@@ -5,8 +5,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildDrawioExtensionNode, DRAWIO_CUSTOM_CONTENT_TYPE } from "./drawio.js";
+import { buildMacroPackExtensionNode, findMacroPackExtensions } from "./macropack.js";
 import { DrawioPublisherService } from "./service.js";
-import type { ConfluenceAttachment, ConfluenceCustomContent, ConfluencePage, JsonObject } from "./types.js";
+import type { ConfluenceAttachment, ConfluenceCustomContent, ConfluencePage, EmbeddedDiagram, JsonObject } from "./types.js";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -31,6 +32,25 @@ function createTempDiagramFiles(drawioName: string, width: number, height: numbe
   writeFileSync(drawioPath, '<mxfile><diagram name="demo"><mxGraphModel><root><mxCell value="API" /></root></mxGraphModel></diagram></mxfile>');
   writeFileSync(previewPath, createPng(width, height));
   return { dir, drawioPath, previewPath };
+}
+
+function getStoredPage(client: FakeConfluenceClient): ConfluencePage {
+  return (client as unknown as { page: ConfluencePage }).page;
+}
+
+function getStoredPageAdf(client: FakeConfluenceClient): JsonObject {
+  return getStoredPage(client).body?.atlas_doc_format?.value as JsonObject;
+}
+
+function getEmbeddedDrawioDiagrams(result: { embeddedDiagrams: EmbeddedDiagram[] }): EmbeddedDiagram[] {
+  return result.embeddedDiagrams.filter((diagram) => diagram.embeddingMode === "drawio");
+}
+
+function getEmbeddedDiagramNames(result: { embeddedDiagrams: EmbeddedDiagram[] }, embeddingMode: EmbeddedDiagram["embeddingMode"]): string[] {
+  return result.embeddedDiagrams
+    .filter((diagram) => diagram.embeddingMode === embeddingMode)
+    .map((diagram) => diagram.diagramName)
+    .filter((diagramName): diagramName is string => Boolean(diagramName));
 }
 
 class FakeConfluenceClient {
@@ -276,6 +296,130 @@ function createExistingWidgetFixture(): {
   };
 }
 
+function createExistingMacroPackFixture(): {
+  client: FakeConfluenceClient;
+  pageId: string;
+  localId: string;
+} {
+  const pageId = "6255738937";
+  const extensionNode = buildMacroPackExtensionNode({
+    pageId,
+    spaceId: "42",
+    spaceKey: "~user",
+    mermaid: "flowchart TD\nA-->B",
+  });
+  const localId = ((extensionNode.attrs as JsonObject).localId as string | undefined) ?? "missing-local-id";
+  const page: ConfluencePage = {
+    id: pageId,
+    status: "current",
+    title: "MacroPack test",
+    spaceId: "42",
+    parentId: "24",
+    version: {
+      number: 2,
+    },
+    body: {
+      atlas_doc_format: {
+        value: {
+          type: "doc",
+          version: 1,
+          content: [extensionNode],
+        },
+      },
+    },
+  };
+
+  return {
+    client: new FakeConfluenceClient("https://example.atlassian.net/wiki", page, [], new Map()),
+    pageId,
+    localId,
+  };
+}
+
+function createMixedDiagramFixture(): {
+  client: FakeConfluenceClient;
+  pageId: string;
+  customContentId: string;
+  localId: string;
+} {
+  const pageId = "6255738938";
+  const customContentId = "cust-1";
+  const macroPackNode = buildMacroPackExtensionNode({
+    pageId,
+    spaceId: "42",
+    spaceKey: "~user",
+    mermaid: "flowchart TD\nA-->B",
+  });
+  const localId = ((macroPackNode.attrs as JsonObject).localId as string | undefined) ?? "missing-local-id";
+  const adf = {
+    type: "doc",
+    version: 1,
+    content: [
+      buildDrawioExtensionNode({
+        pageId,
+        spaceId: "42",
+        spaceKey: "~user",
+        diagramName: "existing.drawio",
+        custContentId: customContentId,
+        width: 320,
+        height: 180,
+        baseUrl: "https://example.atlassian.net/wiki",
+      }),
+      macroPackNode,
+    ],
+  };
+  const page: ConfluencePage = {
+    id: pageId,
+    status: "current",
+    title: "Mixed diagrams",
+    spaceId: "42",
+    parentId: "24",
+    version: {
+      number: 3,
+    },
+    body: {
+      atlas_doc_format: {
+        value: adf,
+      },
+    },
+  };
+  const attachments: ConfluenceAttachment[] = [
+    { id: "att-1", title: "existing.drawio", version: { number: 3 } },
+    { id: "att-2", title: "existing.drawio.png", version: { number: 3 } },
+  ];
+  const customContents = new Map<string, ConfluenceCustomContent>([
+    [customContentId, {
+      id: customContentId,
+      type: DRAWIO_CUSTOM_CONTENT_TYPE,
+      status: "current",
+      title: "existing.drawio",
+      pageId,
+      version: {
+        number: 5,
+      },
+      body: {
+        raw: {
+          value: JSON.stringify({
+            search: "API ",
+            pageId,
+            type: "page",
+            diagramName: "existing.drawio",
+            revision: 3,
+            isSketch: false,
+          }),
+        },
+      },
+    }],
+  ]);
+
+  return {
+    client: new FakeConfluenceClient("https://example.atlassian.net/wiki", page, attachments, customContents),
+    pageId,
+    customContentId,
+    localId,
+  };
+}
+
 describe("DrawioPublisherService", () => {
   it("inspects draw.io widgets on a page", async () => {
     const { client, pageId, customContentId } = createExistingWidgetFixture();
@@ -284,7 +428,7 @@ describe("DrawioPublisherService", () => {
     const result = await service.inspectPage(pageId);
 
     expect(result.page.id).toBe(pageId);
-    expect(result.drawioExtensions).toEqual([
+    expect(getEmbeddedDrawioDiagrams(result)).toEqual([
       expect.objectContaining({
         diagramName: "existing.drawio",
         custContentId: customContentId,
@@ -319,7 +463,7 @@ describe("DrawioPublisherService", () => {
       expect(client.customContentUpdates).toEqual([customContentId]);
       expect(client.pageUpdateMessages).toEqual(["Update draw.io widget metadata"]);
       expect(client.pageUpdateStatuses).toEqual(["current"]);
-      expect(result.drawioExtensions).toEqual([
+      expect(getEmbeddedDrawioDiagrams(result)).toEqual([
         expect.objectContaining({
           diagramName: "renamed.drawio",
           custContentId: customContentId,
@@ -360,7 +504,7 @@ describe("DrawioPublisherService", () => {
       expect(client.customContentCreates).toEqual(["created-2"]);
       expect(client.pageUpdateMessages).toEqual(["Create draw.io widget"]);
       expect(client.pageUpdateStatuses).toEqual(["current"]);
-      expect(result.drawioExtensions).toEqual(
+      expect(getEmbeddedDrawioDiagrams(result)).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             diagramName: "existing.drawio",
@@ -378,6 +522,83 @@ describe("DrawioPublisherService", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("creates a MacroPack diagram from Mermaid without draw.io artifacts", async () => {
+    const { client, pageId } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never);
+
+    const result = await service.createDiagramFromMermaid({
+      pageId,
+      mermaid: "flowchart TD\nA-->B",
+      embeddingMode: "macropack",
+      spaceKey: "~user",
+    });
+
+    expect(client.attachmentMutations).toEqual([]);
+    expect(client.customContentCreates).toEqual([]);
+    expect(client.pageUpdateMessages).toEqual(["Create MacroPack diagram"]);
+    expect(result.embeddedDiagrams).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          embeddingMode: "drawio",
+          diagramName: "existing.drawio",
+        }),
+        expect.objectContaining({
+          embeddingMode: "macropack",
+          localId: expect.any(String),
+        }),
+      ]),
+    );
+    const macroPackExtensions = findMacroPackExtensions(getStoredPageAdf(client));
+    expect(macroPackExtensions).toHaveLength(1);
+    expect(macroPackExtensions[0]?.source).toContain("flowchart TD");
+  });
+
+  it("updates an existing MacroPack diagram in place", async () => {
+    const { client, pageId, localId } = createExistingMacroPackFixture();
+    const service = new DrawioPublisherService(client as never);
+
+    const result = await service.updateDiagramFromMermaid({
+      pageId,
+      mermaid: "flowchart TD\nA-->C",
+      diagram: {
+        localId,
+      },
+    });
+
+    expect(client.attachmentMutations).toEqual([]);
+    expect(client.customContentUpdates).toEqual([]);
+    expect(client.pageUpdateMessages).toEqual(["Update MacroPack diagram"]);
+    expect(result.embeddedDiagrams).toEqual([
+      expect.objectContaining({
+        embeddingMode: "macropack",
+        localId,
+      }),
+    ]);
+    const macroPackExtensions = findMacroPackExtensions(getStoredPageAdf(client));
+    expect(macroPackExtensions[0]?.source).toContain("A-->C");
+  });
+
+  it("inspects mixed draw.io and MacroPack diagrams on a page", async () => {
+    const { client, pageId, customContentId, localId } = createMixedDiagramFixture();
+    const service = new DrawioPublisherService(client as never);
+
+    const result = await service.inspectPage(pageId);
+
+    expect(result.embeddedDiagrams).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          embeddingMode: "drawio",
+          diagramName: "existing.drawio",
+          custContentId: customContentId,
+        }),
+        expect.objectContaining({
+          embeddingMode: "macropack",
+          localId,
+        }),
+      ]),
+    );
   });
 
   it("appends page text and can insert a widget at an anchor", async () => {
@@ -405,7 +626,7 @@ describe("DrawioPublisherService", () => {
 
       expect(client.pageUpdateMessages).toContain("Create draw.io widget");
       expect(client.pageUpdateStatuses).toEqual(["current", "current"]);
-      expect(result.drawioExtensions).toEqual(
+      expect(getEmbeddedDrawioDiagrams(result)).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             diagramName: "anchored.drawio",
@@ -443,23 +664,25 @@ describe("DrawioPublisherService", () => {
         sourceName: "ddd-context-map.md",
         siblingPageId: pageId,
         spaceKey: "~user",
+        embeddingMode: "drawio",
       });
 
       expect(client.createdPages).toEqual(["created-page"]);
       expect(result.page.id).toBe("created-page");
       expect(result.page.parentId).toBe("24");
       expect(result.source).toBe("ddd-context-map.md");
+      expect(result.embeddingMode).toBe("drawio");
       expect(result.mermaidBlocks).toBe(2);
-      expect(result.convertedBlocks).toBe(1);
+      expect(result.embeddedBlocks).toBe(1);
       expect(result.fallbackBlocks).toBe(1);
-      expect(result.widgetNames).toEqual(["domain-context-map-01.drawio"]);
+      expect(getEmbeddedDiagramNames(result, "drawio")).toEqual(["domain-context-map-01.drawio"]);
       expect(client.pageUpdateMessages).toContain("Publish ddd-context-map.md");
       expect(client.attachmentMutations).toEqual([
         { pageId: "created-page", remoteFileName: "domain-context-map-01.drawio" },
         { pageId: "created-page", remoteFileName: "domain-context-map-01.drawio.png" },
       ]);
       expect(client.customContentCreates).toEqual(["created-1"]);
-      expect((client as unknown as { page: ConfluencePage }).page.body?.atlas_doc_format?.value).toEqual(
+      expect(getStoredPage(client).body?.atlas_doc_format?.value).toEqual(
         expect.objectContaining({
           content: expect.arrayContaining([
             expect.objectContaining({ type: "heading" }),
@@ -514,20 +737,22 @@ describe("DrawioPublisherService", () => {
         sourceName: "quarterly-sales.md",
         siblingPageId: pageId,
         spaceKey: "~user",
+        embeddingMode: "drawio",
       });
 
       expect(result.page.id).toBe("created-page");
       expect(result.source).toBe("quarterly-sales.md");
+      expect(result.embeddingMode).toBe("drawio");
       expect(result.mermaidBlocks).toBe(2);
-      expect(result.convertedBlocks).toBe(1);
+      expect(result.embeddedBlocks).toBe(1);
       expect(result.fallbackBlocks).toBe(1);
-      expect(result.widgetNames).toEqual(["quarterly-sales-01.drawio"]);
+      expect(getEmbeddedDiagramNames(result, "drawio")).toEqual(["quarterly-sales-01.drawio"]);
       expect(client.pageUpdateMessages).toContain("Publish quarterly-sales.md");
       expect(client.attachmentMutations).toEqual([
         { pageId: "created-page", remoteFileName: "quarterly-sales-01.drawio" },
         { pageId: "created-page", remoteFileName: "quarterly-sales-01.drawio.png" },
       ]);
-      expect((client as unknown as { page: ConfluencePage }).page.body?.atlas_doc_format?.value).toEqual(
+      expect(getStoredPage(client).body?.atlas_doc_format?.value).toEqual(
         expect.objectContaining({
           content: expect.arrayContaining([
             expect.objectContaining({ type: "extension" }),
@@ -577,12 +802,13 @@ describe("DrawioPublisherService", () => {
         markdownFile,
         siblingPageId: pageId,
         spaceKey: "~user",
+        embeddingMode: "drawio",
       });
 
       expect(result.page.id).toBe("created-page");
       expect(result.source).toBe("ddd-context-map.md");
       expect(result.mermaidBlocks).toBe(1);
-      expect(result.convertedBlocks).toBe(1);
+      expect(result.embeddedBlocks).toBe(1);
       expect(result.fallbackBlocks).toBe(0);
       expect(client.pageUpdateMessages).toContain("Publish ddd-context-map.md");
     } finally {
@@ -617,12 +843,13 @@ describe("DrawioPublisherService", () => {
         markdownFile: "docs/ddd-context-map.md",
         siblingPageId: pageId,
         spaceKey: "~user",
+        embeddingMode: "drawio",
       });
 
       expect(result.page.id).toBe("created-page");
       expect(result.source).toBe("ddd-context-map.md");
       expect(result.mermaidBlocks).toBe(1);
-      expect(result.convertedBlocks).toBe(1);
+      expect(result.embeddedBlocks).toBe(1);
       expect(result.fallbackBlocks).toBe(0);
       expect(client.pageUpdateMessages).toContain("Publish ddd-context-map.md");
     } finally {

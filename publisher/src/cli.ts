@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ConfluenceClient } from "./confluence-client.js";
+import { getDefaultEmbeddingMode } from "./embedding-mode.js";
 import { DrawioPublisherService } from "./service.js";
 
 interface ParsedArgs {
@@ -45,7 +46,7 @@ function requireOption(options: Map<string, string>, name: string): string {
   return value;
 }
 
-function createService(options: Map<string, string>): DrawioPublisherService {
+export function createService(options: Map<string, string>): DrawioPublisherService {
   const baseUrl = options.get("base-url") ?? process.env.CONFLUENCE_BASE_URL;
   if (!baseUrl) {
     throw new Error("Provide --base-url or CONFLUENCE_BASE_URL");
@@ -61,6 +62,8 @@ function createService(options: Map<string, string>): DrawioPublisherService {
       email,
       apiToken,
     }),
+    undefined,
+    getDefaultEmbeddingMode(),
   );
 }
 

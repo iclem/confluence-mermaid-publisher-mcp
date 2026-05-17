@@ -1,6 +1,6 @@
 # markdown-to-confluence-drawio-mcp
 
-`markdown-to-confluence-drawio-mcp` is an MCP server for publishing locally authored Markdown to Confluence while converting Mermaid diagrams into editable draw.io widgets.
+`markdown-to-confluence-drawio-mcp` is an MCP server for publishing locally authored Markdown to Confluence while embedding Mermaid diagrams as Confluence diagrams. MacroPack is the default embedding mode, and draw.io remains available when you want editable `.drawio` artifacts.
 
 The intended workflow is:
 
@@ -8,15 +8,15 @@ The intended workflow is:
 2. keep that Markdown as the reproducible source of truth
 3. publish the final result to Confluence
 
-This gives a faster editing loop than using Confluence as the primary authoring surface, usually uses fewer model tokens during iterative edits, and avoids relying on Confluence's limited Mermaid support by publishing draw.io instead.
+This gives a faster editing loop than using Confluence as the primary authoring surface, usually uses fewer model tokens during iterative edits, and avoids relying on Confluence's limited Mermaid support by publishing through MacroPack or draw.io.
 
 ## What it does
 
 - publish Markdown documents to Confluence
-- convert Mermaid blocks into draw.io diagrams during publication
-- create a draw.io widget from Mermaid on an existing page
-- update an existing draw.io widget in place
-- inspect draw.io widgets already present on a page
+- embed Mermaid blocks as MacroPack or draw.io diagrams during publication
+- create a Confluence diagram from Mermaid on an existing page
+- update an existing embedded Confluence diagram in place
+- inspect diagrams already present on a page
 
 ## Runtime shape
 
@@ -61,6 +61,8 @@ export COPILOT_MCP_CONFLUENCE_API_TOKEN="..."
 ```
 
 The local stdio helper forwards both the direct `CONFLUENCE_*` variables and the Copilot-style fallback variables into the container.
+
+Set `CONFLUENCE_DEFAULT_EMBEDDING_MODE=drawio` if you want draw.io to be the server default. When unset, the server defaults to `macropack`.
 
 Run local Docker stdio from the workspace you want mounted:
 

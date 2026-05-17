@@ -1,5 +1,9 @@
 export type JsonObject = Record<string, unknown>;
 
+export const EMBEDDING_MODES = ["macropack", "drawio"] as const;
+
+export type EmbeddingMode = (typeof EMBEDDING_MODES)[number];
+
 export interface AtlasDocFormatBody {
   value?: string | JsonObject;
 }
@@ -78,21 +82,25 @@ export interface DrawioExtension {
   localId?: string;
 }
 
-export interface WidgetTarget {
+export interface DiagramTarget {
   diagramName?: string;
   custContentId?: string;
+  localId?: string;
   index?: number;
+}
+
+export interface EmbeddedDiagram {
+  embeddingMode: EmbeddingMode;
+  diagramName?: string;
+  custContentId?: string;
+  localId?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface InspectResult {
   page: Pick<ConfluencePage, "id" | "title" | "status" | "spaceId" | "parentId" | "version">;
-  drawioExtensions: Array<{
-    diagramName: string;
-    custContentId: string;
-    width: number;
-    height: number;
-    localId?: string;
-  }>;
+  embeddedDiagrams: EmbeddedDiagram[];
   attachments: ConfluenceAttachment[];
   customContents: ConfluenceCustomContent[];
 }
@@ -100,8 +108,9 @@ export interface InspectResult {
 export interface MarkdownPublishResult {
   page: Pick<ConfluencePage, "id" | "title" | "status" | "spaceId" | "parentId" | "version">;
   source: string;
+  embeddingMode: EmbeddingMode;
   mermaidBlocks: number;
-  convertedBlocks: number;
+  embeddedBlocks: number;
   fallbackBlocks: number;
-  widgetNames: string[];
+  embeddedDiagrams: EmbeddedDiagram[];
 }

@@ -2,8 +2,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { ConfluenceClient } from "./confluence-client.js";
-import { convertMermaidToArtifacts } from "./converter.js";
+import { getDefaultEmbeddingMode } from "./embedding-mode.js";
 import { DrawioPublisherService } from "./service.js";
+import { EMBEDDING_MODES } from "./types.js";
 
 function getConfluenceSetting(primary: string, fallback?: string): string | undefined {
   const primaryValue = process.env[primary]?.trim();
@@ -43,6 +44,7 @@ export function createPublisherService(): DrawioPublisherService {
   const email = getConfluenceSetting("CONFLUENCE_EMAIL", "COPILOT_MCP_CONFLUENCE_USERNAME");
   const apiToken = getConfluenceSetting("CONFLUENCE_API_TOKEN", "COPILOT_MCP_CONFLUENCE_API_TOKEN");
   const bearerToken = process.env.CONFLUENCE_BEARER_TOKEN;
+  const defaultEmbeddingMode = getDefaultEmbeddingMode();
 
   if (!baseUrl) {
     throw new Error("Missing CONFLUENCE_BASE_URL or COPILOT_MCP_CONFLUENCE_URL");
@@ -55,6 +57,8 @@ export function createPublisherService(): DrawioPublisherService {
       email,
       apiToken,
     }),
+    undefined,
+    defaultEmbeddingMode,
   );
 }
 
@@ -71,13 +75,20 @@ function textResult(payload: unknown) {
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
-    name: "drawio-confluence-mcp",
+    name: "confluence-mermaid-publisher",
     version: "0.1.0",
   });
+  const embeddingModeGuidance =
+    "Omit this field to use the server default embedding mode. Only set it when the user explicitly requests a non-default mode such as macropack or drawio. When omitted, the server uses its configured default; if that is unset, it falls back to macropack.";
+  const embeddingModeSchema = z.enum(EMBEDDING_MODES).optional().describe(
+    `Optional Mermaid embedding mode override. ${embeddingModeGuidance}`,
+  );
+  const defaultEmbeddingModeToolGuidance =
+    "Omit embeddingMode to use the server default. Only set it when the user explicitly requests a non-default mode.";
 
   server.tool(
-    "inspect_confluence_drawio_page",
-    "Inspect Confluence page draw.io widgets, attachments, and draw.io custom content.",
+    "inspect_confluence_page_diagrams",
+    "Inspect Confluence page diagrams, attachments, and draw.io custom content.",
     {
       pageId: z.string().describe("Confluence page ID."),
     },
@@ -88,32 +99,28 @@ export function createMcpServer(): McpServer {
   );
 
   server.tool(
-    "create_confluence_drawio_widget_from_mermaid",
-    "Convert Mermaid to draw.io and insert it as a new draw.io widget on a Confluence page.",
+    "create_confluence_diagram_from_mermaid",
+    `Create a new embedded Confluence diagram from Mermaid. ${defaultEmbeddingModeToolGuidance}`,
     {
       pageId: z.string().describe("Target Confluence page ID."),
-      diagramName: z.string().describe("Diagram file name, typically ending in .drawio."),
+      diagramName: z.string().optional().describe("Optional diagram file name for draw.io mode, typically ending in .drawio."),
       mermaid: z.string().describe("Mermaid diagram source."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for the page."),
       anchorText: z.string().optional().describe("Optional text anchor. The widget is inserted immediately after the first matching text inside a paragraph."),
+      embeddingMode: embeddingModeSchema,
     },
-    async ({ pageId, diagramName, mermaid, spaceKey, anchorText }) => {
+    async ({ pageId, diagramName, mermaid, spaceKey, anchorText, embeddingMode }) => {
       const service = createPublisherService();
-      const artifacts = await convertMermaidToArtifacts(mermaid, diagramName);
-      try {
-        return textResult(
-          await service.createWidget({
-            pageId,
-            drawioPath: artifacts.drawioPath,
-            previewPath: artifacts.previewPath,
-            diagramName,
-            spaceKey,
-            anchorText,
-          }),
-        );
-      } finally {
-        await artifacts.cleanup();
-      }
+      return textResult(
+        await service.createDiagramFromMermaid({
+          pageId,
+          diagramName,
+          mermaid,
+          spaceKey,
+          anchorText,
+          embeddingMode,
+        }),
+      );
     },
   );
 
@@ -132,7 +139,7 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "create_confluence_page_from_markdown",
-    "Create a Confluence page from Markdown content, converting Mermaid blocks to draw.io widgets where possible and falling back per block when conversion fails.",
+    `Create a Confluence page from Markdown content. ${defaultEmbeddingModeToolGuidance} Mermaid blocks fall back per block when embedding fails.`,
     {
       title: z.string().describe("New page title."),
       markdown: z.string().describe("Markdown document to publish."),
@@ -140,9 +147,10 @@ export function createMcpServer(): McpServer {
       spaceId: z.string().optional().describe("Target Confluence space ID. Optional when siblingPageId is provided."),
       parentId: z.string().optional().describe("Optional parent page ID."),
       siblingPageId: z.string().optional().describe("Optional existing page ID whose parent should be reused for the new sibling page."),
-      spaceKey: z.string().optional().describe("Optional Confluence space key for draw.io macro metadata."),
+      spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
+      embeddingMode: embeddingModeSchema,
     },
-    async ({ title, markdown, sourceName, spaceId, parentId, siblingPageId, spaceKey }) => {
+    async ({ title, markdown, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode }) => {
       const service = createPublisherService();
       return textResult(
         await service.createPageFromMarkdown({
@@ -153,6 +161,7 @@ export function createMcpServer(): McpServer {
           parentId,
           siblingPageId,
           spaceKey,
+          embeddingMode,
         }),
       );
     },
@@ -160,7 +169,7 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "create_confluence_page_from_markdown_file",
-    "Create a Confluence page from a Markdown file path, converting Mermaid blocks to draw.io widgets where possible and falling back per block when conversion fails.",
+    `Create a Confluence page from a Markdown file path. ${defaultEmbeddingModeToolGuidance} Mermaid blocks fall back per block when embedding fails.`,
     {
       title: z.string().describe("New page title."),
       markdownFile: z.string().describe("Path to the Markdown document to publish."),
@@ -168,9 +177,10 @@ export function createMcpServer(): McpServer {
       spaceId: z.string().optional().describe("Target Confluence space ID. Optional when siblingPageId is provided."),
       parentId: z.string().optional().describe("Optional parent page ID."),
       siblingPageId: z.string().optional().describe("Optional existing page ID whose parent should be reused for the new sibling page."),
-      spaceKey: z.string().optional().describe("Optional Confluence space key for draw.io macro metadata."),
+      spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
+      embeddingMode: embeddingModeSchema,
     },
-    async ({ title, markdownFile, sourceName, spaceId, parentId, siblingPageId, spaceKey }) => {
+    async ({ title, markdownFile, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode }) => {
       const service = createPublisherService();
       return textResult(await withMarkdownFileHint(
         markdownFile,
@@ -182,6 +192,7 @@ export function createMcpServer(): McpServer {
           parentId,
           siblingPageId,
           spaceKey,
+          embeddingMode,
         }),
       ));
     },
@@ -189,14 +200,15 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "update_confluence_page_from_markdown",
-    "Update an existing Confluence page from Markdown content, converting Mermaid blocks to draw.io widgets where possible and falling back per block when conversion fails.",
+    `Update an existing Confluence page from Markdown content. ${defaultEmbeddingModeToolGuidance} Mermaid blocks fall back per block when embedding fails.`,
     {
       pageId: z.string().describe("Target Confluence page ID."),
       markdown: z.string().describe("Markdown document to publish into the existing page."),
       sourceName: z.string().optional().describe("Optional source file name used in publication metadata."),
-      spaceKey: z.string().optional().describe("Optional Confluence space key for draw.io macro metadata."),
+      spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
+      embeddingMode: embeddingModeSchema,
     },
-    async ({ pageId, markdown, sourceName, spaceKey }) => {
+    async ({ pageId, markdown, sourceName, spaceKey, embeddingMode }) => {
       const service = createPublisherService();
       return textResult(
         await service.updatePageFromMarkdown({
@@ -204,6 +216,7 @@ export function createMcpServer(): McpServer {
           markdown,
           sourceName,
           spaceKey,
+          embeddingMode,
         }),
       );
     },
@@ -211,14 +224,15 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "update_confluence_page_from_markdown_file",
-    "Update an existing Confluence page from a Markdown file path, converting Mermaid blocks to draw.io widgets where possible and falling back per block when conversion fails.",
+    `Update an existing Confluence page from a Markdown file path. ${defaultEmbeddingModeToolGuidance} Mermaid blocks fall back per block when embedding fails.`,
     {
       pageId: z.string().describe("Target Confluence page ID."),
       markdownFile: z.string().describe("Path to the Markdown document to publish into the existing page."),
       sourceName: z.string().optional().describe("Optional source file name used in publication metadata."),
-      spaceKey: z.string().optional().describe("Optional Confluence space key for draw.io macro metadata."),
+      spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
+      embeddingMode: embeddingModeSchema,
     },
-    async ({ pageId, markdownFile, sourceName, spaceKey }) => {
+    async ({ pageId, markdownFile, sourceName, spaceKey, embeddingMode }) => {
       const service = createPublisherService();
       return textResult(await withMarkdownFileHint(
         markdownFile,
@@ -227,43 +241,41 @@ export function createMcpServer(): McpServer {
           markdownFile,
           sourceName,
           spaceKey,
+          embeddingMode,
         }),
       ));
     },
   );
 
   server.tool(
-    "update_confluence_drawio_widget_from_mermaid",
-    "Convert Mermaid to draw.io and update an existing draw.io widget in place on a Confluence page.",
+    "update_confluence_diagram_from_mermaid",
+    `Update an existing embedded Confluence diagram from Mermaid. ${defaultEmbeddingModeToolGuidance}`,
     {
       pageId: z.string().describe("Target Confluence page ID."),
       mermaid: z.string().describe("Mermaid diagram source."),
-      diagramName: z.string().optional().describe("Optional resulting draw.io file name."),
-      widgetDiagramName: z.string().optional().describe("Existing widget diagram name selector."),
-      custContentId: z.string().optional().describe("Existing widget custom content ID selector."),
-      index: z.number().int().nonnegative().optional().describe("Existing widget index selector."),
+      diagramName: z.string().optional().describe("Optional resulting draw.io file name or logical diagram name."),
+      widgetDiagramName: z.string().optional().describe("Existing draw.io diagram name selector."),
+      custContentId: z.string().optional().describe("Existing draw.io custom content ID selector."),
+      localId: z.string().optional().describe("Existing embedded diagram local ID selector."),
+      index: z.number().int().nonnegative().optional().describe("Existing embedded diagram index selector."),
+      embeddingMode: embeddingModeSchema,
     },
-    async ({ pageId, mermaid, diagramName, widgetDiagramName, custContentId, index }) => {
-      const targetDiagramName = diagramName ?? widgetDiagramName ?? "diagram.drawio";
+    async ({ pageId, mermaid, diagramName, widgetDiagramName, custContentId, localId, index, embeddingMode }) => {
       const service = createPublisherService();
-      const artifacts = await convertMermaidToArtifacts(mermaid, targetDiagramName);
-      try {
-        return textResult(
-          await service.updateExistingWidget({
-            pageId,
-            drawioPath: artifacts.drawioPath,
-            previewPath: artifacts.previewPath,
-            diagramName,
-            widget: {
-              diagramName: widgetDiagramName,
-              custContentId,
-              index,
-            },
-          }),
-        );
-      } finally {
-        await artifacts.cleanup();
-      }
+      return textResult(
+        await service.updateDiagramFromMermaid({
+          pageId,
+          mermaid,
+          diagramName,
+          embeddingMode,
+          diagram: {
+            diagramName: widgetDiagramName,
+            custContentId,
+            localId,
+            index,
+          },
+        }),
+      );
     },
   );
 

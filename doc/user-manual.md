@@ -1,25 +1,26 @@
 # Markdown to Confluence Draw.io MCP User Manual
 
-This manual covers installation, runtime setup, and the most common operator workflows for the draw.io + Confluence MCP server.
+This manual covers installation, runtime setup, and the most common operator workflows for the Confluence diagram MCP server.
 
 For the shortest path to a first successful publish, see `doc/quick-start.md`.
 
-The intended workflow is: author locally in Markdown, iterate with normal file-based tools, and publish the final result to Confluence. This is typically faster, more reproducible, and less token-expensive than using Confluence itself as the primary editing surface. The project also uses draw.io as the published diagram format because Confluence does not provide satisfactory Mermaid support for this use case.
+The intended workflow is: author locally in Markdown, iterate with normal file-based tools, and publish the final result to Confluence. This is typically faster, more reproducible, and less token-expensive than using Confluence itself as the primary editing surface. The project embeds Mermaid as MacroPack by default and can still use draw.io when editable `.drawio` artifacts are required.
 
 ## What this server does
 
 The MCP server exposes a product-oriented tool surface for:
 
 - publishing Markdown documents to Confluence
-- converting Mermaid blocks into editable draw.io widgets
-- creating a single draw.io widget from Mermaid
-- updating an existing draw.io widget in place
-- inspecting draw.io widgets already present on a page
+- embedding Mermaid blocks as MacroPack or draw.io diagrams
+- creating a single Confluence diagram from Mermaid
+- updating an existing embedded diagram in place
+- inspecting diagrams already present on a page
 
 ## Prerequisites
 
 - Docker
 - access to a Confluence Cloud tenant with the draw.io app installed
+- access to a Confluence Cloud tenant with MacroPack installed if you want to use the default MacroPack mode
 - Confluence credentials via one of these explicit sets:
   - direct publisher variables:
     - `CONFLUENCE_BASE_URL`
@@ -118,6 +119,7 @@ docker run --rm -i \
   -e CONFLUENCE_EMAIL \
   -e CONFLUENCE_API_TOKEN \
   -e CONFLUENCE_BEARER_TOKEN \
+  -e CONFLUENCE_DEFAULT_EMBEDDING_MODE \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
@@ -147,7 +149,7 @@ Recommended local HTTP registration:
 ```json
 {
   "mcpServers": {
-    "markdown-to-confluence-drawio-mcp": {
+    "confluence-mermaid-publisher": {
       "type": "http",
       "url": "http://127.0.0.1:3000/mcp"
     }
@@ -158,7 +160,7 @@ Recommended local HTTP registration:
 For GitHub Copilot cloud agents, start from the repository-root example:
 
 ```text
-.github/copilot/cloud-agent/markdown-to-confluence-drawio-mcp.json
+.github/copilot/cloud-agent/confluence-mermaid-publisher.json
 ```
 
 That checked-in example uses the packaged Docker image with stdio transport.
@@ -170,7 +172,7 @@ If you prefer a registry-only setup without a local checkout, a direct stdio reg
 ```json
 {
   "mcpServers": {
-    "markdown-to-confluence-drawio-mcp": {
+    "confluence-mermaid-publisher": {
       "type": "stdio",
       "command": "sh",
       "args": [
@@ -193,7 +195,7 @@ Typical global config file:
 Example registration:
 
 ```toml
-[mcp_servers.markdown-to-confluence-drawio-mcp]
+[mcp_servers.confluence-mermaid-publisher]
 url = "http://127.0.0.1:3000/mcp"
 ```
 
@@ -206,7 +208,7 @@ If you prefer per-project setup, place the same block in:
 Registry-only stdio example:
 
 ```toml
-[mcp_servers.markdown-to-confluence-drawio-mcp]
+[mcp_servers.confluence-mermaid-publisher]
 command = "sh"
 args = [
   "-c",
@@ -221,7 +223,7 @@ Claude Code and Claude Desktop both use a JSON `mcpServers` definition. The easi
 ```json
 {
   "mcpServers": {
-    "markdown-to-confluence-drawio-mcp": {
+    "confluence-mermaid-publisher": {
       "type": "http",
       "url": "http://127.0.0.1:3000/mcp"
     }
@@ -243,7 +245,7 @@ Registry-only stdio example:
 ```json
 {
   "mcpServers": {
-    "markdown-to-confluence-drawio-mcp": {
+    "confluence-mermaid-publisher": {
       "type": "stdio",
       "command": "sh",
       "args": [
@@ -268,7 +270,7 @@ Example registration:
 ```json
 {
   "mcpServers": {
-    "markdown-to-confluence-drawio-mcp": {
+    "confluence-mermaid-publisher": {
       "httpUrl": "http://127.0.0.1:3000/mcp",
       "trust": true
     }
@@ -303,13 +305,13 @@ and send the Markdown body directly instead.
 
 | Tool | Use when |
 | --- | --- |
-| `inspect_confluence_drawio_page` | You want to inspect draw.io widgets, attachments, and custom content on an existing page |
+| `inspect_confluence_page_diagrams` | You want to inspect embedded diagrams, attachments, and draw.io custom content on an existing page |
 | `create_confluence_page_from_markdown` | The Markdown content is already in memory |
 | `create_confluence_page_from_markdown_file` | The Markdown already exists on disk and you want to avoid sending it through model context |
 | `update_confluence_page_from_markdown` | You want to replace an existing page body from Markdown already in memory |
 | `update_confluence_page_from_markdown_file` | You want to republish an existing page directly from a Markdown file on disk |
-| `create_confluence_drawio_widget_from_mermaid` | You want to add one new draw.io widget to an existing page |
-| `update_confluence_drawio_widget_from_mermaid` | You want to replace an existing widget without recreating the page |
+| `create_confluence_diagram_from_mermaid` | You want to add one new diagram to an existing page |
+| `update_confluence_diagram_from_mermaid` | You want to replace an existing embedded diagram without recreating the page |
 | `append_confluence_page_paragraph` | You want a small text-only page edit |
 
 ## Typical workflows
@@ -333,48 +335,52 @@ The publisher:
 
 1. creates the page
 2. parses Markdown into Confluence ADF
-3. converts each Mermaid block into draw.io where possible
-4. embeds the generated widget
-5. falls back to Mermaid source blocks when conversion fails
+3. embeds each Mermaid block as MacroPack or draw.io based on the effective `embeddingMode`
+4. uses draw.io conversion only when the effective mode is `drawio`
+5. falls back to Mermaid source blocks when embedding fails
 
 ### Add a single diagram to an existing page
 
 Use:
 
-- `create_confluence_drawio_widget_from_mermaid`
+- `create_confluence_diagram_from_mermaid`
 
 Provide:
 
 - `pageId`
-- `diagramName`
 - `mermaid`
+- optional `diagramName` when the embedding mode is `drawio`
+- optional `embeddingMode` only when you want to override the server default
 - optional `anchorText`
 
-### Update an existing draw.io widget
+### Update an existing embedded diagram
 
 Use:
 
-- `inspect_confluence_drawio_page`
-- then `update_confluence_drawio_widget_from_mermaid`
+- `inspect_confluence_page_diagrams`
+- then `update_confluence_diagram_from_mermaid`
 
-Select the target widget by:
+Select the target diagram by:
 
 - `widgetDiagramName`
 - or `custContentId`
+- or `localId`
 - or `index`
+
+When `embeddingMode` is omitted, the server uses its configured default and falls back to `macropack` when no server default is set. Pass `embeddingMode` only when you explicitly want to override that default for a specific tool call.
 
 ## Example prompts for agents
 
 - "Publish `/absolute/path/to/your-project/docs/domain-context-map.md` as a sibling of page `123456` using `create_confluence_page_from_markdown_file`."
 - "Republish page `123456` from `/absolute/path/to/your-project/docs/domain-context-map.md` using `update_confluence_page_from_markdown_file`."
-- "Create a new widget called `context-map.drawio` on page `123456` from this Mermaid block."
-- "Inspect page `123456` and then update the widget named `context-map.drawio` from this Mermaid source."
+- "Create a new diagram on page `123456` from this Mermaid block using `drawio` mode and the file name `context-map.drawio`."
+- "Inspect page `123456` and then update the diagram named `context-map.drawio` from this Mermaid source."
 - "Create a new Confluence page titled `Architecture Validation` from this Markdown body and keep Mermaid fallbacks if conversion fails."
 
 ## Operational notes
 
 - The HTTP server is intentionally **stateless**. That avoids session bootstrap issues with current HTTP MCP hosts.
-- The draw.io preview uploaded with the widget is currently a **placeholder PNG preview**, not a full rendered export.
+- The draw.io preview uploaded with draw.io-backed diagrams is currently a **placeholder PNG preview**, not a full rendered export.
 - Markdown publication supports headings, paragraphs, block quotes, bullet lists, ordered lists, tables, rules, code blocks, and Mermaid fenced blocks.
 
 ## Troubleshooting
@@ -402,4 +408,4 @@ Check:
 
 ### A page already has a widget with the same diagram name
 
-Use a new `diagramName` or switch to `update_confluence_drawio_widget_from_mermaid`.
+Use a new `diagramName` or switch to `update_confluence_diagram_from_mermaid`.
