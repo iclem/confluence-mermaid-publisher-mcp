@@ -31,7 +31,7 @@ test-e2e: # Run e2e tests on mermaid diagram samples
 	$(DEV_RUN) 'cd /app && ./scripts/test-e2e.sh'
 
 image-mcp: # Build MCP server image
-	docker build -t markdown-to-confluence-drawio-mcp:local .
+	docker build -t confluence-mermaid-publisher-mcp:local .
 
 mcp-http: # Run the local HTTP MCP server through docker compose
 	docker compose $(COMPOSE_FILE) up -d mcp-http --force-recreate

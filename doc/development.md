@@ -37,8 +37,8 @@ The repository is mounted at `/app`.
 The release-oriented contract is now a **single Docker image** with a **single supported default entrypoint**:
 
 ```bash
-docker build -t markdown-to-confluence-drawio-mcp:local .
-docker run --rm -i markdown-to-confluence-drawio-mcp:local
+docker build -t confluence-mermaid-publisher-mcp:local .
+docker run --rm -i confluence-mermaid-publisher-mcp:local
 ```
 
 The default command starts the product-owned stdio MCP server.
@@ -48,11 +48,11 @@ The development compose file also follows the corporate layout under `build/dock
 Supported subcommands:
 
 ```bash
-docker run --rm -i markdown-to-confluence-drawio-mcp:local mcp
-docker run --rm -p 3000:3000 markdown-to-confluence-drawio-mcp:local mcp-http
-docker run --rm -i markdown-to-confluence-drawio-mcp:local publisher-cli --help
-docker run --rm -i -v "$PWD:/work" -w /work markdown-to-confluence-drawio-mcp:local convert input.mermaid output.drawio
-docker run --rm -i markdown-to-confluence-drawio-mcp:local test
+docker run --rm -i confluence-mermaid-publisher-mcp:local mcp
+docker run --rm -p 3000:3000 confluence-mermaid-publisher-mcp:local mcp-http
+docker run --rm -i confluence-mermaid-publisher-mcp:local publisher-cli --help
+docker run --rm -i -v "$PWD:/work" -w /work confluence-mermaid-publisher-mcp:local convert input.mermaid output.drawio
+docker run --rm -i confluence-mermaid-publisher-mcp:local test
 ```
 
 The development compose file also exposes an `mcp-http` service:
@@ -96,7 +96,7 @@ mvn package -DskipTests
 If you want to prove builds are independent from any pre-populated Maven cache, point the scripts at a clean local repository:
 
 ```bash
-export MAVEN_REPO_LOCAL=/tmp/markdown-to-confluence-drawio-mcp-m2
+export MAVEN_REPO_LOCAL=/tmp/confluence-mermaid-publisher-mcp-m2
 ./scripts/convert.sh ./test-data/simple-flowchart.mermaid ./output/simple-flowchart.drawio
 ```
 
@@ -152,8 +152,8 @@ This writes `output/validation-flowchart.drawio` plus the other manual inspectio
 
 The Compose setup keeps:
 
-- Maven artifacts in the `markdown_to_confluence_drawio_mcp_m2` volume
-- npm cache in the `markdown_to_confluence_drawio_mcp_npm` volume
+- Maven artifacts in the `confluence_mermaid_publisher_mcp_m2` volume
+- npm cache in the `confluence_mermaid_publisher_mcp_npm` volume
 
 ## Current state
 
@@ -282,7 +282,7 @@ docker run --rm -i \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
-  markdown-to-confluence-drawio-mcp:local
+  confluence-mermaid-publisher-mcp:local
 ```
 
 ### Run the MCP server over HTTP
@@ -294,7 +294,7 @@ docker run --rm -p 127.0.0.1:3000:3000 \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
-  markdown-to-confluence-drawio-mcp:local mcp-http
+  confluence-mermaid-publisher-mcp:local mcp-http
 ```
 
 The Streamable HTTP endpoint is served at `/mcp`, with a simple health check at `/healthz`.
@@ -313,21 +313,22 @@ docker compose -f build/docker-compose/docker-compose-local.yml up mcp-http
 
 The server currently exposes:
 
-- `inspect_confluence_drawio_page`
+- `inspect_confluence_page_diagrams`
 - `append_confluence_page_paragraph`
 - `create_confluence_page_from_markdown`
 - `create_confluence_page_from_markdown_file`
 - `update_confluence_page_from_markdown`
 - `update_confluence_page_from_markdown_file`
-- `create_confluence_drawio_widget_from_mermaid`
-- `update_confluence_drawio_widget_from_mermaid`
+- `create_confluence_diagram_from_mermaid`
+- `update_confluence_diagram_from_mermaid`
 
 These tools:
 
 - authenticate using the same `CONFLUENCE_*` or `COPILOT_MCP_CONFLUENCE_*` environment variables
-- convert Mermaid to `.drawio` inside the container
-- create or update draw.io widgets on Confluence pages
-- can create or update a page from Markdown content or from a Markdown file path and convert multiple Mermaid blocks with fallback to Mermaid code blocks when conversion fails
+- default to `macropack` unless `CONFLUENCE_DEFAULT_EMBEDDING_MODE` or a per-tool `embeddingMode` selects `drawio`
+- convert Mermaid to `.drawio` inside the container only when the effective embedding mode is `drawio`
+- create or update embedded diagrams on Confluence pages
+- can create or update a page from Markdown content or from a Markdown file path and embed multiple Mermaid blocks with fallback to Mermaid code blocks when embedding fails
 
 ### Current limitation
 
@@ -343,7 +344,7 @@ Inspect a page contract:
   --page-id 123456
 ```
 
-Update an existing draw.io widget:
+Update an existing embedded diagram:
 
 ```bash
 ./scripts/confluence-drawio.sh update-widget \
@@ -370,7 +371,7 @@ cat docs/domain-context-map.md | docker compose run --rm -T dev bash -lc '
 '
 ```
 
-Create a new draw.io widget:
+Create a new draw.io-backed diagram:
 
 ```bash
 ./scripts/confluence-drawio.sh create-widget \
@@ -385,10 +386,12 @@ Create a new draw.io widget:
 
 The publication package currently supports:
 
-- reading page ADF and discovering draw.io widget metadata
+- reading page ADF and discovering draw.io and MacroPack diagram metadata
 - reading draw.io custom content referenced by `custContentId`
-- updating an existing widget by replacing the `.drawio` attachment, replacing the `.png` preview, and updating draw.io custom content
-- creating a new widget by creating attachments, creating draw.io custom content, and appending a draw.io extension node to the page ADF
+- updating an existing draw.io-backed diagram by replacing the `.drawio` attachment, replacing the `.png` preview, and updating draw.io custom content
+- updating an existing MacroPack-backed diagram by rewriting its embedded Mermaid source in page ADF
+- creating a new draw.io-backed diagram by creating attachments, creating draw.io custom content, and appending a draw.io extension node to the page ADF
+- creating a new MacroPack-backed diagram by appending a MacroPack extension node directly to the page ADF
 
 The live Confluence validation path remains tenant-dependent and should be exercised first on disposable pages.
 
@@ -396,10 +399,10 @@ The live Confluence validation path remains tenant-dependent and should be exerc
 
 The core runtime image is intentionally **product-only**: it ships the product-owned MCP server and converter toolchain, not `mcp-atlassian`.
 
-To register the packaged server in GitHub Copilot cloud agents, use the repository-root file `.github/copilot/cloud-agent/markdown-to-confluence-drawio-mcp.json` as the starting point. A repository administrator must:
+To register the packaged server in GitHub Copilot cloud agents, use the repository-root file `.github/copilot/cloud-agent/confluence-mermaid-publisher.json` as the starting point. A repository administrator must:
 
 1. Open **Settings** -> **Copilot** -> **Cloud agent**
-2. Paste the JSON from the repository-root file `.github/copilot/cloud-agent/markdown-to-confluence-drawio-mcp.json` into **MCP configuration**
+2. Paste the JSON from the repository-root file `.github/copilot/cloud-agent/confluence-mermaid-publisher.json` into **MCP configuration**
 3. Create a `copilot` environment if it does not already exist
 4. Provide the required Confluence secrets through environment variables:
    - `CONFLUENCE_BASE_URL` or `COPILOT_MCP_CONFLUENCE_URL`

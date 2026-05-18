@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: markdown-to-confluence-drawio-mcp-dev
+    image: confluence-mermaid-publisher-mcp-dev
     working_dir: /app
     command: bash
     environment:
@@ -18,11 +18,11 @@ services:
     tty: true
     volumes:
       - .:/app
-      - markdown_to_confluence_drawio_mcp_m2:/root/.m2
-      - markdown_to_confluence_drawio_mcp_npm:/root/.npm
+      - confluence_mermaid_publisher_mcp_m2:/root/.m2
+      - confluence_mermaid_publisher_mcp_npm:/root/.npm
 
   mcp:
-    image: markdown-to-confluence-drawio-mcp-dev
+    image: confluence-mermaid-publisher-mcp-dev
     working_dir: /app
     command:
       - mcp
@@ -38,9 +38,9 @@ services:
     tty: false
     volumes:
       - .:/app
-      - markdown_to_confluence_drawio_mcp_m2:/root/.m2
-      - markdown_to_confluence_drawio_mcp_npm:/root/.npm
+      - confluence_mermaid_publisher_mcp_m2:/root/.m2
+      - confluence_mermaid_publisher_mcp_npm:/root/.npm
 
 volumes:
-  markdown_to_confluence_drawio_mcp_m2:
-  markdown_to_confluence_drawio_mcp_npm:
+  confluence_mermaid_publisher_mcp_m2:
+  confluence_mermaid_publisher_mcp_npm:

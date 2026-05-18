@@ -50,7 +50,7 @@ if [[ ! -f "${PARSER_DIR}/dist/cli.js" ]]; then
   popd >/dev/null
 fi
 
-if [[ ! -f "${GENERATOR_DIR}/target/markdown-to-confluence-drawio-mcp-generator-0.1.0-SNAPSHOT.jar" ]]; then
+if [[ ! -f "${GENERATOR_DIR}/target/confluence-mermaid-publisher-mcp-generator-0.1.0-SNAPSHOT.jar" ]]; then
   pushd "${GENERATOR_DIR}" >/dev/null
   mvn -q "${MAVEN_REPO_ARGS[@]}" -DskipTests package
   popd >/dev/null

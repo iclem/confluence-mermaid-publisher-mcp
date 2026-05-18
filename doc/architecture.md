@@ -128,13 +128,13 @@ The packaged runtime is one Docker image containing:
 The default container entrypoint starts the stdio MCP server:
 
 ```text
-markdown-to-confluence-drawio-mcp:local mcp
+confluence-mermaid-publisher-mcp:local mcp
 ```
 
 The same image can also start the HTTP MCP server:
 
 ```text
-markdown-to-confluence-drawio-mcp:local mcp-http
+confluence-mermaid-publisher-mcp:local mcp-http
 ```
 
 and utility commands:
@@ -148,20 +148,20 @@ and utility commands:
 
 ### 1. Single Mermaid widget creation
 
-1. MCP client calls `create_confluence_drawio_widget_from_mermaid`
+1. MCP client calls `create_confluence_diagram_from_mermaid`
 2. `publisher/src/mcp-app.ts` creates a publisher service
-3. `publisher/src/converter.ts` writes temporary Mermaid input and runs `scripts/convert.sh`
-4. the generator produces `.drawio`
-5. the publisher uploads the `.drawio` and preview, creates draw.io custom content, and injects a draw.io extension node into page ADF
+3. if the effective `embeddingMode` is `drawio`, `publisher/src/converter.ts` writes temporary Mermaid input and runs `scripts/convert.sh`
+4. in draw.io mode, the generator produces `.drawio`
+5. the publisher either uploads the draw.io artifacts and injects a draw.io extension, or injects a MacroPack extension directly into page ADF
 6. the tool returns the inspected page state
 
 ### 2. Existing widget update
 
-1. MCP client calls `update_confluence_drawio_widget_from_mermaid`
-2. the publisher finds the existing draw.io extension by diagram name, custom-content ID, or index
-3. the new `.drawio` and preview replace the old attachments
-4. the draw.io custom content is updated with a new revision
-5. page ADF metadata is updated if the widget name or dimensions changed
+1. MCP client calls `update_confluence_diagram_from_mermaid`
+2. the publisher finds the existing embedded diagram by draw.io selector, local ID, or index
+3. in draw.io mode, the new `.drawio` and preview replace the old attachments and draw.io custom content is updated
+4. in MacroPack mode, the embedded Mermaid source is rewritten directly in page ADF
+5. page ADF metadata is updated when the backing diagram mode requires it
 
 ### 3. Markdown publication
 
@@ -169,7 +169,7 @@ and utility commands:
 2. the publisher creates the target page or loads the existing page to republish
 3. `publisher/src/markdown.ts` parses Markdown into block-level content
 4. normal text blocks are mapped to Confluence ADF nodes
-5. each Mermaid block is converted to draw.io when possible
+5. each Mermaid block is embedded as MacroPack or draw.io according to the resolved `embeddingMode`
 6. when conversion fails, the page gets an explanatory paragraph plus the original Mermaid code block
 7. the final ADF is written back to Confluence
 
@@ -205,6 +205,8 @@ The current reference backend talks to Confluence directly. The product therefor
 - attachments
 - custom content
 - page ADF mutation
+
+and MacroPack-specific page ADF mutation for embedded Mermaid diagrams.
 
 ### Preview boundary
 

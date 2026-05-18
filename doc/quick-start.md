@@ -4,7 +4,7 @@ This is the shortest path from a clean checkout to a successful Confluence publi
 
 For the full setup and provider-specific installation details, see `doc/user-manual.md`.
 
-The workflow assumes that Markdown is your local source of truth and Confluence is the final publication target. That keeps iteration fast and file-based, while draw.io is used for published diagrams because Confluence Mermaid support is not sufficient for this workflow.
+The workflow assumes that Markdown is your local source of truth and Confluence is the final publication target. That keeps iteration fast and file-based, while the MCP server embeds Mermaid as MacroPack by default and can still use draw.io when you want editable `.drawio` artifacts.
 
 ## 1. Set Confluence credentials
 
@@ -43,7 +43,7 @@ If your agent can spawn command-based stdio MCP servers, run the helper from the
 If the helper is launched from another directory, override the workspace path explicitly:
 
 ```bash
-MARKDOWN_TO_CONFLUENCE_DRAWIO_MCP_WORKSPACE=/absolute/path/to/your-project \
+CONFLUENCE_MERMAID_PUBLISHER_MCP_WORKSPACE=/absolute/path/to/your-project \
   ./scripts/confluence-drawio-mcp.sh
 ```
 
@@ -66,7 +66,7 @@ docker run --rm \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
-  markdown-to-confluence-drawio-mcp:local mcp-http
+  confluence-mermaid-publisher-mcp:local mcp-http
 ```
 
 Or use the compose service from the repository root:
@@ -103,6 +103,14 @@ The common endpoint is:
 http://127.0.0.1:3000/mcp
 ```
 
+Optional default diagram mode:
+
+```bash
+export CONFLUENCE_DEFAULT_EMBEDDING_MODE="drawio"
+```
+
+If omitted, the server defaults to `macropack`.
+
 ## 6. Do a first publish
 
 Recommended sample file in your own repository:
@@ -137,9 +145,11 @@ Example request shape:
 - `create_confluence_page_from_markdown` when the Markdown is generated in memory
 - `update_confluence_page_from_markdown_file` to republish an existing page directly from a Markdown file
 - `update_confluence_page_from_markdown` to republish an existing page from Markdown already in memory
-- `create_confluence_drawio_widget_from_mermaid` to add a single new widget to an existing page
-- `update_confluence_drawio_widget_from_mermaid` to replace an existing widget in place
-- `inspect_confluence_drawio_page` to inspect current page/widget state before updating it
+- `create_confluence_diagram_from_mermaid` to add a single new diagram to an existing page
+- `update_confluence_diagram_from_mermaid` to replace an existing embedded diagram in place
+- `inspect_confluence_page_diagrams` to inspect current page/diagram state before updating it
+
+Every Mermaid-aware tool also accepts an optional `embeddingMode` of `macropack` or `drawio`. If you omit it, the server default is used.
 
 ## Common first-run issues
 

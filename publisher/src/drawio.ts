@@ -4,10 +4,10 @@ import { randomUUID } from "node:crypto";
 
 import type {
   ConfluenceCustomContent,
+  DiagramTarget,
   DrawioExtension,
   DrawioGuestParams,
   JsonObject,
-  WidgetTarget,
 } from "./types.js";
 
 export const DRAWIO_EXTENSION_KEY =
@@ -84,7 +84,7 @@ export function findDrawioExtensions(adfDocument: JsonObject): DrawioExtension[]
   return results;
 }
 
-export function selectDrawioExtension(extensions: DrawioExtension[], target: WidgetTarget): DrawioExtension {
+export function selectDrawioExtension(extensions: DrawioExtension[], target: DiagramTarget): DrawioExtension {
   if (target.custContentId) {
     const byId = extensions.find((extension) => extension.custContentId === target.custContentId);
     if (!byId) {

@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "markdown-to-confluence-drawio-mcp": {
+    "confluence-mermaid-publisher": {
       "type": "stdio",
       "command": "docker",
       "args": [
@@ -14,6 +14,8 @@
         "-e",
         "CONFLUENCE_API_TOKEN",
         "-e",
+        "CONFLUENCE_DEFAULT_EMBEDDING_MODE",
+        "-e",
         "CONFLUENCE_BEARER_TOKEN",
         "-e",
         "COPILOT_MCP_CONFLUENCE_URL",
@@ -21,7 +23,7 @@
         "COPILOT_MCP_CONFLUENCE_USERNAME",
         "-e",
         "COPILOT_MCP_CONFLUENCE_API_TOKEN",
-        "markdown-to-confluence-drawio-mcp:local",
+        "confluence-mermaid-publisher-mcp:local",
         "mcp"
       ]
     }
