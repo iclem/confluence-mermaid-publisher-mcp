@@ -1,5 +1,5 @@
 {
-  "name": "@iclem/markdown-to-confluence-drawio-mcp-parser",
+  "name": "@iclem/confluence-mermaid-publisher-mcp-parser",
   "version": "0.1.0",
   "private": true,
   "type": "module",

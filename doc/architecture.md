@@ -128,13 +128,13 @@ The packaged runtime is one Docker image containing:
 The default container entrypoint starts the stdio MCP server:
 
 ```text
-markdown-to-confluence-drawio-mcp:local mcp
+confluence-mermaid-publisher-mcp:local mcp
 ```
 
 The same image can also start the HTTP MCP server:
 
 ```text
-markdown-to-confluence-drawio-mcp:local mcp-http
+confluence-mermaid-publisher-mcp:local mcp-http
 ```
 
 and utility commands:

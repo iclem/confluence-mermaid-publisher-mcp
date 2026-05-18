@@ -43,7 +43,7 @@ If your agent can spawn command-based stdio MCP servers, run the helper from the
 If the helper is launched from another directory, override the workspace path explicitly:
 
 ```bash
-MARKDOWN_TO_CONFLUENCE_DRAWIO_MCP_WORKSPACE=/absolute/path/to/your-project \
+CONFLUENCE_MERMAID_PUBLISHER_MCP_WORKSPACE=/absolute/path/to/your-project \
   ./scripts/confluence-drawio-mcp.sh
 ```
 
@@ -66,7 +66,7 @@ docker run --rm \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
-  markdown-to-confluence-drawio-mcp:local mcp-http
+  confluence-mermaid-publisher-mcp:local mcp-http
 ```
 
 Or use the compose service from the repository root:

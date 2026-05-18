@@ -1,6 +1,6 @@
-# markdown-to-confluence-drawio-mcp
+# confluence-mermaid-publisher-mcp
 
-`markdown-to-confluence-drawio-mcp` is an MCP server for publishing locally authored Markdown to Confluence while embedding Mermaid diagrams as Confluence diagrams. MacroPack is the default embedding mode, and draw.io remains available when you want editable `.drawio` artifacts.
+`confluence-mermaid-publisher-mcp` is an MCP server for publishing locally authored Markdown to Confluence while embedding Mermaid diagrams as Confluence diagrams. MacroPack is the default embedding mode, and draw.io remains available when you want editable `.drawio` artifacts.
 
 Migration note: older MCP registrations may still refer to this server as `drawio-confluence-mcp` and to the previous draw.io-specific tool names. Update those registrations to use the `confluence-mermaid-publisher` server name and the generic Confluence diagram tool names.
 
@@ -75,7 +75,7 @@ Run local Docker stdio from the workspace you want mounted:
 If your MCP client launches the server from another directory, point the helper at the workspace explicitly:
 
 ```bash
-MARKDOWN_TO_CONFLUENCE_DRAWIO_MCP_WORKSPACE=/absolute/path/to/your-project \
+CONFLUENCE_MERMAID_PUBLISHER_MCP_WORKSPACE=/absolute/path/to/your-project \
   ./scripts/confluence-drawio-mcp.sh
 ```
 
@@ -96,7 +96,7 @@ docker run --rm \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
-  markdown-to-confluence-drawio-mcp:local mcp-http
+  confluence-mermaid-publisher-mcp:local mcp-http
 ```
 
 Or use the development compose service:

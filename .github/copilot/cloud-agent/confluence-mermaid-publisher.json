@@ -23,7 +23,7 @@
         "COPILOT_MCP_CONFLUENCE_USERNAME",
         "-e",
         "COPILOT_MCP_CONFLUENCE_API_TOKEN",
-        "markdown-to-confluence-drawio-mcp:local",
+        "confluence-mermaid-publisher-mcp:local",
         "mcp"
       ]
     }

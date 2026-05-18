@@ -55,7 +55,7 @@ docker run --rm \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
-  markdown-to-confluence-drawio-mcp:local mcp-http
+  confluence-mermaid-publisher-mcp:local mcp-http
 ```
 
 Or start the equivalent compose service from the repository root:
@@ -99,7 +99,7 @@ From the workspace you want mounted:
 If the helper is launched from another directory, set the workspace explicitly:
 
 ```bash
-MARKDOWN_TO_CONFLUENCE_DRAWIO_MCP_WORKSPACE=/absolute/path/to/your-project \
+CONFLUENCE_MERMAID_PUBLISHER_MCP_WORKSPACE=/absolute/path/to/your-project \
   ./scripts/confluence-drawio-mcp.sh
 ```
 
@@ -123,7 +123,7 @@ docker run --rm -i \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
-  markdown-to-confluence-drawio-mcp:local mcp
+  confluence-mermaid-publisher-mcp:local mcp
 ```
 
 Use local Docker stdio when your agent prefers command-based MCP registration scoped to the current workspace. Use HTTP when you want a long-lived shared container and URL-based registration.
@@ -132,7 +132,7 @@ If you do **not** keep a local checkout and instead pull the packaged image from
 
 - macOS or Linux
 - the MCP client launches the command with its cwd set to the workspace that should be mounted
-- you replace `<your-registry>/markdown-to-confluence-drawio-mcp:<tag>` with your published image reference
+- you replace `<your-registry>/confluence-mermaid-publisher-mcp:<tag>` with your published image reference
 
 ## Provider installation
 
@@ -179,7 +179,7 @@ If you prefer a registry-only setup without a local checkout, a direct stdio reg
       "command": "sh",
       "args": [
         "-c",
-        "docker run --rm -i -v \"$PWD\":\"$PWD\" -w \"$PWD\" -e CONFLUENCE_BASE_URL -e CONFLUENCE_EMAIL -e CONFLUENCE_API_TOKEN -e CONFLUENCE_BEARER_TOKEN -e COPILOT_MCP_CONFLUENCE_URL -e COPILOT_MCP_CONFLUENCE_USERNAME -e COPILOT_MCP_CONFLUENCE_API_TOKEN <your-registry>/markdown-to-confluence-drawio-mcp:<tag> mcp"
+        "docker run --rm -i -v \"$PWD\":\"$PWD\" -w \"$PWD\" -e CONFLUENCE_BASE_URL -e CONFLUENCE_EMAIL -e CONFLUENCE_API_TOKEN -e CONFLUENCE_BEARER_TOKEN -e COPILOT_MCP_CONFLUENCE_URL -e COPILOT_MCP_CONFLUENCE_USERNAME -e COPILOT_MCP_CONFLUENCE_API_TOKEN <your-registry>/confluence-mermaid-publisher-mcp:<tag> mcp"
       ]
     }
   }
@@ -214,7 +214,7 @@ Registry-only stdio example:
 command = "sh"
 args = [
   "-c",
-  "docker run --rm -i -v \"$PWD\":\"$PWD\" -w \"$PWD\" -e CONFLUENCE_BASE_URL -e CONFLUENCE_EMAIL -e CONFLUENCE_API_TOKEN -e CONFLUENCE_BEARER_TOKEN -e COPILOT_MCP_CONFLUENCE_URL -e COPILOT_MCP_CONFLUENCE_USERNAME -e COPILOT_MCP_CONFLUENCE_API_TOKEN <your-registry>/markdown-to-confluence-drawio-mcp:<tag> mcp"
+  "docker run --rm -i -v \"$PWD\":\"$PWD\" -w \"$PWD\" -e CONFLUENCE_BASE_URL -e CONFLUENCE_EMAIL -e CONFLUENCE_API_TOKEN -e CONFLUENCE_BEARER_TOKEN -e COPILOT_MCP_CONFLUENCE_URL -e COPILOT_MCP_CONFLUENCE_USERNAME -e COPILOT_MCP_CONFLUENCE_API_TOKEN <your-registry>/confluence-mermaid-publisher-mcp:<tag> mcp"
 ]
 ```
 
@@ -252,7 +252,7 @@ Registry-only stdio example:
       "command": "sh",
       "args": [
         "-c",
-        "docker run --rm -i -v \"$PWD\":\"$PWD\" -w \"$PWD\" -e CONFLUENCE_BASE_URL -e CONFLUENCE_EMAIL -e CONFLUENCE_API_TOKEN -e CONFLUENCE_BEARER_TOKEN -e COPILOT_MCP_CONFLUENCE_URL -e COPILOT_MCP_CONFLUENCE_USERNAME -e COPILOT_MCP_CONFLUENCE_API_TOKEN <your-registry>/markdown-to-confluence-drawio-mcp:<tag> mcp"
+        "docker run --rm -i -v \"$PWD\":\"$PWD\" -w \"$PWD\" -e CONFLUENCE_BASE_URL -e CONFLUENCE_EMAIL -e CONFLUENCE_API_TOKEN -e CONFLUENCE_BEARER_TOKEN -e COPILOT_MCP_CONFLUENCE_URL -e COPILOT_MCP_CONFLUENCE_USERNAME -e COPILOT_MCP_CONFLUENCE_API_TOKEN <your-registry>/confluence-mermaid-publisher-mcp:<tag> mcp"
       ]
     }
   }

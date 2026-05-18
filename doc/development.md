@@ -37,8 +37,8 @@ The repository is mounted at `/app`.
 The release-oriented contract is now a **single Docker image** with a **single supported default entrypoint**:
 
 ```bash
-docker build -t markdown-to-confluence-drawio-mcp:local .
-docker run --rm -i markdown-to-confluence-drawio-mcp:local
+docker build -t confluence-mermaid-publisher-mcp:local .
+docker run --rm -i confluence-mermaid-publisher-mcp:local
 ```
 
 The default command starts the product-owned stdio MCP server.
@@ -48,11 +48,11 @@ The development compose file also follows the corporate layout under `build/dock
 Supported subcommands:
 
 ```bash
-docker run --rm -i markdown-to-confluence-drawio-mcp:local mcp
-docker run --rm -p 3000:3000 markdown-to-confluence-drawio-mcp:local mcp-http
-docker run --rm -i markdown-to-confluence-drawio-mcp:local publisher-cli --help
-docker run --rm -i -v "$PWD:/work" -w /work markdown-to-confluence-drawio-mcp:local convert input.mermaid output.drawio
-docker run --rm -i markdown-to-confluence-drawio-mcp:local test
+docker run --rm -i confluence-mermaid-publisher-mcp:local mcp
+docker run --rm -p 3000:3000 confluence-mermaid-publisher-mcp:local mcp-http
+docker run --rm -i confluence-mermaid-publisher-mcp:local publisher-cli --help
+docker run --rm -i -v "$PWD:/work" -w /work confluence-mermaid-publisher-mcp:local convert input.mermaid output.drawio
+docker run --rm -i confluence-mermaid-publisher-mcp:local test
 ```
 
 The development compose file also exposes an `mcp-http` service:
@@ -96,7 +96,7 @@ mvn package -DskipTests
 If you want to prove builds are independent from any pre-populated Maven cache, point the scripts at a clean local repository:
 
 ```bash
-export MAVEN_REPO_LOCAL=/tmp/markdown-to-confluence-drawio-mcp-m2
+export MAVEN_REPO_LOCAL=/tmp/confluence-mermaid-publisher-mcp-m2
 ./scripts/convert.sh ./test-data/simple-flowchart.mermaid ./output/simple-flowchart.drawio
 ```
 
@@ -152,8 +152,8 @@ This writes `output/validation-flowchart.drawio` plus the other manual inspectio
 
 The Compose setup keeps:
 
-- Maven artifacts in the `markdown_to_confluence_drawio_mcp_m2` volume
-- npm cache in the `markdown_to_confluence_drawio_mcp_npm` volume
+- Maven artifacts in the `confluence_mermaid_publisher_mcp_m2` volume
+- npm cache in the `confluence_mermaid_publisher_mcp_npm` volume
 
 ## Current state
 
@@ -282,7 +282,7 @@ docker run --rm -i \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
-  markdown-to-confluence-drawio-mcp:local
+  confluence-mermaid-publisher-mcp:local
 ```
 
 ### Run the MCP server over HTTP
@@ -294,7 +294,7 @@ docker run --rm -p 127.0.0.1:3000:3000 \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
-  markdown-to-confluence-drawio-mcp:local mcp-http
+  confluence-mermaid-publisher-mcp:local mcp-http
 ```
 
 The Streamable HTTP endpoint is served at `/mcp`, with a simple health check at `/healthz`.

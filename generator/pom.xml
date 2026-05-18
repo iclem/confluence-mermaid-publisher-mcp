@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.nasdanika.experimental</groupId>
-    <artifactId>markdown-to-confluence-drawio-mcp-generator</artifactId>
+    <artifactId>confluence-mermaid-publisher-mcp-generator</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
