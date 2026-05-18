@@ -1,0 +1,27 @@
+publisher/src/service.ts
+  s_c312869048a412::t_1901f87676de75 103
+doc/user-manual.md
+  s_c312869048a412::t_1901f87676de75 139-140
+publisher/src/macropack.ts
+  s_c312869048a412::t_1901f87676de75 155-172,174-175
+publisher/src/service.test.ts
+  s_c312869048a412::t_1901f87676de75 339-386,631-675
+README.md
+  s_c312869048a412::t_1901f87676de75 5-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "5ccb6e3dab7e641e5583defdc8d15575190d2a78",
+  "prompts": {},
+  "sessions": {
+    "s_c312869048a412": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1c56c1794ffeHOsaYgF0v35UqM",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
