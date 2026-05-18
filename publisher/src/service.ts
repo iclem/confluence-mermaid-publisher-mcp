@@ -119,6 +119,12 @@ export class DrawioPublisherService {
       throw new Error(`No embedded diagram found for localId ${target.localId}`);
     }
 
+    // diagramName / index selectors are only valid for draw.io widgets
+    // (MacroPack rejects them in selectMacroPackExtension)
+    if (target.diagramName || target.index !== undefined) {
+      return "drawio";
+    }
+
     return undefined;
   }
 

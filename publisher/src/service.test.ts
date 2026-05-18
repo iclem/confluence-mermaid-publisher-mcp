@@ -672,7 +672,7 @@ describe("DrawioPublisherService", () => {
       diagram: {
         diagramName: "existing.drawio",
       },
-    })).rejects.toThrow("MacroPack diagrams can be selected only by localId or index");
+    })).rejects.toThrow("Target diagram does not use embedding mode macropack; detected drawio instead");
   });
 
   it("inspects mixed draw.io and MacroPack diagrams on a page", async () => {
