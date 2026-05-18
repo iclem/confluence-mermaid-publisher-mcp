@@ -1,0 +1,21 @@
+publisher/src/service.ts
+  s_c281f43b36ef39::t_c4c0907cc6d0a3 122-127
+publisher/src/service.test.ts
+  s_c281f43b36ef39::t_632f96f1d060df 675
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "96b328f1e768588b4ab376a7ad9362fcc9c5c693",
+  "prompts": {},
+  "sessions": {
+    "s_c281f43b36ef39": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1c4e483e8ffeHX4MUwrEOVTXYb",
+        "model": "qwen3.6:27b-a3b"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
