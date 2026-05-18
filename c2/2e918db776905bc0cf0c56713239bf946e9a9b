@@ -1,0 +1,33 @@
+publisher/src/mcp-app.ts
+  s_e2a56afd0b14e5::t_077a527f65a8d5 257-260
+doc/user-manual.md
+  s_e2a56afd0b14e5::t_77d146145120ff 367-370,374
+  s_e2a56afd0b14e5::t_077a527f65a8d5 372-373
+publisher/src/service.ts
+  s_e2a56afd0b14e5::t_77d146145120ff 91-98,145,152-172,174-186,193-197
+  s_e2a56afd0b14e5::t_077a527f65a8d5 99-113,318,464
+doc/architecture.md
+  s_e2a56afd0b14e5::t_77d146145120ff 161
+publisher/src/drawio.ts
+  s_e2a56afd0b14e5::t_077a527f65a8d5 95-100
+publisher/src/service.test.ts
+  s_e2a56afd0b14e5::t_77d146145120ff 229,233-243,248,299-371,707-732,802-833,847-888
+  s_e2a56afd0b14e5::t_077a527f65a8d5 735-754,889-902
+  s_e2a56afd0b14e5::t_92013d5165e624 834-846
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "c22e918db776905bc0cf0c56713239bf946e9a9b",
+  "prompts": {},
+  "sessions": {
+    "s_e2a56afd0b14e5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1c3e302acffe3GiWfDQX6cvHPw",
+        "model": "qwen3.6:27b-a3b"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
