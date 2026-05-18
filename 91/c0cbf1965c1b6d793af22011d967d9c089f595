@@ -1,0 +1,59 @@
+doc/development.md
+  s_ad89a396dbca7c::t_f255da1f40f4e5 40-41,51-55,285,297
+  s_ad89a396dbca7c::t_a2de7d395b933c 99
+  s_ad89a396dbca7c::t_075a6e4d19766f 155-156
+scripts/confluence-drawio-mcp.sh
+  s_ad89a396dbca7c::t_fb4ae5d2e84418 5-6
+generator/pom.xml
+  s_ad89a396dbca7c::t_8d2e0e89f25c33 7
+publisher/package.json
+  s_ad89a396dbca7c::t_c61804c52c8862 2
+Dockerfile
+  s_ad89a396dbca7c::t_d5b3e85b606fe3 17-18,20
+docker-compose.yml
+  s_ad89a396dbca7c::t_a5e306663f3649 21-22,41-42,45-46
+  s_ad89a396dbca7c::t_3483d0ea41a8ca 6,25
+build/docker-compose/docker-compose-local.yml
+  s_ad89a396dbca7c::t_1b14f433f58de8 21-22,41-42,64-65,68-69
+  s_ad89a396dbca7c::t_07bc079bad3158 6,25,45
+README.md
+  s_ad89a396dbca7c::t_b3b56bfa7dfd15 1,3
+  s_ad89a396dbca7c::t_978afdff4ec771 99
+  s_ad89a396dbca7c::t_47baf1c2f295a6 78
+scripts/docker-entrypoint.sh
+  s_ad89a396dbca7c::t_e6b18168af90e7 5
+  s_ad89a396dbca7c::t_06013509cfb765 34
+.github/copilot/cloud-agent/confluence-mermaid-publisher.json
+  s_ad89a396dbca7c::t_6f8fe8b28732d3 26
+scripts/convert.sh
+  s_ad89a396dbca7c::t_e1d326d3da6969 53
+Makefile
+  s_ad89a396dbca7c::t_bb6a3b759b89ab 34
+parser/package.json
+  s_ad89a396dbca7c::t_97ec99f974eaf5 2
+doc/quick-start.md
+  s_ad89a396dbca7c::t_41e1d5749763d9 69
+  s_ad89a396dbca7c::t_96729065286735 46
+doc/user-manual.md
+  s_ad89a396dbca7c::t_64ad984d4ce825 102
+  s_ad89a396dbca7c::t_4a3ca114c854d0 58,126
+  s_ad89a396dbca7c::t_f7ff521b3773b4 135,182,217,255
+doc/architecture.md
+  s_ad89a396dbca7c::t_37df30e9406435 131,137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "91c0cbf1965c1b6d793af22011d967d9c089f595",
+  "prompts": {},
+  "sessions": {
+    "s_ad89a396dbca7c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1c4ef3a28ffewBtBTZgmES7O8P",
+        "model": "qwen3.6:27b-a3b"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
