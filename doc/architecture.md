@@ -158,7 +158,7 @@ and utility commands:
 ### 2. Existing widget update
 
 1. MCP client calls `update_confluence_diagram_from_mermaid`
-2. the publisher finds the existing embedded diagram by draw.io selector, local ID, or index
+2. the publisher finds the existing embedded diagram by draw.io-only selector (`widgetDiagramName`/`custContentId`), or by `localId`, or by `index` within the resolved embedding mode
 3. in draw.io mode, the new `.drawio` and preview replace the old attachments and draw.io custom content is updated
 4. in MacroPack mode, the embedded Mermaid source is rewritten directly in page ADF
 5. page ADF metadata is updated when the backing diagram mode requires it
