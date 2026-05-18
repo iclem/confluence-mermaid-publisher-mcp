@@ -100,7 +100,7 @@ export class DrawioPublisherService {
   }
 
   private detectTargetEmbeddingMode(adf: JsonObject, target: DiagramTarget): EmbeddingMode | undefined {
-    if (target.custContentId || target.diagramName) {
+    if (target.custContentId) {
       return "drawio";
     }
 

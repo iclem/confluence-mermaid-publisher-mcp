@@ -336,6 +336,54 @@ function createExistingMacroPackFixture(): {
   };
 }
 
+function createMultipleMacroPackFixture(): {
+  client: FakeConfluenceClient;
+  pageId: string;
+  localIds: string[];
+} {
+  const pageId = "6255738939";
+  const firstNode = buildMacroPackExtensionNode({
+    pageId,
+    spaceId: "42",
+    spaceKey: "~user",
+    mermaid: "flowchart TD\nA-->B",
+  });
+  const secondNode = buildMacroPackExtensionNode({
+    pageId,
+    spaceId: "42",
+    spaceKey: "~user",
+    mermaid: "flowchart TD\nC-->D",
+  });
+  const localIds = [firstNode, secondNode].map(
+    (node) => ((node.attrs as JsonObject).localId as string | undefined) ?? "missing-local-id",
+  );
+  const page: ConfluencePage = {
+    id: pageId,
+    status: "current",
+    title: "Multiple MacroPack diagrams",
+    spaceId: "42",
+    parentId: "24",
+    version: {
+      number: 4,
+    },
+    body: {
+      atlas_doc_format: {
+        value: {
+          type: "doc",
+          version: 1,
+          content: [firstNode, secondNode],
+        },
+      },
+    },
+  };
+
+  return {
+    client: new FakeConfluenceClient("https://example.atlassian.net/wiki", page, [], new Map()),
+    pageId,
+    localIds,
+  };
+}
+
 function createMixedDiagramFixture(): {
   client: FakeConfluenceClient;
   pageId: string;
@@ -578,6 +626,53 @@ describe("DrawioPublisherService", () => {
     ]);
     const macroPackExtensions = findMacroPackExtensions(getStoredPageAdf(client));
     expect(macroPackExtensions[0]?.source).toContain("A-->C");
+  });
+
+  it("updates the only MacroPack diagram when no selector is provided", async () => {
+    const { client, pageId, localId } = createExistingMacroPackFixture();
+    const service = new DrawioPublisherService(client as never);
+
+    const result = await service.updateDiagramFromMermaid({
+      pageId,
+      mermaid: "flowchart TD\nA-->D",
+      diagram: {},
+    });
+
+    expect(client.pageUpdateMessages).toEqual(["Update MacroPack diagram"]);
+    expect(result.embeddedDiagrams).toEqual([
+      expect.objectContaining({
+        embeddingMode: "macropack",
+        localId,
+      }),
+    ]);
+    const macroPackExtensions = findMacroPackExtensions(getStoredPageAdf(client));
+    expect(macroPackExtensions[0]?.source).toContain("A-->D");
+  });
+
+  it("requires an explicit selector when multiple MacroPack diagrams exist", async () => {
+    const { client, pageId } = createMultipleMacroPackFixture();
+    const service = new DrawioPublisherService(client as never);
+
+    await expect(service.updateDiagramFromMermaid({
+      pageId,
+      mermaid: "flowchart TD\nA-->E",
+      diagram: {},
+      embeddingMode: "macropack",
+    })).rejects.toThrow("Multiple MacroPack diagrams found; provide localId or index");
+  });
+
+  it("does not infer draw.io mode from diagramName when a MacroPack override is explicit", async () => {
+    const { client, pageId } = createMixedDiagramFixture();
+    const service = new DrawioPublisherService(client as never);
+
+    await expect(service.updateDiagramFromMermaid({
+      pageId,
+      mermaid: "flowchart TD\nA-->F",
+      embeddingMode: "macropack",
+      diagram: {
+        diagramName: "existing.drawio",
+      },
+    })).rejects.toThrow("MacroPack diagrams can be selected only by localId or index");
   });
 
   it("inspects mixed draw.io and MacroPack diagrams on a page", async () => {

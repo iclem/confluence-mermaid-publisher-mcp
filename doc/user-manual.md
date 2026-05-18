@@ -136,6 +136,8 @@ If you do **not** keep a local checkout and instead pull the packaged image from
 
 ## Provider installation
 
+Migration note: if you previously registered this MCP server as `drawio-confluence-mcp`, update the server key/name to `confluence-mermaid-publisher` and switch any client automation to the generic Confluence diagram tool names.
+
 ### GitHub Copilot CLI
 
 Typical local config file:

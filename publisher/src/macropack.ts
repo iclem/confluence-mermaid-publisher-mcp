@@ -152,12 +152,27 @@ export function selectMacroPackExtension(extensions: MacroPackExtension[], targe
     return byLocalId;
   }
 
-  const index = target.index ?? 0;
-  const extension = extensions[index];
-  if (!extension) {
-    throw new Error(`No MacroPack diagram found at index ${index}`);
+  if (target.index !== undefined) {
+    const extension = extensions[target.index];
+    if (!extension) {
+      throw new Error(`No MacroPack diagram found at index ${target.index}`);
+    }
+    return extension;
   }
-  return extension;
+
+  if (target.custContentId || target.diagramName) {
+    throw new Error("MacroPack diagrams can be selected only by localId or index");
+  }
+
+  if (extensions.length === 0) {
+    throw new Error("No MacroPack diagrams found on page");
+  }
+
+  if (extensions.length > 1) {
+    throw new Error("Multiple MacroPack diagrams found; provide localId or index");
+  }
+
+  return extensions[0]!;
 }
 
 export function updateMacroPackExtensionSource(
