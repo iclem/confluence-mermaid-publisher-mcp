@@ -110,7 +110,6 @@ function assertSingleDiagramSelector(target: DiagramTarget): void {
     );
   }
 }
-
 export class DrawioPublisherService {
   constructor(
     private readonly client: ConfluenceClient,
@@ -183,7 +182,6 @@ export class DrawioPublisherService {
       }
       return this.resolveIndexEmbeddingMode(adf);
     }
-
     const detected = this.detectTargetEmbeddingMode(adf, target);
     if (override && detected && override !== detected) {
       throw new Error(
@@ -194,7 +192,6 @@ export class DrawioPublisherService {
     if (!override && !detected && hasGenericSelector(target)) {
       return this.defaultEmbeddingMode;
     }
-
     return override ?? detected ?? this.defaultEmbeddingMode;
   }
 

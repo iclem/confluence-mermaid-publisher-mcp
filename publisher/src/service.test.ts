@@ -751,7 +751,6 @@ describe("DrawioPublisherService", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
-
   it("updates the only MacroPack diagram when no selector is provided", async () => {
     const { client, pageId, localId } = createExistingMacroPackFixture();
     const service = new DrawioPublisherService(client as never);
@@ -901,7 +900,6 @@ describe("DrawioPublisherService", () => {
       },
     })).rejects.toThrow("Provide only one existing diagram selector; received custContentId, localId");
   });
-
   it("inspects mixed draw.io and MacroPack diagrams on a page", async () => {
     const { client, pageId, customContentId, localId } = createMixedDiagramFixture();
     const service = new DrawioPublisherService(client as never);
