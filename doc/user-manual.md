@@ -364,12 +364,14 @@ Use:
 
 Select the target diagram by:
 
-- `widgetDiagramName`
-- or `custContentId`
-- or `localId`
-- or `index`
+- `widgetDiagramName` for draw.io diagrams
+- or `custContentId` for draw.io diagrams
+- or `localId` for either embedding mode
+- or `index` within the chosen embedding mode
 
-When `embeddingMode` is omitted, the server uses its configured default and falls back to `macropack` when no server default is set. Pass `embeddingMode` only when you explicitly want to override that default for a specific tool call.
+Use only one selector per update request.
+
+When `embeddingMode` is omitted, the server uses its configured default and falls back to `macropack` when no server default is set. Pass `embeddingMode` when you explicitly want to override that default for a specific tool call, or when selecting by `index` on a page that contains both draw.io and MacroPack diagrams.
 
 ## Example prompts for agents
 

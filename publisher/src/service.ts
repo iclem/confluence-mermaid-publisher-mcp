@@ -88,6 +88,28 @@ function buildEmbeddedDiagrams(adf: JsonObject): EmbeddedDiagram[] {
   return [...drawioDiagrams, ...macroPackDiagrams];
 }
 
+function hasDrawioOnlySelector(target: DiagramTarget): boolean {
+  return Boolean(target.custContentId || target.diagramName);
+}
+
+function hasGenericSelector(target: DiagramTarget): boolean {
+  return Boolean(target.localId || target.index !== undefined);
+}
+
+function assertSingleDiagramSelector(target: DiagramTarget): void {
+  const selectors = [
+    target.diagramName ? "diagramName" : undefined,
+    target.custContentId ? "custContentId" : undefined,
+    target.localId ? "localId" : undefined,
+    target.index !== undefined ? "index" : undefined,
+  ].filter((selector): selector is string => Boolean(selector));
+
+  if (selectors.length > 1) {
+    throw new Error(
+      `Provide only one existing diagram selector; received ${selectors.join(", ")}`,
+    );
+  }
+}
 export class DrawioPublisherService {
   constructor(
     private readonly client: ConfluenceClient,
@@ -119,21 +141,56 @@ export class DrawioPublisherService {
       throw new Error(`No embedded diagram found for localId ${target.localId}`);
     }
 
-    // diagramName / index selectors are only valid for draw.io widgets
-    // (MacroPack rejects them in selectMacroPackExtension)
-    if (target.diagramName || target.index !== undefined) {
+    if (target.diagramName) {
       return "drawio";
     }
 
     return undefined;
   }
 
+  private resolveIndexEmbeddingMode(adf: JsonObject): EmbeddingMode {
+    const drawioCount = findDrawioExtensions(adf).length;
+    const macroPackCount = findMacroPackExtensions(adf).length;
+
+    if (drawioCount > 0 && macroPackCount > 0) {
+      throw new Error(
+        "Index selector is ambiguous on pages with both draw.io and MacroPack diagrams; provide embeddingMode or localId",
+      );
+    }
+
+    if (drawioCount > 0) {
+      return "drawio";
+    }
+
+    if (macroPackCount > 0) {
+      return "macropack";
+    }
+
+    return this.defaultEmbeddingMode;
+  }
+
   private resolveUpdateEmbeddingMode(adf: JsonObject, target: DiagramTarget, override?: EmbeddingMode): EmbeddingMode {
+    if (hasDrawioOnlySelector(target) && override === "macropack") {
+      throw new Error(
+        `Target diagram does not use embedding mode ${override}; detected drawio instead`,
+      );
+    }
+
+    if (target.index !== undefined) {
+      if (override) {
+        return override;
+      }
+      return this.resolveIndexEmbeddingMode(adf);
+    }
     const detected = this.detectTargetEmbeddingMode(adf, target);
     if (override && detected && override !== detected) {
       throw new Error(
         `Target diagram does not use embedding mode ${override}; detected ${detected} instead`,
       );
+    }
+
+    if (!override && !detected && hasGenericSelector(target)) {
+      return this.defaultEmbeddingMode;
     }
     return override ?? detected ?? this.defaultEmbeddingMode;
   }
@@ -255,6 +312,7 @@ export class DrawioPublisherService {
     diagramName?: string;
     widget: DiagramTarget;
   }): Promise<InspectResult> {
+    assertSingleDiagramSelector(args.widget);
     const page = await this.client.getPage(args.pageId, "atlas_doc_format");
     const adf = parseAtlasDocFormat(page.body?.atlas_doc_format?.value ?? { type: "doc", version: 1, content: [] });
     const extensions = findDrawioExtensions(adf);
@@ -400,6 +458,7 @@ export class DrawioPublisherService {
     diagram: DiagramTarget;
     embeddingMode?: EmbeddingMode;
   }): Promise<InspectResult> {
+    assertSingleDiagramSelector(args.diagram);
     const page = await this.client.getPage(args.pageId, "atlas_doc_format");
     const adf = parseAtlasDocFormat(page.body?.atlas_doc_format?.value ?? { type: "doc", version: 1, content: [] });
     const embeddingMode = this.resolveUpdateEmbeddingMode(adf, args.diagram, args.embeddingMode);

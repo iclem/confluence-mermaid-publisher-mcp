@@ -92,6 +92,13 @@ export function selectDrawioExtension(extensions: DrawioExtension[], target: Dia
     }
     return byId;
   }
+  if (target.localId) {
+    const byLocalId = extensions.find((extension) => extension.localId === target.localId);
+    if (!byLocalId) {
+      throw new Error(`No draw.io widget found for localId ${target.localId}`);
+    }
+    return byLocalId;
+  }
   if (target.diagramName) {
     const byName = extensions.find((extension) => extension.diagramName === target.diagramName);
     if (!byName) {

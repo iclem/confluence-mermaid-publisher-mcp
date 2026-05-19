@@ -226,23 +226,26 @@ function createExistingWidgetFixture(): {
   client: FakeConfluenceClient;
   pageId: string;
   customContentId: string;
+  localId: string;
 } {
   const pageId = "6255738936";
   const customContentId = "cust-1";
+  const extensionNode = buildDrawioExtensionNode({
+    pageId,
+    spaceId: "42",
+    spaceKey: "~user",
+    diagramName: "existing.drawio",
+    custContentId: customContentId,
+    width: 320,
+    height: 180,
+    baseUrl: "https://example.atlassian.net/wiki",
+  });
+  const localId = ((extensionNode.attrs as JsonObject).localId as string | undefined) ?? "missing-local-id";
   const adf = {
     type: "doc",
     version: 1,
     content: [
-      buildDrawioExtensionNode({
-        pageId,
-        spaceId: "42",
-        spaceKey: "~user",
-        diagramName: "existing.drawio",
-        custContentId: customContentId,
-        width: 320,
-        height: 180,
-        baseUrl: "https://example.atlassian.net/wiki",
-      }),
+      extensionNode,
     ],
   };
   const page: ConfluencePage = {
@@ -293,6 +296,79 @@ function createExistingWidgetFixture(): {
     client: new FakeConfluenceClient("https://example.atlassian.net/wiki", page, attachments, customContents),
     pageId,
     customContentId,
+    localId,
+  };
+}
+
+function createMultipleDrawioFixture(): {
+  client: FakeConfluenceClient;
+  pageId: string;
+  customContentIds: string[];
+} {
+  const pageId = "6255738940";
+  const customContentIds = ["cust-1", "cust-2"];
+  const adf = {
+    type: "doc",
+    version: 1,
+    content: customContentIds.map((customContentId, index) => buildDrawioExtensionNode({
+      pageId,
+      spaceId: "42",
+      spaceKey: "~user",
+      diagramName: `existing-${index + 1}.drawio`,
+      custContentId: customContentId,
+      width: 320,
+      height: 180,
+      baseUrl: "https://example.atlassian.net/wiki",
+    })),
+  };
+  const page: ConfluencePage = {
+    id: pageId,
+    status: "current",
+    title: "Multiple draw.io diagrams",
+    spaceId: "42",
+    parentId: "24",
+    version: {
+      number: 4,
+    },
+    body: {
+      atlas_doc_format: {
+        value: adf,
+      },
+    },
+  };
+  const attachments: ConfluenceAttachment[] = [
+    { id: "att-1", title: "existing-1.drawio", version: { number: 3 } },
+    { id: "att-2", title: "existing-1.drawio.png", version: { number: 3 } },
+    { id: "att-3", title: "existing-2.drawio", version: { number: 3 } },
+    { id: "att-4", title: "existing-2.drawio.png", version: { number: 3 } },
+  ];
+  const customContents = new Map<string, ConfluenceCustomContent>(customContentIds.map((id, index) => [id, {
+    id,
+    type: DRAWIO_CUSTOM_CONTENT_TYPE,
+    status: "current",
+    title: `existing-${index + 1}.drawio`,
+    pageId,
+    version: {
+      number: 5,
+    },
+    body: {
+      raw: {
+        value: JSON.stringify({
+          search: `API ${index + 1}`,
+          pageId,
+          type: "page",
+          diagramName: `existing-${index + 1}.drawio`,
+          revision: 3,
+          isSketch: false,
+        }),
+      },
+    },
+  }]));
+
+  return {
+    client: new FakeConfluenceClient("https://example.atlassian.net/wiki", page, attachments, customContents),
+    pageId,
+    customContentIds,
   };
 }
 
@@ -628,6 +704,53 @@ describe("DrawioPublisherService", () => {
     expect(macroPackExtensions[0]?.source).toContain("A-->C");
   });
 
+  it("updates an existing draw.io widget by localId", async () => {
+    const { client, pageId, customContentId, localId } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never);
+    const { dir, drawioPath, previewPath } = createTempDiagramFiles("existing.drawio", 320, 180);
+
+    try {
+      const result = await service.updateExistingWidget({
+        pageId,
+        drawioPath,
+        previewPath,
+        widget: {
+          localId,
+        },
+      });
+
+      expect(client.customContentUpdates).toEqual([customContentId]);
+      expect(getEmbeddedDrawioDiagrams(result)).toEqual([
+        expect.objectContaining({
+          diagramName: "existing.drawio",
+          custContentId: customContentId,
+          localId,
+        }),
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects conflicting selectors when updating an existing draw.io widget directly", async () => {
+    const { client, pageId, customContentId, localId } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never);
+    const { dir, drawioPath, previewPath } = createTempDiagramFiles("existing.drawio", 320, 180);
+
+    try {
+      await expect(service.updateExistingWidget({
+        pageId,
+        drawioPath,
+        previewPath,
+        widget: {
+          custContentId: customContentId,
+          localId,
+        },
+      })).rejects.toThrow("Provide only one existing diagram selector; received custContentId, localId");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
   it("updates the only MacroPack diagram when no selector is provided", async () => {
     const { client, pageId, localId } = createExistingMacroPackFixture();
     const service = new DrawioPublisherService(client as never);
@@ -675,6 +798,108 @@ describe("DrawioPublisherService", () => {
     })).rejects.toThrow("Target diagram does not use embedding mode macropack; detected drawio instead");
   });
 
+  it("updates a MacroPack diagram by index when embeddingMode is macropack", async () => {
+    const { client, pageId, localIds } = createMultipleMacroPackFixture();
+    const service = new DrawioPublisherService(client as never);
+
+    const result = await service.updateDiagramFromMermaid({
+      pageId,
+      mermaid: "flowchart TD\nX-->Y",
+      embeddingMode: "macropack",
+      diagram: {
+        index: 1,
+      },
+    });
+
+    expect(client.pageUpdateMessages).toEqual(["Update MacroPack diagram"]);
+    expect(result.embeddedDiagrams).toEqual([
+      expect.objectContaining({
+        embeddingMode: "macropack",
+        localId: localIds[0],
+      }),
+      expect.objectContaining({
+        embeddingMode: "macropack",
+        localId: localIds[1],
+      }),
+    ]);
+    const macroPackExtensions = findMacroPackExtensions(getStoredPageAdf(client));
+    expect(macroPackExtensions[0]?.source).toContain("A-->B");
+    expect(macroPackExtensions[1]?.source).toContain("X-->Y");
+  });
+
+  it("updates a draw.io widget by index on draw.io-only pages", async () => {
+    const { client, pageId, customContentIds } = createMultipleDrawioFixture();
+    const { dir, drawioPath, previewPath } = createTempDiagramFiles("updated-index.drawio", 640, 480);
+    const service = new DrawioPublisherService(
+      client as never,
+      async (mermaid, diagramName) => {
+        expect(mermaid).toBe("flowchart TD\nA-->Z");
+        expect(diagramName).toBe("updated-index.drawio");
+        return {
+          mermaidPath: `${dir}/input.mermaid`,
+          drawioPath,
+          previewPath,
+          cleanup: async () => undefined,
+        };
+      },
+    );
+
+    try {
+      const result = await service.updateDiagramFromMermaid({
+        pageId,
+        mermaid: "flowchart TD\nA-->Z",
+        diagramName: "updated-index.drawio",
+        diagram: {
+          index: 1,
+        },
+      });
+
+      expect(client.customContentUpdates).toEqual([customContentIds[1]!]);
+      expect(getEmbeddedDrawioDiagrams(result)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            diagramName: "existing-1.drawio",
+            custContentId: customContentIds[0],
+          }),
+          expect.objectContaining({
+            diagramName: "updated-index.drawio",
+            custContentId: customContentIds[1],
+          }),
+        ]),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects index selection on mixed pages without an explicit embedding mode", async () => {
+    const { client, pageId } = createMixedDiagramFixture();
+    const service = new DrawioPublisherService(client as never);
+
+    await expect(service.updateDiagramFromMermaid({
+      pageId,
+      mermaid: "flowchart TD\nA-->G",
+      diagram: {
+        index: 0,
+      },
+    })).rejects.toThrow(
+      "Index selector is ambiguous on pages with both draw.io and MacroPack diagrams; provide embeddingMode or localId",
+    );
+  });
+
+  it("rejects conflicting selectors when updating from Mermaid", async () => {
+    const { client, pageId, customContentId, localId } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never);
+
+    await expect(service.updateDiagramFromMermaid({
+      pageId,
+      mermaid: "flowchart TD\nA-->H",
+      diagram: {
+        custContentId: customContentId,
+        localId,
+      },
+    })).rejects.toThrow("Provide only one existing diagram selector; received custContentId, localId");
+  });
   it("inspects mixed draw.io and MacroPack diagrams on a page", async () => {
     const { client, pageId, customContentId, localId } = createMixedDiagramFixture();
     const service = new DrawioPublisherService(client as never);
