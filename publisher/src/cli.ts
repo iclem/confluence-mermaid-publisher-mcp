@@ -5,8 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ConfluenceClient } from "./confluence-client.js";
-import { getDefaultEmbeddingMode } from "./embedding-mode.js";
-import { DrawioPublisherService } from "./service.js";
+import { ConfluenceMermaidPublisherService } from "./service.js";
 
 interface ParsedArgs {
   command?: string;
@@ -14,7 +13,7 @@ interface ParsedArgs {
 }
 
 export const CLI_USAGE =
-  "Usage: cli.js <inspect-page|update-widget|create-widget|create-page-from-markdown|update-page-from-markdown> " +
+  "Usage: cli.js <inspect-page|create-diagram|update-diagram|append-paragraph|create-page-from-markdown|update-page-from-markdown> " +
   "--base-url <https://site.atlassian.net> " +
   "[--bearer-token <token> | --email <email> --api-token <token>] ...";
 
@@ -46,7 +45,7 @@ function requireOption(options: Map<string, string>, name: string): string {
   return value;
 }
 
-export function createService(options: Map<string, string>): DrawioPublisherService {
+export function createService(options: Map<string, string>): ConfluenceMermaidPublisherService {
   const baseUrl = options.get("base-url") ?? process.env.CONFLUENCE_BASE_URL;
   if (!baseUrl) {
     throw new Error("Provide --base-url or CONFLUENCE_BASE_URL");
@@ -55,22 +54,19 @@ export function createService(options: Map<string, string>): DrawioPublisherServ
   const bearerToken = options.get("bearer-token") ?? process.env.CONFLUENCE_BEARER_TOKEN;
   const email = options.get("email") ?? process.env.CONFLUENCE_EMAIL;
   const apiToken = options.get("api-token") ?? process.env.CONFLUENCE_API_TOKEN;
-  return new DrawioPublisherService(
+  return new ConfluenceMermaidPublisherService(
     new ConfluenceClient({
       baseUrl,
       bearerToken,
       email,
       apiToken,
     }),
-    undefined,
-    getDefaultEmbeddingMode(),
   );
 }
 
 function getWidgetSelector(options: Map<string, string>) {
   return {
-    custContentId: options.get("cust-content-id"),
-    diagramName: options.get("diagram-name"),
+    localId: options.get("local-id"),
     index: options.has("index") ? Number(options.get("index")) : undefined,
   };
 }
@@ -93,25 +89,31 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (command === "update-widget") {
-    const result = await service.updateExistingWidget({
+  if (command === "create-diagram") {
+    const result = await service.createDiagramFromMermaid({
       pageId: requireOption(options, "page-id"),
-      drawioPath: requireOption(options, "drawio-file"),
-      previewPath: options.get("preview-file"),
-      diagramName: options.get("rename-to"),
-      widget: getWidgetSelector(options),
+      mermaid: requireOption(options, "mermaid"),
+      spaceKey: options.get("space-key"),
+      anchorText: options.get("anchor-text"),
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
   }
 
-  if (command === "create-widget") {
-    const result = await service.createWidget({
+  if (command === "update-diagram") {
+    const result = await service.updateDiagramFromMermaid({
       pageId: requireOption(options, "page-id"),
-      drawioPath: requireOption(options, "drawio-file"),
-      previewPath: options.get("preview-file"),
-      diagramName: options.get("diagram-name"),
-      spaceKey: options.get("space-key"),
+      mermaid: requireOption(options, "mermaid"),
+      diagram: getWidgetSelector(options),
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "append-paragraph") {
+    const result = await service.appendPageParagraph({
+      pageId: requireOption(options, "page-id"),
+      text: requireOption(options, "text"),
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;

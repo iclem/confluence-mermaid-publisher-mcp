@@ -64,7 +64,7 @@ while (( INDEX < ${#ARGS[@]} )); do
   DOCKER_ARGS+=("$(printf '%q' "${arg}")")
 
   case "${arg}" in
-    --markdown-file|--drawio-file|--preview-file)
+    --markdown-file)
       INDEX=$((INDEX + 1))
       if (( INDEX >= ${#ARGS[@]} )); then
         echo "Missing value for ${arg}" >&2

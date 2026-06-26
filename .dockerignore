@@ -1,11 +1,8 @@
 # Keep local build outputs out of the Docker build context so the image
 # always compiles from source inside Docker.
 doc/
-parser/node_modules/
-parser/dist/
 publisher/node_modules/
 publisher/dist/
-generator/target/
 output/
 .publish-stage.*/
 __publish__*.md

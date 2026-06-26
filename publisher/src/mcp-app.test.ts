@@ -4,7 +4,6 @@ import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 import { createPublisherService, formatMarkdownFileNotFoundMessage } from "./mcp-app.js";
 import { createMcpServer } from "./mcp-app.js";
-import { DEFAULT_EMBEDDING_MODE_ENV } from "./embedding-mode.js";
 
 interface ToolListHandlerHost {
   _requestHandlers: Map<string, (request: unknown, extra: unknown) => Promise<{
@@ -34,26 +33,15 @@ describe("mcp app", () => {
     expect(() => createPublisherService()).not.toThrow();
   });
 
-  it("defaults the publisher service to macropack when embedding mode is unset", async () => {
+  it("creates the publisher service without embedding mode configuration", async () => {
     process.env.CONFLUENCE_BASE_URL = "https://example.atlassian.net/wiki";
     process.env.CONFLUENCE_EMAIL = "user@example.com";
     process.env.CONFLUENCE_API_TOKEN = "token";
-    delete process.env[DEFAULT_EMBEDDING_MODE_ENV];
 
-    const service = createPublisherService();
-    expect((service as unknown as { defaultEmbeddingMode: string }).defaultEmbeddingMode).toBe("macropack");
+    expect(() => createPublisherService()).not.toThrow();
   });
 
-  it("rejects unsupported embedding mode configuration", () => {
-    process.env.CONFLUENCE_BASE_URL = "https://example.atlassian.net/wiki";
-    process.env.CONFLUENCE_EMAIL = "user@example.com";
-    process.env.CONFLUENCE_API_TOKEN = "token";
-    process.env[DEFAULT_EMBEDDING_MODE_ENV] = "invalid-mode";
-
-    expect(() => createPublisherService()).toThrow(`Unsupported ${DEFAULT_EMBEDDING_MODE_ENV} value: invalid-mode`);
-  });
-
-  it("registers generic diagram tools with embeddingMode inputs", async () => {
+  it("registers MacroPack-only diagram tools without embeddingMode inputs", async () => {
     const server = createMcpServer();
 
     const result = await (server.server as unknown as ToolListHandlerHost)._requestHandlers.get(ListToolsRequestSchema.shape.method.value)?.({
@@ -68,12 +56,9 @@ describe("mcp app", () => {
       ]),
     );
     const createDiagramTool = result?.tools.find((tool: { name: string }) => tool.name === "create_confluence_diagram_from_mermaid");
-    expect(createDiagramTool?.description).toContain("Omit embeddingMode to use the server default.");
-    expect(createDiagramTool?.inputSchema?.properties?.embeddingMode).toBeDefined();
-    expect(createDiagramTool?.inputSchema?.properties?.embeddingMode?.enum).toEqual(["macropack", "drawio"]);
-    expect(createDiagramTool?.inputSchema?.properties?.embeddingMode?.description).toContain(
-      "Only set it when the user explicitly requests a non-default mode",
-    );
+    expect(createDiagramTool?.description).toContain("MacroPack");
+    expect(createDiagramTool?.inputSchema?.properties?.embeddingMode).toBeUndefined();
+    expect(createDiagramTool?.inputSchema?.properties?.diagramName).toBeUndefined();
   });
 
   it("adds a workspace bind-mount hint when a markdown file is missing", () => {

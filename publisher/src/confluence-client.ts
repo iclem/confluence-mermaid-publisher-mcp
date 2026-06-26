@@ -1,10 +1,6 @@
-import { readFileSync } from "node:fs";
-import { basename } from "node:path";
-
 import type {
   ConfluenceAttachment,
   ConfluenceAttachmentList,
-  ConfluenceCustomContent,
   ConfluencePage,
   JsonObject,
 } from "./types.js";
@@ -23,13 +19,6 @@ function trimTrailingSlash(value: string): string {
 function normalizeBaseUrl(baseUrl: string): string {
   const trimmed = trimTrailingSlash(baseUrl);
   return trimmed.endsWith("/wiki") ? trimmed : `${trimmed}/wiki`;
-}
-
-function assertJsonObject(value: unknown): JsonObject {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("Expected a JSON object response");
-  }
-  return value as JsonObject;
 }
 
 export function getNextPageVersionNumber(page: ConfluencePage): number {
@@ -177,164 +166,5 @@ export class ConfluenceClient {
     const search = filename ? `?filename=${encodeURIComponent(filename)}` : "?limit=250";
     const result = await this.requestJson<ConfluenceAttachmentList>(`/api/v2/pages/${pageId}/attachments${search}`);
     return result.results ?? [];
-  }
-
-  async getCustomContent(customContentId: string): Promise<ConfluenceCustomContent> {
-    return this.requestJson<ConfluenceCustomContent>(`/api/v2/custom-content/${customContentId}?body-format=raw`);
-  }
-
-  async createCustomContent(args: {
-    type: string;
-    title: string;
-    pageId: string;
-    bodyRaw: string;
-  }): Promise<ConfluenceCustomContent> {
-    return this.requestJson<ConfluenceCustomContent>("/api/v2/custom-content", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        type: args.type,
-        status: "current",
-        pageId: args.pageId,
-        title: args.title,
-        body: {
-          representation: "raw",
-          value: args.bodyRaw,
-        },
-      }),
-    });
-  }
-
-  async updateCustomContent(args: {
-    id: string;
-    type: string;
-    title: string;
-    pageId: string;
-    bodyRaw: string;
-    versionNumber: number;
-  }): Promise<ConfluenceCustomContent> {
-    return this.requestJson<ConfluenceCustomContent>(`/api/v2/custom-content/${args.id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: args.id,
-        type: args.type,
-        status: "current",
-        pageId: args.pageId,
-        title: args.title,
-        body: {
-          representation: "raw",
-          value: args.bodyRaw,
-        },
-        version: {
-          number: args.versionNumber,
-        },
-      }),
-    });
-  }
-
-  async upsertAttachment(args: {
-    pageId: string;
-    localPath: string;
-    remoteFileName?: string;
-    contentType: string;
-    comment: string;
-    minorEdit?: boolean;
-  }): Promise<ConfluenceAttachment> {
-    const remoteFileName = args.remoteFileName ?? basename(args.localPath);
-    const existing = (await this.listPageAttachments(args.pageId, remoteFileName))[0];
-    if (existing) {
-      return this.updateAttachment({
-        ...args,
-        attachmentId: existing.id,
-        remoteFileName,
-      });
-    }
-    return this.createAttachment({
-      ...args,
-      remoteFileName,
-    });
-  }
-
-  private async createAttachment(args: {
-    pageId: string;
-    localPath: string;
-    remoteFileName: string;
-    contentType: string;
-    comment: string;
-    minorEdit?: boolean;
-  }): Promise<ConfluenceAttachment> {
-    return this.attachmentMutation(
-      `/rest/api/content/${args.pageId}/child/attachment`,
-      args.localPath,
-      args.remoteFileName,
-      args.contentType,
-      args.comment,
-      args.minorEdit ?? true,
-    );
-  }
-
-  private async updateAttachment(args: {
-    pageId: string;
-    attachmentId: string;
-    localPath: string;
-    remoteFileName: string;
-    contentType: string;
-    comment: string;
-    minorEdit?: boolean;
-  }): Promise<ConfluenceAttachment> {
-    return this.attachmentMutation(
-      `/rest/api/content/${args.pageId}/child/attachment/${args.attachmentId}/data`,
-      args.localPath,
-      args.remoteFileName,
-      args.contentType,
-      args.comment,
-      args.minorEdit ?? true,
-    );
-  }
-
-  private async attachmentMutation(
-    path: string,
-    localPath: string,
-    remoteFileName: string,
-    contentType: string,
-    comment: string,
-    minorEdit: boolean,
-  ): Promise<ConfluenceAttachment> {
-    const form = new FormData();
-    form.append("file", new Blob([readFileSync(localPath)], { type: contentType }), remoteFileName);
-    form.append("minorEdit", String(minorEdit));
-    form.append("comment", comment);
-
-    const response = await this.request(path, {
-      method: "POST",
-      headers: {
-        "X-Atlassian-Token": "no-check",
-      },
-      body: form,
-    });
-    const payload = assertJsonObject(await response.json());
-    const results = Array.isArray(payload.results) ? payload.results : undefined;
-    if (results && results[0] && typeof results[0] === "object") {
-      const first = results[0] as JsonObject;
-      return {
-        id: String(first.id),
-        title: String(first.title),
-        version: isFinite(Number((first.version as JsonObject | undefined)?.number))
-          ? { number: Number((first.version as JsonObject).number) }
-          : undefined,
-      };
-    }
-    return {
-      id: String(payload.id),
-      title: String(payload.title),
-      version: isFinite(Number((payload.version as JsonObject | undefined)?.number))
-        ? { number: Number((payload.version as JsonObject).number) }
-        : undefined,
-    };
   }
 }

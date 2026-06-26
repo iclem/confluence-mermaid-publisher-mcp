@@ -160,10 +160,6 @@ export function selectMacroPackExtension(extensions: MacroPackExtension[], targe
     return extension;
   }
 
-  if (target.custContentId || target.diagramName) {
-    throw new Error("MacroPack diagrams can be selected only by localId or index");
-  }
-
   if (extensions.length === 0) {
     throw new Error("No MacroPack diagrams found on page");
   }
