@@ -1,0 +1,53 @@
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/IntermediateSequenceFrameSection.java
+  s_d6c1289407a35d::t_59c1a860de8f0b 1-4
+doc/coverage-matrix.md
+  s_d6c1289407a35d::t_9e2f04d1a83b57 38,95,98-102,104,106-111,113-114
+scripts/test-e2e.sh
+  s_d6c1289407a35d::t_763a50cbcaae1a 13,61-66
+  s_d6c1289407a35d::t_b2a1d3320c8273 67
+generator/src/test/java/org/nasdanika/mermaid/drawio/generator/DrawioGeneratorTest.java
+  s_d6c1289407a35d::t_c0ba978617dc35 517-566
+  s_d6c1289407a35d::t_923085b9af5658 446-449
+  s_d6c1289407a35d::t_e4bdf0fac3cbdf 455-464
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/DrawioGenerator.java
+  s_d6c1289407a35d::t_e3c29f8c0ee2fb 307-309,311-318,320-349,366-373
+  s_d6c1289407a35d::t_d1c5d57f390def 59,472-522
+  s_d6c1289407a35d::t_47e9df31bee428 224-225,244-250
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/IntermediateSequenceParticipant.java
+  s_d6c1289407a35d::t_c0d2a4eb22821c 5-10
+parser/src/index.ts
+  s_d6c1289407a35d::t_7c02f548dfdbd5 1016-1024,1071,1093-1110,1113-1121
+  s_d6c1289407a35d::t_aff395a753ff77 2290,2295,2347,2360,2380,2385-2391
+  s_d6c1289407a35d::t_945167deb7d0a1 2307,2313-2315,2319,2323-2325,2368,2393
+  s_d6c1289407a35d::t_9fef9ffde85ccd 145
+  s_d6c1289407a35d::t_0ae8191e9ed7f2 141-142,146-157,162-168
+  s_d6c1289407a35d::t_031bd3066fddbd 19-31,69,94-100,102,108
+  s_d6c1289407a35d::t_037839b71661c8 2392,2394
+test-data/sequence-alt-frames.mermaid
+  s_d6c1289407a35d::t_2866878f894815 1-15
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/IntermediateSequenceFrame.java
+  s_d6c1289407a35d::t_73c10ab9277322 9-10,13-23
+doc/spec.md
+  s_d6c1289407a35d::t_cd8ca29c57e5d7 17,191
+parser/src/index.test.ts
+  s_d6c1289407a35d::t_0c33d1452160ca 156-180,182-188,194,202-263,266-273
+  s_d6c1289407a35d::t_80b2ea8f2e6106 181,264-265
+  s_d6c1289407a35d::t_3e8d3fbc5d91c9 923,1002
+  s_d6c1289407a35d::t_6c5d8652c649fe 274
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "fd7ce5564512cb7bfec69ad896d14a92110ef760",
+  "prompts": {},
+  "sessions": {
+    "s_d6c1289407a35d": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "3cad191d-b3a8-47c8-b61e-b6e675462b91",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
