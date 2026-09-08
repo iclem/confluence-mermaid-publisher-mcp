@@ -1,4 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -32,6 +34,11 @@ function createTempDiagramFiles(drawioName: string, width: number, height: numbe
   writeFileSync(drawioPath, '<mxfile><diagram name="demo"><mxGraphModel><root><mxCell value="API" /></root></mxGraphModel></diagram></mxfile>');
   writeFileSync(previewPath, createPng(width, height));
   return { dir, drawioPath, previewPath };
+}
+
+function hashedDiagramName(draftName: string, drawioPath: string): string {
+  const hash = createHash("sha1").update(readFileSync(drawioPath)).digest("hex").slice(0, 8);
+  return draftName.replace(/\.drawio$/, `-${hash}.drawio`);
 }
 
 function getStoredPage(client: FakeConfluenceClient): ConfluencePage {
@@ -995,11 +1002,11 @@ describe("DrawioPublisherService", () => {
       expect(result.mermaidBlocks).toBe(2);
       expect(result.embeddedBlocks).toBe(1);
       expect(result.fallbackBlocks).toBe(1);
-      expect(getEmbeddedDiagramNames(result, "drawio")).toEqual(["domain-context-map-01.drawio"]);
+      expect(getEmbeddedDiagramNames(result, "drawio")).toEqual([hashedDiagramName("domain-context-map-01.drawio", drawioPath)]);
       expect(client.pageUpdateMessages).toContain("Publish ddd-context-map.md");
       expect(client.attachmentMutations).toEqual([
-        { pageId: "created-page", remoteFileName: "domain-context-map-01.drawio" },
-        { pageId: "created-page", remoteFileName: "domain-context-map-01.drawio.png" },
+        { pageId: "created-page", remoteFileName: hashedDiagramName("domain-context-map-01.drawio", drawioPath) },
+        { pageId: "created-page", remoteFileName: `${hashedDiagramName("domain-context-map-01.drawio", drawioPath)}.png` },
       ]);
       expect(client.customContentCreates).toEqual(["created-1"]);
       expect(getStoredPage(client).body?.atlas_doc_format?.value).toEqual(
@@ -1066,11 +1073,11 @@ describe("DrawioPublisherService", () => {
       expect(result.mermaidBlocks).toBe(2);
       expect(result.embeddedBlocks).toBe(1);
       expect(result.fallbackBlocks).toBe(1);
-      expect(getEmbeddedDiagramNames(result, "drawio")).toEqual(["quarterly-sales-01.drawio"]);
+      expect(getEmbeddedDiagramNames(result, "drawio")).toEqual([hashedDiagramName("quarterly-sales-01.drawio", drawioPath)]);
       expect(client.pageUpdateMessages).toContain("Publish quarterly-sales.md");
       expect(client.attachmentMutations).toEqual([
-        { pageId: "created-page", remoteFileName: "quarterly-sales-01.drawio" },
-        { pageId: "created-page", remoteFileName: "quarterly-sales-01.drawio.png" },
+        { pageId: "created-page", remoteFileName: hashedDiagramName("quarterly-sales-01.drawio", drawioPath) },
+        { pageId: "created-page", remoteFileName: `${hashedDiagramName("quarterly-sales-01.drawio", drawioPath)}.png` },
       ]);
       expect(getStoredPage(client).body?.atlas_doc_format?.value).toEqual(
         expect.objectContaining({

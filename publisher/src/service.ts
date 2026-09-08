@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
@@ -567,9 +568,18 @@ export class DrawioPublisherService {
           continue;
         }
 
-        const diagramName = `${baseDiagramName}-${String(mermaidBlocks).padStart(2, "0")}.drawio`;
-        const artifacts = await this.mermaidConverter(block.text, diagramName);
+        const draftName = `${baseDiagramName}-${String(mermaidBlocks).padStart(2, "0")}.drawio`;
+        const artifacts = await this.mermaidConverter(block.text, draftName);
         try {
+          // Include a content hash in the diagram name: the draw.io app caches
+          // rendered content per page+name, so unchanged diagrams keep their
+          // name (and caches) while edited diagrams get fresh names that every
+          // cache layer picks up.
+          const contentHash = createHash("sha1")
+            .update(readFileSync(artifacts.drawioPath))
+            .digest("hex")
+            .slice(0, 8);
+          const diagramName = draftName.replace(/\.drawio$/, `-${contentHash}.drawio`);
           const extensionNode = await this.createExtensionForArtifacts({
             page,
             pageId: page.id,

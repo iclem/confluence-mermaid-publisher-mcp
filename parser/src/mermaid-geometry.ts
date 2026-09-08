@@ -79,8 +79,6 @@ export interface SequenceGeometryContext {
 const ACTOR_MAN_WIDTH = 35;
 const DEFAULT_HEADER_HEIGHT = 65;
 
-type CanvasContext = { measureText(text: string): { width: number } } & { font: string };
-
 let renderCounter = 0;
 let canvasAvailability: boolean | undefined;
 
@@ -100,27 +98,6 @@ function isCanvasAvailable(): boolean {
     }
   }
   return canvasAvailability;
-}
-
-function installTextMeasurement(dom: JSDOM, measureCtx: CanvasContext): void {
-  const proto = dom.window.SVGElement.prototype as unknown as Record<string, unknown>;
-  const fontFor = (el: Element): string => {
-    const style = (el as HTMLElement).style;
-    const size = el.getAttribute("font-size") || style?.fontSize || "16px";
-    const family = el.getAttribute("font-family") || style?.fontFamily ||
-      '"trebuchet ms", verdana, arial, sans-serif';
-    return `${size} ${family}`;
-  };
-  const textWidth = (el: Element): number => {
-    measureCtx.font = fontFor(el);
-    return measureCtx.measureText(el.textContent ?? "").width;
-  };
-  proto.getBBox = function (this: Element) {
-    return { x: 0, y: 0, width: textWidth(this), height: 16 };
-  };
-  proto.getComputedTextLength = function (this: Element) {
-    return textWidth(this);
-  };
 }
 
 function attr(el: Element, name: string): number {
@@ -159,31 +136,13 @@ export async function renderSequenceGeometry(
   if (!isCanvasAvailable()) {
     return undefined;
   }
-  const { createCanvas } = await import("canvas");
-  const { mermaid } = await import("./mermaid-env.js");
-
-  const dom = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true });
-  installTextMeasurement(dom, createCanvas(1, 1).getContext("2d") as unknown as CanvasContext);
-
-  const previous = {
-    window: globalThis.window,
-    document: globalThis.document,
-    DOMParser: globalThis.DOMParser,
-    CSSStyleSheet: globalThis.CSSStyleSheet,
-  };
-  globalThis.window = dom.window as unknown as Window & typeof globalThis;
-  globalThis.document = dom.window.document;
-  globalThis.DOMParser = dom.window.DOMParser as unknown as typeof globalThis.DOMParser;
-  globalThis.CSSStyleSheet = dom.window.CSSStyleSheet as unknown as typeof CSSStyleSheet;
-  try {
-    const { svg } = await mermaid.render(`seqgeom-${renderCounter++}`, mermaidText);
-    return extractGeometry(dom, svg, context);
-  } finally {
-    globalThis.window = previous.window;
-    globalThis.document = previous.document;
-    globalThis.DOMParser = previous.DOMParser;
-    globalThis.CSSStyleSheet = previous.CSSStyleSheet;
+  const { renderMermaidSvg } = await import("./mermaid-render.js");
+  const svg = await renderMermaidSvg(mermaidText);
+  if (!svg) {
+    return undefined;
   }
+  const dom = new JSDOM("<!doctype html><html><body></body></html>");
+  return extractGeometry(dom, svg, context);
 }
 
 function extractGeometry(
