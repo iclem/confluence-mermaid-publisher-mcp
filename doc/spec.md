@@ -188,7 +188,7 @@ Use a containerized runtime combining:
 
 ### Version 2
 
-- richer sequence diagram support (mermaid-computed layout geometry, `rect` backgrounds, create/destroy markers)
+- richer sequence diagram support (`rect` backgrounds, create/destroy markers)
 - Better styles and themes
 - Richer layout
 - Confluence-specific embedding improvements

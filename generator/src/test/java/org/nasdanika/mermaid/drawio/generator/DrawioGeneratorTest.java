@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.nasdanika.drawio.Connection;
@@ -601,6 +602,81 @@ class DrawioGeneratorTest {
         double noteRight = note.getGeometry().getX() + note.getGeometry().getWidth();
         double auditCenter = audit.getGeometry().getX() + audit.getGeometry().getWidth() / 2;
         assertTrue(noteRight < auditCenter);
+    }
+
+    @Test
+    void usesMermaidGeometryWhenPresent() throws Exception {
+        IntermediateSequenceGeometry geometry = new IntermediateSequenceGeometry(
+                List.of(
+                        new IntermediateSequenceGeometry.Participant("A", 10, 0, 150, 65, 85, 400),
+                        new IntermediateSequenceGeometry.Participant("B", 260, 0, 150, 65, 335, 400)),
+                Map.of("0", 107.0),
+                List.of(new IntermediateSequenceGeometry.Frame(0, 0, 20, 90, 400, 200, List.of(150.0))),
+                List.of(new IntermediateSequenceGeometry.Note(1, 100, 120, 130, 36)),
+                List.of(new IntermediateSequenceGeometry.Activation("B", 0, 330, 110, 10, 80)),
+                List.of());
+        IntermediateDiagram diagram = new IntermediateDiagram(
+                "SequenceGeometry",
+                "sequence",
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(
+                        new IntermediateSequenceParticipant("A", "API"),
+                        new IntermediateSequenceParticipant("B", "Worker")),
+                List.of(new IntermediateSequenceMessage(0, "A", "B", "Call", "solid")),
+                List.of(new IntermediateSequenceNote(1, List.of("B"), "Note", "over")),
+                List.of(new IntermediateSequenceActivation("B", 0, 0, 0)),
+                List.of(new IntermediateSequenceFrame(
+                        "alt",
+                        "Branch",
+                        0,
+                        0,
+                        0,
+                        List.of("A", "B"),
+                        List.of(new IntermediateSequenceFrameSection(0, "other")))),
+                List.of(),
+                geometry,
+                List.of());
+
+        Document document = Document.load(new DrawioGenerator().generate(diagram), null);
+        Layer<?> layer = document.getPages().get(0).getModel().getRoot().getLayers().get(0);
+
+        Node api = findNode(layer, "A");
+        assertEquals(10.0, api.getGeometry().getX(), 0.01);
+        assertEquals(150.0, api.getGeometry().getWidth(), 0.01);
+        assertEquals(400.0, api.getGeometry().getHeight(), 0.01);
+
+        Node worker = findNode(layer, "B");
+        Node activation = worker.getChildren().stream()
+                .filter(Node.class::isInstance)
+                .map(Node.class::cast)
+                .filter(node -> "sequence-activation-B-0-0".equals(node.getProperty("id")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Activation node not found"));
+        assertEquals(70.0, activation.getGeometry().getX(), 0.01);
+        assertEquals(110.0, activation.getGeometry().getY(), 0.01);
+        assertEquals(80.0, activation.getGeometry().getHeight(), 0.01);
+
+        Node frame = findNode(layer, "sequence-frame-alt-0-0");
+        assertEquals(20.0, frame.getGeometry().getX(), 0.01);
+        assertEquals(90.0, frame.getGeometry().getY(), 0.01);
+        assertEquals(400.0, frame.getGeometry().getWidth(), 0.01);
+        assertEquals(200.0, frame.getGeometry().getHeight(), 0.01);
+
+        Node divider = frame.getChildren().stream()
+                .filter(Node.class::isInstance)
+                .map(Node.class::cast)
+                .filter(node -> "sequence-frame-alt-0-0-section-0".equals(node.getProperty("id")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Frame divider not found"));
+        assertEquals(60.0, divider.getGeometry().getY(), 0.01);
+
+        Node note = findNode(layer, "sequence-note-1");
+        assertEquals(100.0, note.getGeometry().getX(), 0.01);
+        assertEquals(120.0, note.getGeometry().getY(), 0.01);
+        assertEquals(130.0, note.getGeometry().getWidth(), 0.01);
     }
 
     private Node findNode(Layer<?> layer, String id) {

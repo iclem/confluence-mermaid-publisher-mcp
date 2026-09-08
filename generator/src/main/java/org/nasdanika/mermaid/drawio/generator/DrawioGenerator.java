@@ -71,7 +71,7 @@ public class DrawioGenerator {
     private record LayoutGrid(Map<String, Bounds> nodeBounds) {
     }
 
-    private record SequenceFrame(Node node, int x, int width, int height, int centerX, int index) {
+    private record SequenceFrame(Node node, int x, int y, int width, int height, int headerHeight, int centerX, int index) {
     }
 
     public String generate(IntermediateDiagram diagram) throws TransformerException, IOException {
@@ -198,36 +198,115 @@ public class DrawioGenerator {
         int participantHeight =
                 SEQUENCE_EVENT_START + Math.max(1, maxOrder + 1) * SEQUENCE_ROW_SPACING + SEQUENCE_BOTTOM_PADDING;
 
-        Map<String, SequenceFrame> participantFrames = createSequenceParticipants(layer, participants, participantHeight);
+        IntermediateSequenceGeometry geometry = diagram.sequenceGeometry();
+
+        Map<String, SequenceFrame> participantFrames =
+                createSequenceParticipants(layer, participants, participantHeight, geometry);
         for (IntermediateSequenceBox box : diagram.sequenceBoxes() == null ? List.<IntermediateSequenceBox>of() : diagram.sequenceBoxes()) {
             createSequenceBox(layer, box, participantFrames);
         }
         for (IntermediateSequenceFrame frame : frames) {
-            createSequenceFrame(layer, frame, participantFrames);
+            createSequenceFrame(layer, frame, participantFrames, geometry);
         }
         for (IntermediateSequenceActivation activation : activations) {
-            createSequenceActivation(activation, participantFrames);
+            createSequenceActivation(activation, participantFrames, geometry);
         }
         for (IntermediateSequenceNote note : notes) {
-            createSequenceNote(layer, note, participantFrames, participantHeight);
+            createSequenceNote(layer, note, participantFrames, participantHeight, geometry);
         }
         for (IntermediateSequenceMessage message : messages) {
-            createSequenceMessage(layer, message, participantFrames, participantHeight);
+            createSequenceMessage(layer, message, participantFrames, participantHeight, geometry);
         }
 
         return document.save(false);
     }
 
+    private Integer geometryEventY(IntermediateSequenceGeometry geometry, int order) {
+        if (geometry == null || geometry.eventYs() == null) {
+            return null;
+        }
+        Double y = geometry.eventYs().get(Integer.toString(order));
+        return y == null ? null : (int) Math.round(y);
+    }
+
+    private IntermediateSequenceGeometry.Participant geometryParticipant(
+            IntermediateSequenceGeometry geometry, String id) {
+        if (geometry == null || geometry.participants() == null) {
+            return null;
+        }
+        return geometry.participants().stream()
+                .filter(participant -> participant.id().equals(id))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private IntermediateSequenceGeometry.Frame geometryFrame(
+            IntermediateSequenceGeometry geometry, int startOrder, int depth) {
+        if (geometry == null || geometry.frames() == null) {
+            return null;
+        }
+        return geometry.frames().stream()
+                .filter(frame -> frame.startOrder() == startOrder && frame.depth() == depth)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private IntermediateSequenceGeometry.Note geometryNote(
+            IntermediateSequenceGeometry geometry, int order) {
+        if (geometry == null || geometry.notes() == null) {
+            return null;
+        }
+        return geometry.notes().stream()
+                .filter(note -> note.order() == order)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private IntermediateSequenceGeometry.Activation geometryActivation(
+            IntermediateSequenceGeometry geometry, String participantId, int startOrder) {
+        if (geometry == null || geometry.activations() == null) {
+            return null;
+        }
+        return geometry.activations().stream()
+                .filter(activation -> activation.participantId().equals(participantId)
+                        && activation.startOrder() == startOrder)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private IntermediateSequenceGeometry.SelfMessage geometrySelfMessage(
+            IntermediateSequenceGeometry geometry, int order) {
+        if (geometry == null || geometry.selfMessages() == null) {
+            return null;
+        }
+        return geometry.selfMessages().stream()
+                .filter(selfMessage -> selfMessage.order() == order)
+                .findFirst()
+                .orElse(null);
+    }
+
     private Map<String, SequenceFrame> createSequenceParticipants(
             Layer<?> layer,
             List<IntermediateSequenceParticipant> participants,
-            int participantHeight) {
+            int participantHeight,
+            IntermediateSequenceGeometry geometry) {
         Map<String, SequenceFrame> frames = new LinkedHashMap<>();
         int currentX = SEQUENCE_LEFT;
         for (int i = 0; i < participants.size(); i++) {
             IntermediateSequenceParticipant participant = participants.get(i);
             boolean isActor = "actor".equals(participant.type());
-            int width = isActor ? 35 : computeParticipantWidth(participant.label());
+            IntermediateSequenceGeometry.Participant pg = geometryParticipant(geometry, participant.id());
+
+            int width = pg != null
+                    ? (int) Math.round(pg.width())
+                    : (isActor ? 35 : computeParticipantWidth(participant.label()));
+            int x = pg != null ? (int) Math.round(pg.x()) : currentX;
+            int y = pg != null ? (int) Math.round(pg.y()) : SEQUENCE_TOP;
+            int headerHeight = pg != null ? (int) Math.round(pg.height()) : SEQUENCE_HEADER_SIZE;
+            int height = pg != null
+                    ? Math.max(headerHeight, (int) Math.round(pg.lifelineBottom() - pg.y()))
+                    : participantHeight;
+
             Node lifeline = layer.createNode();
             lifeline.setProperty("id", participant.id());
             lifeline.setLabel(formatLabel(participant.label()));
@@ -242,7 +321,7 @@ public class DrawioGenerator {
             lifeline.style("outlineConnect", "0");
             lifeline.style("portConstraint", "eastwest");
             lifeline.style("whiteSpace", "wrap");
-            lifeline.style("size", Integer.toString(SEQUENCE_HEADER_SIZE));
+            lifeline.style("size", Integer.toString(headerHeight));
             lifeline.style(
                     "newEdgeStyle",
                     "{\"edgeStyle\":\"elbowEdgeStyle\",\"elbow\":\"vertical\",\"curved\":0,\"rounded\":0}");
@@ -254,17 +333,19 @@ public class DrawioGenerator {
                 lifeline.style("align", "center");
             }
 
-            lifeline.getGeometry().setBounds(currentX, SEQUENCE_TOP, width, participantHeight);
+            lifeline.getGeometry().setBounds(x, y, width, height);
             frames.put(
                     participant.id(),
                     new SequenceFrame(
                             lifeline,
-                            currentX,
+                            x,
+                            y,
                             width,
-                            participantHeight,
-                            currentX + width / 2,
+                            height,
+                            headerHeight,
+                            x + width / 2,
                             i));
-            currentX += width + SEQUENCE_PARTICIPANT_GAP;
+            currentX = x + width + SEQUENCE_PARTICIPANT_GAP;
         }
 
         return frames;
@@ -288,6 +369,7 @@ public class DrawioGenerator {
 
         int minX = frames.stream().mapToInt(SequenceFrame::x).min().orElse(SEQUENCE_LEFT);
         int maxX = frames.stream().mapToInt(frame -> frame.x() + frame.width()).max().orElse(minX);
+        SequenceFrame first = frames.get(0);
 
         Node boxNode = layer.createNode();
         boxNode.setProperty("id", "sequence-box-" + box.participantIds().get(0));
@@ -302,15 +384,16 @@ public class DrawioGenerator {
         boxNode.style("spacingTop", "4");
         boxNode.getGeometry().setBounds(
                 minX - SEQUENCE_BOX_MARGIN,
-                SEQUENCE_TOP - SEQUENCE_BOX_MARGIN,
+                first.y() - SEQUENCE_BOX_MARGIN,
                 (maxX - minX) + 2 * SEQUENCE_BOX_MARGIN,
-                SEQUENCE_HEADER_SIZE + 2 * SEQUENCE_BOX_MARGIN);
+                first.headerHeight() + 2 * SEQUENCE_BOX_MARGIN);
     }
 
     private void createSequenceFrame(
             Layer<?> layer,
             IntermediateSequenceFrame frame,
-            Map<String, SequenceFrame> participantFrames) {
+            Map<String, SequenceFrame> participantFrames,
+            IntermediateSequenceGeometry geometry) {
         if (participantFrames.isEmpty()) {
             return;
         }
@@ -345,6 +428,14 @@ public class DrawioGenerator {
                 contentBottom - contentTop
                         + SEQUENCE_FRAME_BOTTOM_OFFSET - verticalInset * 2);
 
+        IntermediateSequenceGeometry.Frame frameGeometry = geometryFrame(geometry, frame.startOrder(), frame.depth());
+        if (frameGeometry != null) {
+            x = (int) Math.round(frameGeometry.x());
+            y = (int) Math.round(frameGeometry.y());
+            width = (int) Math.round(frameGeometry.width());
+            height = (int) Math.round(frameGeometry.height());
+        }
+
         Node frameNode = layer.createNode();
         String frameId = "sequence-frame-" + frame.kind() + "-" + frame.startOrder() + "-" + frame.depth();
         frameNode.setProperty("id", frameId);
@@ -373,6 +464,7 @@ public class DrawioGenerator {
         title.getGeometry().setBounds(tabWidth, 0, width - tabWidth, SEQUENCE_FRAME_TAB_HEIGHT);
 
         if (frame.sections() != null) {
+            int sectionIndex = 0;
             for (IntermediateSequenceFrameSection section : frame.sections()) {
                 Node divider = frameNode.createNode();
                 divider.setProperty("id", frameId + "-section-" + section.order());
@@ -385,15 +477,24 @@ public class DrawioGenerator {
                 divider.style("verticalLabelPosition", "middle");
                 divider.style("align", "center");
                 divider.style("strokeColor", "#B3B3B3");
-                int dividerY = computeSequenceEventY(section.order()) - SEQUENCE_ROW_SPACING / 2 - y;
+                int dividerY;
+                if (frameGeometry != null
+                        && frameGeometry.dividerYs() != null
+                        && sectionIndex < frameGeometry.dividerYs().size()) {
+                    dividerY = (int) Math.round(frameGeometry.dividerYs().get(sectionIndex)) - y;
+                } else {
+                    dividerY = computeSequenceEventY(section.order()) - SEQUENCE_ROW_SPACING / 2 - y;
+                }
                 divider.getGeometry().setBounds(0, dividerY, width, SEQUENCE_FRAME_TAB_HEIGHT);
+                sectionIndex += 1;
             }
         }
     }
 
     private void createSequenceActivation(
             IntermediateSequenceActivation activation,
-            Map<String, SequenceFrame> participantFrames) {
+            Map<String, SequenceFrame> participantFrames,
+            IntermediateSequenceGeometry geometry) {
         SequenceFrame frame = participantFrames.get(activation.participantId());
         if (frame == null) {
             throw new IllegalArgumentException("Unknown sequence participant in activation: " + activation);
@@ -414,6 +515,17 @@ public class DrawioGenerator {
                 "newEdgeStyle",
                 "{\"edgeStyle\":\"elbowEdgeStyle\",\"elbow\":\"vertical\",\"curved\":0,\"rounded\":0}");
 
+        IntermediateSequenceGeometry.Activation activationGeometry =
+                geometryActivation(geometry, activation.participantId(), activation.startOrder());
+        if (activationGeometry != null) {
+            activationNode.getGeometry().setBounds(
+                    (int) Math.round(activationGeometry.x()) - frame.x(),
+                    (int) Math.round(activationGeometry.y()) - frame.y(),
+                    (int) Math.round(activationGeometry.width()),
+                    (int) Math.round(activationGeometry.height()));
+            return;
+        }
+
         int x = (frame.width() - SEQUENCE_ACTIVATION_WIDTH) / 2 + activation.depth() * SEQUENCE_ACTIVATION_OFFSET;
         int y = computeSequenceEventY(activation.startOrder()) - SEQUENCE_TOP + SEQUENCE_ACTIVATION_TOP_OFFSET;
         int height = Math.max(
@@ -427,7 +539,8 @@ public class DrawioGenerator {
             Layer<?> layer,
             IntermediateSequenceNote note,
             Map<String, SequenceFrame> participantFrames,
-            int participantHeight) {
+            int participantHeight,
+            IntermediateSequenceGeometry geometry) {
         if (note.participantIds() == null || note.participantIds().isEmpty()) {
             return;
         }
@@ -468,6 +581,16 @@ public class DrawioGenerator {
         noteStyle.align("center");
         noteStyle.verticalAlign("middle");
         noteNode.style("whiteSpace", "wrap");
+
+        IntermediateSequenceGeometry.Note noteGeometry = geometryNote(geometry, note.order());
+        if (noteGeometry != null) {
+            noteNode.getGeometry().setBounds(
+                    (int) Math.round(noteGeometry.x()),
+                    (int) Math.round(noteGeometry.y()),
+                    (int) Math.round(noteGeometry.width()),
+                    (int) Math.round(noteGeometry.height()));
+            return;
+        }
         noteNode.getGeometry().setBounds(noteX, noteY - SEQUENCE_NOTE_HEIGHT / 2, noteWidth, SEQUENCE_NOTE_HEIGHT);
     }
 
@@ -475,16 +598,18 @@ public class DrawioGenerator {
             Layer<?> layer,
             IntermediateSequenceMessage message,
             Map<String, SequenceFrame> participantFrames,
-            int participantHeight) {
+            int participantHeight,
+            IntermediateSequenceGeometry geometry) {
         SequenceFrame sourceFrame = participantFrames.get(message.sourceId());
         SequenceFrame targetFrame = participantFrames.get(message.targetId());
         if (sourceFrame == null || targetFrame == null) {
             throw new IllegalArgumentException("Unknown sequence participant in message: " + message);
         }
 
-        int absoluteY = computeSequenceEventY(message.order());
+        Integer geometryY = geometryEventY(geometry, message.order());
+        int absoluteY = geometryY != null ? geometryY : computeSequenceEventY(message.order());
         if (sourceFrame.index() == targetFrame.index()) {
-            createSelfSequenceMessage(layer, sourceFrame, message, absoluteY, participantHeight);
+            createSelfSequenceMessage(layer, sourceFrame, message, absoluteY, geometry);
             if (message.number() != null) {
                 createSequenceNumberBadge(
                         layer,
@@ -496,8 +621,10 @@ public class DrawioGenerator {
         }
 
         boolean leftToRight = sourceFrame.centerX() < targetFrame.centerX();
-        ConnectionPoint sourcePoint = sourceFrame.node().createConnectionPoint(leftToRight ? 1.0 : 0.0, toRelativeY(absoluteY, participantHeight));
-        ConnectionPoint targetPoint = targetFrame.node().createConnectionPoint(leftToRight ? 0.0 : 1.0, toRelativeY(absoluteY, participantHeight));
+        ConnectionPoint sourcePoint = sourceFrame.node()
+                .createConnectionPoint(leftToRight ? 1.0 : 0.0, toRelativeY(absoluteY, sourceFrame));
+        ConnectionPoint targetPoint = targetFrame.node()
+                .createConnectionPoint(leftToRight ? 0.0 : 1.0, toRelativeY(absoluteY, targetFrame));
         Connection connection = layer.createConnection(sourcePoint, targetPoint);
         connection.setLabel(message.label());
         configureSequenceMessageStyle(connection, message.kind());
@@ -541,18 +668,24 @@ public class DrawioGenerator {
             SequenceFrame frame,
             IntermediateSequenceMessage message,
             int absoluteY,
-            int participantHeight) {
-        ConnectionPoint sourcePoint = frame.node().createConnectionPoint(1.0, toRelativeY(absoluteY, participantHeight));
+            IntermediateSequenceGeometry geometry) {
+        IntermediateSequenceGeometry.SelfMessage selfGeometry = geometrySelfMessage(geometry, message.order());
+        int loopBottom = absoluteY + SEQUENCE_SELF_LOOP_HEIGHT;
+        if (selfGeometry != null && selfGeometry.points() != null && selfGeometry.points().size() >= 2) {
+            loopBottom = (int) Math.round(selfGeometry.points().get(1).y());
+        }
+        ConnectionPoint sourcePoint = frame.node().createConnectionPoint(1.0, toRelativeY(absoluteY, frame));
         ConnectionPoint targetPoint =
-                frame.node().createConnectionPoint(1.0, toRelativeY(absoluteY + SEQUENCE_SELF_LOOP_HEIGHT, participantHeight));
+                frame.node().createConnectionPoint(1.0, toRelativeY(loopBottom, frame));
         Connection connection = layer.createConnection(sourcePoint, targetPoint);
         connection.setLabel(message.label());
         configureSequenceMessageStyle(connection, message.kind());
         connection.getStyle().put("curved", "1");
-        connection.getPoints().add(frame.x() + frame.width() + SEQUENCE_SELF_LOOP_WIDTH, absoluteY);
-        connection.getPoints().add(
-                frame.x() + frame.width() + SEQUENCE_SELF_LOOP_WIDTH,
-                absoluteY + SEQUENCE_SELF_LOOP_HEIGHT);
+        int loopX = selfGeometry != null && selfGeometry.points() != null && !selfGeometry.points().isEmpty()
+                ? (int) Math.round(selfGeometry.points().get(0).x())
+                : frame.x() + frame.width() + SEQUENCE_SELF_LOOP_WIDTH;
+        connection.getPoints().add(loopX, absoluteY);
+        connection.getPoints().add(loopX, loopBottom);
     }
 
     private void configureSequenceMessageStyle(Connection connection, String kind) {
@@ -629,8 +762,8 @@ public class DrawioGenerator {
         return SEQUENCE_TOP + SEQUENCE_EVENT_START + order * SEQUENCE_ROW_SPACING;
     }
 
-    private double toRelativeY(int absoluteY, int participantHeight) {
-        return (double) (absoluteY - SEQUENCE_TOP) / participantHeight;
+    private double toRelativeY(int absoluteY, SequenceFrame frame) {
+        return (double) (absoluteY - frame.y()) / frame.height();
     }
 
     private void applyNodeStyle(Node node, IntermediateNode intermediateNode) {

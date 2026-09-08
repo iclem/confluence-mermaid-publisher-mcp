@@ -186,6 +186,37 @@ describe("parseMermaid", () => {
     ]);
   });
 
+  it("extracts mermaid render geometry for sequence diagrams", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        sequenceDiagram
+        A->>B: one
+        alt branch
+          B->>A: two
+        else other
+          B-->>A: three
+        end
+      `,
+    });
+
+    const geometry = diagram.sequenceGeometry;
+    expect(geometry).toBeDefined();
+    expect(geometry!.participants.map((participant) => participant.id)).toEqual(["A", "B"]);
+    expect(geometry!.participants[0].lifelineX).toBeLessThan(geometry!.participants[1].lifelineX);
+    expect(Object.keys(geometry!.eventYs).sort()).toEqual(["0", "1", "2"]);
+    expect(geometry!.eventYs["0"]).toBeLessThan(geometry!.eventYs["1"]);
+    expect(geometry!.frames).toHaveLength(1);
+    expect(geometry!.frames[0].startOrder).toBe(1);
+    expect(geometry!.frames[0].dividerYs).toHaveLength(1);
+  });
+
   it("rejects invalid sequence syntax explicitly", () => {
     return expect(
       parseMermaid({
@@ -1010,8 +1041,6 @@ write use case"]
       },
     ]);
     expect(diagram.sequenceFrames).toEqual([]);
-    expect(diagram.warnings).toEqual([
-      'ignored_sequence_wrapper: "rect rgb(230, 240, 255)"',
-    ]);
+    expect(diagram.warnings).toContain('ignored_sequence_wrapper: "rect rgb(230, 240, 255)"');
   });
 });

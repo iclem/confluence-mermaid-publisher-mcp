@@ -1,3 +1,4 @@
+import "./canvas-guard.js";
 import { JSDOM } from "jsdom";
 
 // Mermaid's sequence parser uses DOMPurify (labels) and window.CSS (box colors),

@@ -130,6 +130,7 @@ export interface IntermediateDiagram {
   sequenceActivations: IntermediateSequenceActivation[];
   sequenceFrames: IntermediateSequenceFrame[];
   sequenceBoxes?: IntermediateSequenceBox[];
+  sequenceGeometry?: import("./mermaid-geometry.js").SequenceGeometry;
   warnings: string[];
 }
 
@@ -2463,6 +2464,25 @@ async function parseSequence(request: MermaidParseRequest): Promise<Intermediate
     }
   }
 
+  let sequenceGeometry: import("./mermaid-geometry.js").SequenceGeometry | undefined;
+  try {
+    const { renderSequenceGeometry } = await import("./mermaid-geometry.js");
+    sequenceGeometry = await renderSequenceGeometry(request.mermaid, {
+      participants,
+      messages,
+      notes,
+      frames,
+      activations,
+      boxes,
+    });
+    if (sequenceGeometry === undefined) {
+      warnings.push("sequence_geometry_unavailable: canvas text measurement is unavailable on this platform");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warnings.push(`sequence_geometry_unavailable: ${message.split("\n")[0]}`);
+  }
+
   return {
     pageName: derivePageName(request.sourceName),
     diagramType: "sequence",
@@ -2475,6 +2495,7 @@ async function parseSequence(request: MermaidParseRequest): Promise<Intermediate
     sequenceActivations: activations,
     sequenceFrames: frames,
     sequenceBoxes: boxes,
+    sequenceGeometry,
     warnings,
   };
 }

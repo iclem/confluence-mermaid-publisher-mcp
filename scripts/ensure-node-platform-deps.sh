@@ -21,4 +21,18 @@ if ! node -e "require('rollup')" >/dev/null 2>&1; then
   npm install --no-save >/dev/null
 fi
 
+# canvas ships a platform-specific native binding; restore it when missing or
+# rebuild it when the mounted node_modules was populated on a different platform
+# (e.g. macOS host + Linux dev container).
+if node -e "require('canvas')" >/dev/null 2>&1; then
+  :
+elif [[ -d node_modules/canvas ]]; then
+  echo "==> Rebuilding canvas native binding for $(uname -s)/$(uname -m)"
+  npm rebuild canvas >/dev/null
+else
+  echo "==> Installing canvas for $(uname -s)/$(uname -m)"
+  rm -rf node_modules/canvas.disabled-*
+  npm install canvas >/dev/null
+fi
+
 popd >/dev/null
