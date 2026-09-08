@@ -1,0 +1,70 @@
+parser/src/canvas-guard.ts
+  s_d6c1289407a35d::t_851e668f7ebf8e 1-35
+generator/src/test/java/org/nasdanika/mermaid/drawio/generator/DrawioGeneratorTest.java
+  s_d6c1289407a35d::t_c7db21e5d67c47 7
+  s_d6c1289407a35d::t_0fd8c25d0e874d 607-681
+doc/spec.md
+  s_d6c1289407a35d::t_003ed35c0433f1 191
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/DrawioGenerator.java
+  s_d6c1289407a35d::t_8b0e54d20be3ae 291-292,298-309,324,336,341-342,344-346,348
+  s_d6c1289407a35d::t_3718d5d9a6a64a 542-543,584-593
+  s_d6c1289407a35d::t_b06391bb2fad6d 601-602,609-610,612,624-627
+  s_d6c1289407a35d::t_ef3b656f204c34 395-396,431-438,467,480-487,489
+  s_d6c1289407a35d::t_f7dd98308f521b 671-677,679,684-688
+  s_d6c1289407a35d::t_43d8468ef7daf9 765-766
+  s_d6c1289407a35d::t_30437a63623009 372,387,389
+  s_d6c1289407a35d::t_84c7780636b1fb 496-497,518-527
+  s_d6c1289407a35d::t_da113c0086b8fa 74,201-204,209,212,215,218,224-286
+  s_d6c1289407a35d::t_05e7c6964b7207 287
+  s_d6c1289407a35d::t_da51d4108491d0 528
+parser/src/index.ts
+  s_d6c1289407a35d::t_02395f7937d55b 133,2467-2477,2481-2485,2498
+  s_d6c1289407a35d::t_45dfad6518a376 2478-2480
+scripts/ensure-node-platform-deps.sh
+  s_d6c1289407a35d::t_e25898c55e6b4b 24-26,32-35
+  s_d6c1289407a35d::t_ac610be18607b7 27-31,36-37
+parser/src/index.test.ts
+  s_d6c1289407a35d::t_ee0f71ba465d80 1044
+  s_d6c1289407a35d::t_4f37d8d46271fa 189-219
+parser/package.json
+  s_d6c1289407a35d::t_89038c0de6d5e2 14
+  s_d6c1289407a35d::t_2088b4efab220c 23-25
+parser/src/mermaid-geometry.ts
+  s_d6c1289407a35d::t_a3b598a8387c64 5-84,104-129,137-158,162-175,177-195,200-203,206,211-239,242-244,251-252,268-273,276,278-285,287-297,299-369,374
+  s_d6c1289407a35d::t_3a2cdfe0b1177c 373
+  s_d6c1289407a35d::t_2671cf52359ba5 370-372
+  s_d6c1289407a35d::t_677f9ab00335de 1
+  s_d6c1289407a35d::t_081b47f63331ff 2-4,85-103,159-161
+  s_d6c1289407a35d::t_dc0cd83df1a7cd 130-136,196-199
+  s_d6c1289407a35d::t_ab253df6f5136e 176
+  s_d6c1289407a35d::t_48b8e0325e57a9 204-205,207-210,240-241,245-250,253-267,274-275,277,286
+  s_d6c1289407a35d::t_494bae47f7e43c 298
+parser/src/mermaid-env.ts
+  s_d6c1289407a35d::t_1b1810f4c0d233 1
+doc/architecture.md
+  s_d6c1289407a35d::t_977205825033c1 50
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/IntermediateDiagram.java
+  s_d6c1289407a35d::t_6e888bc30e2fbf 18,47-78
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/IntermediateSequenceGeometry.java
+  s_d6c1289407a35d::t_879240bf1e843b 1-51
+doc/coverage-matrix.md
+  s_d6c1289407a35d::t_d01e2d8e2eb88c 38
+parser/package-lock.json
+  s_d6c1289407a35d::t_f898d8bf2ef1da 12,1605-1624,1634-1668,1679-1692,1752-1757,2351-2365,2376-2384,2394-2402,2412-2420,2492-2500,2529-2534,2550-2555,2586-2617,2812-2838,2877-2909,3026-3062,3072-3100,3179-3198,3217-3228,3236-3280,3304-3321,3347-3374,3489-3500,3537-3542,3844-3849
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "85370c21a41ce01742932b9b3e97691024cccca0",
+  "prompts": {},
+  "sessions": {
+    "s_d6c1289407a35d": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "3cad191d-b3a8-47c8-b61e-b6e675462b91",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
