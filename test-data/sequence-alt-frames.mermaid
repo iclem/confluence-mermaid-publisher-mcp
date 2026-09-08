@@ -1,0 +1,15 @@
+sequenceDiagram
+    participant PM as pymarketplaces
+    participant C as lengow-core (render API)
+    participant P as PostgreSQL (products)
+    participant F as Cache file
+    participant MK as Marketplace
+    PM->>C: pull feed via render API
+    alt no usable cache
+        C->>P: read products and render
+    else cache passthrough
+        C->>F: read previously rendered file
+    end
+    C-->>PM: stream feed
+    PM->>MK: push via API
+    MK-->>PM: publishing report

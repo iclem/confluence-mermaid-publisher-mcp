@@ -64,4 +64,10 @@ pushd "${GENERATOR_DIR}" >/dev/null
 mvn -q "${MAVEN_REPO_ARGS[@]}" -Dexec.mainClass=org.nasdanika.mermaid.drawio.generator.GeneratorMain exec:java < "${TMP_DIR}/diagram.json" > "${OUTPUT_FILE}"
 popd >/dev/null
 
+# Best-effort preview render; the publisher falls back to a placeholder PNG
+# when this fails (e.g. canvas unavailable on this platform).
+pushd "${PARSER_DIR}" >/dev/null
+node dist/preview-cli.js "${INPUT_FILE}" "${OUTPUT_FILE}.png" 2>/dev/null || true
+popd >/dev/null
+
 echo "Wrote ${OUTPUT_FILE}"

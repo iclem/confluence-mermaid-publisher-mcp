@@ -46,7 +46,9 @@ Markdown / Mermaid input
 The parser owns Mermaid-specific concerns:
 
 - diagram header detection
-- supported subset parsing
+- sequence diagram parsing through Mermaid's own parser (`mermaid.parse` + the sequence diagram DB, run headlessly via jsdom) so sequence syntax support matches stock draw.io behavior
+- sequence layout geometry from a headless Mermaid render (jsdom + canvas text measurement), matching stock draw.io coordinates; falls back to a computed grid when canvas is unavailable
+- supported subset parsing for the other diagram families
 - Mermaid validation and normalization
 - stable intermediate-model output
 

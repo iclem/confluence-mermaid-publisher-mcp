@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.nasdanika.drawio.Connection;
@@ -443,14 +444,25 @@ class DrawioGeneratorTest {
                         new IntermediateSequenceFrame("loop", "Retry until success", 1, 1, 1)),
                 List.of());
 
-        Document document = Document.load(new DrawioGenerator().generate(diagram), null);
+        String xml = new DrawioGenerator().generate(diagram);
+        assertTrue(xml.contains("umlFrame"));
+
+        Document document = Document.load(xml, null);
         Layer<?> layer = document.getPages().get(0).getModel().getRoot().getLayers().get(0);
 
         Node optFrame = findNode(layer, "sequence-frame-opt-0-0");
         Node loopFrame = findNode(layer, "sequence-frame-loop-1-1");
 
-        assertEquals("opt Cache miss", optFrame.getLabel());
-        assertEquals("loop Retry until success", loopFrame.getLabel());
+        assertEquals("opt", optFrame.getLabel());
+        assertEquals("loop", loopFrame.getLabel());
+
+        Node optTitle = optFrame.getChildren().stream()
+                .filter(Node.class::isInstance)
+                .map(Node.class::cast)
+                .filter(node -> "sequence-frame-opt-0-0-title".equals(node.getProperty("id")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Frame title not found"));
+        assertEquals("Cache miss", optTitle.getLabel());
         assertTrue(optFrame.getGeometry().getY() < loopFrame.getGeometry().getY());
         assertTrue(optFrame.getGeometry().getX() < loopFrame.getGeometry().getX());
         assertTrue(
@@ -501,6 +513,177 @@ class DrawioGeneratorTest {
         assertTrue(scopedLeft <= workerLeft);
         assertTrue(scopedRight >= workerRight);
         assertTrue(scopedRight < auditRight);
+    }
+
+    @Test
+    void generatesSequenceFrameSectionsAndArrowStyles() throws Exception {
+        IntermediateDiagram diagram = new IntermediateDiagram(
+                "SequenceAlt",
+                "sequence",
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(
+                        new IntermediateSequenceParticipant("A", "API"),
+                        new IntermediateSequenceParticipant("B", "Worker")),
+                List.of(
+                        new IntermediateSequenceMessage(0, "A", "B", "Try", "solid"),
+                        new IntermediateSequenceMessage(1, "A", "B", "Render", "solid"),
+                        new IntermediateSequenceMessage(2, "A", "B", "Passthrough", "solid"),
+                        new IntermediateSequenceMessage(3, "B", "A", "Failed", "dotted-cross"),
+                        new IntermediateSequenceMessage(4, "B", "A", "Done", "solid-point")),
+                List.of(),
+                List.of(),
+                List.of(new IntermediateSequenceFrame(
+                        "alt",
+                        "No cache",
+                        1,
+                        2,
+                        0,
+                        List.of("A", "B"),
+                        List.of(new IntermediateSequenceFrameSection(2, "Cached")))),
+                List.of());
+
+        String xml = new DrawioGenerator().generate(diagram);
+        assertTrue(xml.contains("endArrow=cross"));
+        assertTrue(xml.contains("dashPattern=3 3"));
+        assertTrue(xml.contains("endArrow=classic"));
+
+        Document document = Document.load(xml, null);
+        Layer<?> layer = document.getPages().get(0).getModel().getRoot().getLayers().get(0);
+
+        Node altFrame = findNode(layer, "sequence-frame-alt-1-0");
+        assertEquals("alt", altFrame.getLabel());
+
+        Node divider = altFrame.getChildren().stream()
+                .filter(Node.class::isInstance)
+                .map(Node.class::cast)
+                .filter(node -> "sequence-frame-alt-1-0-section-2".equals(node.getProperty("id")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Frame section divider not found"));
+
+        Node sectionLabel = altFrame.getChildren().stream()
+                .filter(Node.class::isInstance)
+                .map(Node.class::cast)
+                .filter(node -> "sequence-frame-alt-1-0-section-label-2".equals(node.getProperty("id")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Frame section label not found"));
+        assertEquals("Cached", sectionLabel.getLabel());
+    }
+
+    @Test
+    void generatesSequenceBoxesNotesAndNumberBadges() throws Exception {
+        IntermediateDiagram diagram = new IntermediateDiagram(
+                "SequenceBoxes",
+                "sequence",
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(
+                        new IntermediateSequenceParticipant("A", "API"),
+                        new IntermediateSequenceParticipant("B", "Worker"),
+                        new IntermediateSequenceParticipant("C", "Audit")),
+                List.of(
+                        new IntermediateSequenceMessage(0, "A", "B", "One", "solid", 1),
+                        new IntermediateSequenceMessage(1, "B", "A", "Two", "dotted", 2)),
+                List.of(new IntermediateSequenceNote(2, List.of("C"), "Side note", "leftOf")),
+                List.of(),
+                List.of(),
+                List.of(new IntermediateSequenceBox("Backend", "rgb(230,240,255)", List.of("B", "C"))),
+                List.of());
+
+        String xml = new DrawioGenerator().generate(diagram);
+        assertTrue(xml.contains("sequence-box-B"));
+        assertTrue(xml.contains("Backend"));
+        assertTrue(xml.contains("rgb(230,240,255)"));
+        assertTrue(xml.contains("sequence-number-0"));
+        assertTrue(xml.contains("sequence-number-1"));
+
+        Document document = Document.load(xml, null);
+        Layer<?> layer = document.getPages().get(0).getModel().getRoot().getLayers().get(0);
+
+        Node note = findNode(layer, "sequence-note-2");
+        Node audit = findNode(layer, "C");
+        double noteRight = note.getGeometry().getX() + note.getGeometry().getWidth();
+        double auditCenter = audit.getGeometry().getX() + audit.getGeometry().getWidth() / 2;
+        assertTrue(noteRight < auditCenter);
+    }
+
+    @Test
+    void usesMermaidGeometryWhenPresent() throws Exception {
+        IntermediateSequenceGeometry geometry = new IntermediateSequenceGeometry(
+                List.of(
+                        new IntermediateSequenceGeometry.Participant("A", 10, 0, 150, 65, 85, 400),
+                        new IntermediateSequenceGeometry.Participant("B", 260, 0, 150, 65, 335, 400)),
+                Map.of("0", 107.0),
+                List.of(new IntermediateSequenceGeometry.Frame(0, 0, 20, 90, 400, 200, List.of(150.0))),
+                List.of(new IntermediateSequenceGeometry.Note(1, 100, 120, 130, 36)),
+                List.of(new IntermediateSequenceGeometry.Activation("B", 0, 330, 110, 10, 80)),
+                List.of());
+        IntermediateDiagram diagram = new IntermediateDiagram(
+                "SequenceGeometry",
+                "sequence",
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(
+                        new IntermediateSequenceParticipant("A", "API"),
+                        new IntermediateSequenceParticipant("B", "Worker")),
+                List.of(new IntermediateSequenceMessage(0, "A", "B", "Call", "solid")),
+                List.of(new IntermediateSequenceNote(1, List.of("B"), "Note", "over")),
+                List.of(new IntermediateSequenceActivation("B", 0, 0, 0)),
+                List.of(new IntermediateSequenceFrame(
+                        "alt",
+                        "Branch",
+                        0,
+                        0,
+                        0,
+                        List.of("A", "B"),
+                        List.of(new IntermediateSequenceFrameSection(0, "other")))),
+                List.of(),
+                geometry,
+                List.of());
+
+        Document document = Document.load(new DrawioGenerator().generate(diagram), null);
+        Layer<?> layer = document.getPages().get(0).getModel().getRoot().getLayers().get(0);
+
+        Node api = findNode(layer, "A");
+        assertEquals(10.0, api.getGeometry().getX(), 0.01);
+        assertEquals(150.0, api.getGeometry().getWidth(), 0.01);
+        assertEquals(465.0, api.getGeometry().getHeight(), 0.01);
+
+        Node worker = findNode(layer, "B");
+        Node activation = worker.getChildren().stream()
+                .filter(Node.class::isInstance)
+                .map(Node.class::cast)
+                .filter(node -> "sequence-activation-B-0-0".equals(node.getProperty("id")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Activation node not found"));
+        assertEquals(70.0, activation.getGeometry().getX(), 0.01);
+        assertEquals(110.0, activation.getGeometry().getY(), 0.01);
+        assertEquals(80.0, activation.getGeometry().getHeight(), 0.01);
+
+        Node frame = findNode(layer, "sequence-frame-alt-0-0");
+        assertEquals(20.0, frame.getGeometry().getX(), 0.01);
+        assertEquals(90.0, frame.getGeometry().getY(), 0.01);
+        assertEquals(400.0, frame.getGeometry().getWidth(), 0.01);
+        assertEquals(200.0, frame.getGeometry().getHeight(), 0.01);
+
+        Node divider = frame.getChildren().stream()
+                .filter(Node.class::isInstance)
+                .map(Node.class::cast)
+                .filter(node -> "sequence-frame-alt-0-0-section-0".equals(node.getProperty("id")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Frame divider not found"));
+        assertEquals(60.0, divider.getGeometry().getY(), 0.01);
+
+        Node note = findNode(layer, "sequence-note-1");
+        assertEquals(100.0, note.getGeometry().getX(), 0.01);
+        assertEquals(120.0, note.getGeometry().getY(), 0.01);
+        assertEquals(130.0, note.getGeometry().getWidth(), 0.01);
     }
 
     private Node findNode(Layer<?> layer, String id) {

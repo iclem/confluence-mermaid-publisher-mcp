@@ -10,6 +10,8 @@ ROLLOUT_FIXTURE="${ROOT_DIR}/test-data/parity-rollout.mermaid"
 SEQUENCE_FIXTURE="${ROOT_DIR}/test-data/catalogue-publication-sequence.mermaid"
 SEQUENCE_ACTIVATION_FIXTURE="${ROOT_DIR}/test-data/sequence-activation-bars.mermaid"
 SEQUENCE_FRAME_FIXTURE="${ROOT_DIR}/test-data/sequence-control-frames.mermaid"
+SEQUENCE_ALT_FIXTURE="${ROOT_DIR}/test-data/sequence-alt-frames.mermaid"
+SEQUENCE_BOX_FIXTURE="${ROOT_DIR}/test-data/sequence-boxes-autonumber.mermaid"
 STATE_FIXTURE="${ROOT_DIR}/test-data/state-rollout.mermaid"
 GANTT_FIXTURE="${ROOT_DIR}/test-data/delivery-plan-gantt.mermaid"
 XYCHART_COST_FIXTURE="${ROOT_DIR}/test-data/cost-estimation-classify-embedding-p50.mermaid"
@@ -56,6 +58,22 @@ grep -q "Ack" "${TMP_DIR}/sequence-activations.drawio"
 grep -q "sequence-frame-opt-0-0" "${TMP_DIR}/sequence-frames.drawio"
 grep -q "sequence-frame-loop-1-1" "${TMP_DIR}/sequence-frames.drawio"
 grep -q "Retry until success" "${TMP_DIR}/sequence-frames.drawio"
+
+"${ROOT_DIR}/scripts/convert.sh" "${SEQUENCE_ALT_FIXTURE}" "${TMP_DIR}/sequence-alt.drawio" >/dev/null
+grep -q "sequence-frame-alt-1-0" "${TMP_DIR}/sequence-alt.drawio"
+grep -q "sequence-frame-alt-1-0-section-2" "${TMP_DIR}/sequence-alt.drawio"
+grep -q "cache passthrough" "${TMP_DIR}/sequence-alt.drawio"
+grep -q "umlFrame" "${TMP_DIR}/sequence-alt.drawio"
+grep -q "dashPattern=3 3" "${TMP_DIR}/sequence-alt.drawio"
+
+"${ROOT_DIR}/scripts/convert.sh" "${SEQUENCE_BOX_FIXTURE}" "${TMP_DIR}/sequence-boxes.drawio" >/dev/null
+grep -q "sequence-box-B" "${TMP_DIR}/sequence-boxes.drawio"
+grep -q "umlActor" "${TMP_DIR}/sequence-boxes.drawio"
+grep -q "sequence-number-0" "${TMP_DIR}/sequence-boxes.drawio"
+grep -q "sequence-number-4" "${TMP_DIR}/sequence-boxes.drawio"
+grep -q "endArrow=classic" "${TMP_DIR}/sequence-boxes.drawio"
+grep -q "sequence-activation-B-1-0" "${TMP_DIR}/sequence-boxes.drawio"
+grep -q "watched async" "${TMP_DIR}/sequence-boxes.drawio"
 
 "${ROOT_DIR}/scripts/convert.sh" "${STATE_FIXTURE}" "${TMP_DIR}/state-rollout.drawio" >/dev/null
 grep -q "LegacyOnly" "${TMP_DIR}/state-rollout.drawio"

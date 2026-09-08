@@ -16,7 +16,19 @@ export type NodeShape =
   | "ellipse";
 
 export type EdgeKind = "directed" | "dashed-directed" | "plain";
-export type SequenceMessageKind = "solid" | "dashed";
+export type SequenceMessageKind =
+  | "solid"
+  | "dotted"
+  | "solid-open"
+  | "dotted-open"
+  | "solid-cross"
+  | "dotted-cross"
+  | "solid-point"
+  | "dotted-point"
+  | "bidirectional-solid"
+  | "bidirectional-dotted"
+  // Legacy alias kept for backwards compatibility with previously generated payloads
+  | "dashed";
 
 export interface IntermediateNode {
   id: string;
@@ -54,6 +66,7 @@ export interface IntermediateSubgraph {
 export interface IntermediateSequenceParticipant {
   id: string;
   label: string;
+  type?: "participant" | "actor";
 }
 
 export interface IntermediateSequenceMessage {
@@ -62,13 +75,16 @@ export interface IntermediateSequenceMessage {
   targetId: string;
   label: string;
   kind: SequenceMessageKind;
+  number?: number;
 }
+
+export type SequenceNotePlacement = "over" | "leftOf" | "rightOf";
 
 export interface IntermediateSequenceNote {
   order: number;
   participantIds: string[];
   label: string;
-  placement: "over";
+  placement: SequenceNotePlacement;
 }
 
 export interface IntermediateSequenceActivation {
@@ -78,13 +94,27 @@ export interface IntermediateSequenceActivation {
   depth: number;
 }
 
+export type SequenceFrameKind = "opt" | "loop" | "alt" | "par" | "critical" | "break";
+
+export interface IntermediateSequenceFrameSection {
+  order: number;
+  label: string;
+}
+
 export interface IntermediateSequenceFrame {
-  kind: "opt" | "loop";
+  kind: SequenceFrameKind;
   label: string;
   startOrder: number;
   endOrder: number;
   depth: number;
   participantIds?: string[];
+  sections?: IntermediateSequenceFrameSection[];
+}
+
+export interface IntermediateSequenceBox {
+  label: string;
+  fillColor?: string;
+  participantIds: string[];
 }
 
 export interface IntermediateDiagram {
@@ -99,36 +129,17 @@ export interface IntermediateDiagram {
   sequenceNotes: IntermediateSequenceNote[];
   sequenceActivations: IntermediateSequenceActivation[];
   sequenceFrames: IntermediateSequenceFrame[];
+  sequenceBoxes?: IntermediateSequenceBox[];
+  sequenceGeometry?: import("./mermaid-geometry.js").SequenceGeometry;
   warnings: string[];
 }
 
 const SUPPORTED_DIRECTIONS = new Set<LayoutDirection>(["TD", "TB", "LR", "RL"]);
 const IGNORED_FLOWCHART_PREFIXES = ["style ", "linkStyle", "click ", "%%{"];
-const UNSUPPORTED_SEQUENCE_PREFIXES = [
-  "actor ",
-  "autonumber",
-  "alt ",
-  "par ",
-  "critical ",
-  "break ",
-  "box ",
-  "destroy ",
-  "create ",
-];
-
 const EDGE_SEGMENT_PATTERN =
   /(-\.->|-->|---)(?:\|([\s\S]*?)\|)?|--\s*"([\s\S]*?)"\s*-->/g;
 const NODE_PATTERN =
   /^(?<id>[A-Za-z_][A-Za-z0-9_-]*)(?:(?<terminal>\(\((?<terminalLabel>[\s\S]+)\)\))|(?<rounded>\((?<roundedLabel>[\s\S]+)\))|(?<decision>\{(?<decisionLabel>[\s\S]+)\})|(?<process>\[(?<processLabel>[\s\S]+)\]))?$/;
-const PARTICIPANT_PATTERN =
-  /^participant\s+(?<id>[A-Za-z_][A-Za-z0-9_-]*)(?:\s+as\s+(?<label>[\s\S]+))?$/;
-const NOTE_PATTERN = /^Note\s+over\s+(?<participants>[^:]+?)\s*:\s*(?<label>[\s\S]+)$/;
-const SEQUENCE_MESSAGE_PATTERN =
-  /^(?<source>[A-Za-z_][A-Za-z0-9_-]*?)(?=\s*-{1,2}>>)\s*(?<arrow>-{1,2}>>)\s*(?<target>[A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(?<label>[\s\S]+)$/;
-const ACTIVATE_PATTERN = /^activate\s+(?<participantId>[A-Za-z_][A-Za-z0-9_-]*)$/;
-const DEACTIVATE_PATTERN = /^deactivate\s+(?<participantId>[A-Za-z_][A-Za-z0-9_-]*)$/;
-const OPT_PATTERN = /^opt(?:\s+(?<label>[\s\S]+))?$/;
-const LOOP_PATTERN = /^loop(?:\s+(?<label>[\s\S]+))?$/;
 const STATE_TRANSITION_PATTERN =
   /^(?<source>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)\s*-->\s*(?<target>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)(?:\s*:\s*(?<label>[\s\S]+))?$/;
 const STATE_NOTE_START_PATTERN = /^note\s+(?:left|right)\s+of\s+(?<target>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)$/i;
@@ -441,14 +452,6 @@ function maybeIgnoreFlowchartLine(line: string, warnings: string[]): boolean {
     }
   }
   return false;
-}
-
-function ensureSupportedSequenceLine(line: string): void {
-  for (const prefix of UNSUPPORTED_SEQUENCE_PREFIXES) {
-    if (line.startsWith(prefix)) {
-      throw new Error(`unsupported_construct: "${line}"`);
-    }
-  }
 }
 
 function normalizeLabel(rawLabel: string): string {
@@ -971,97 +974,6 @@ function parseFlowchart(
     sequenceFrames: [],
     warnings,
   };
-}
-
-function parseSequenceParticipant(
-  line: string,
-): IntermediateSequenceParticipant | undefined {
-  const match = line.match(PARTICIPANT_PATTERN);
-  if (!match?.groups) {
-    return undefined;
-  }
-
-  return {
-    id: match.groups.id,
-    label: normalizeLabel(match.groups.label ?? match.groups.id),
-  };
-}
-
-function parseSequenceNote(line: string): { participantIds: string[]; label: string } | undefined {
-  const match = line.match(NOTE_PATTERN);
-  if (!match?.groups) {
-    return undefined;
-  }
-
-  const participantIds = match.groups.participants
-    .split(",")
-    .map((participantId) => participantId.trim())
-    .filter(Boolean);
-  if (participantIds.length === 0) {
-    throw new Error(`parse_error: malformed note "${line}"`);
-  }
-
-  return {
-    participantIds,
-    label: normalizeLabel(match.groups.label),
-  };
-}
-
-function parseSequenceMessage(line: string): {
-  sourceId: string;
-  targetId: string;
-  label: string;
-  kind: SequenceMessageKind;
-} | undefined {
-  const match = line.match(SEQUENCE_MESSAGE_PATTERN);
-  if (!match?.groups) {
-    return undefined;
-  }
-
-  return {
-    sourceId: match.groups.source,
-    targetId: match.groups.target,
-    label: normalizeLabel(match.groups.label),
-    kind: match.groups.arrow.startsWith("--") ? "dashed" : "solid",
-  };
-}
-
-function parseSequenceActivation(line: string): { participantId: string } | undefined {
-  const match = line.match(ACTIVATE_PATTERN);
-  if (!match?.groups) {
-    return undefined;
-  }
-
-  return { participantId: match.groups.participantId };
-}
-
-function parseSequenceDeactivation(line: string): { participantId: string } | undefined {
-  const match = line.match(DEACTIVATE_PATTERN);
-  if (!match?.groups) {
-    return undefined;
-  }
-
-  return { participantId: match.groups.participantId };
-}
-
-function parseSequenceFrameStart(line: string): { kind: "opt" | "loop"; label: string } | undefined {
-  const optMatch = line.match(OPT_PATTERN);
-  if (optMatch?.groups) {
-    return {
-      kind: "opt",
-      label: normalizeLabel(optMatch.groups.label ?? "optional"),
-    };
-  }
-
-  const loopMatch = line.match(LOOP_PATTERN);
-  if (loopMatch?.groups) {
-    return {
-      kind: "loop",
-      label: normalizeLabel(loopMatch.groups.label ?? "loop"),
-    };
-  }
-
-  return undefined;
 }
 
 function createStateNode(token: string, role: "source" | "target"): IntermediateNode {
@@ -2217,174 +2129,358 @@ function parseStateDiagram(request: MermaidParseRequest, lines: string[]): Inter
   };
 }
 
-function parseSequence(request: MermaidParseRequest, lines: string[]): IntermediateDiagram {
+// Numeric LINETYPE values from Mermaid's sequence db: signals expose only
+// numeric types, so the mapping is duplicated here.
+const SEQUENCE_LTYPE = {
+  note: 2,
+  loopStart: 10,
+  loopEnd: 11,
+  altStart: 12,
+  altElse: 13,
+  altEnd: 14,
+  optStart: 15,
+  optEnd: 16,
+  activeStart: 17,
+  activeEnd: 18,
+  parStart: 19,
+  parAnd: 20,
+  parEnd: 21,
+  rectStart: 22,
+  rectEnd: 23,
+  autonumber: 26,
+  criticalStart: 27,
+  criticalOption: 28,
+  criticalEnd: 29,
+  breakStart: 30,
+  breakEnd: 31,
+} as const;
+
+const SEQUENCE_MESSAGE_KIND_BY_TYPE: Record<number, SequenceMessageKind> = {
+  0: "solid",
+  1: "dotted",
+  3: "solid-cross",
+  4: "dotted-cross",
+  5: "solid-open",
+  6: "dotted-open",
+  24: "solid-point",
+  25: "dotted-point",
+  33: "bidirectional-solid",
+  34: "bidirectional-dotted",
+};
+
+const SEQUENCE_FRAME_KIND_BY_START_TYPE: Record<number, SequenceFrameKind> = {
+  [SEQUENCE_LTYPE.loopStart]: "loop",
+  [SEQUENCE_LTYPE.altStart]: "alt",
+  [SEQUENCE_LTYPE.optStart]: "opt",
+  [SEQUENCE_LTYPE.parStart]: "par",
+  [SEQUENCE_LTYPE.criticalStart]: "critical",
+  [SEQUENCE_LTYPE.breakStart]: "break",
+};
+
+const SEQUENCE_FRAME_DIVIDER_TYPES = new Set<number>([
+  SEQUENCE_LTYPE.altElse,
+  SEQUENCE_LTYPE.parAnd,
+  SEQUENCE_LTYPE.criticalOption,
+]);
+
+const SEQUENCE_FRAME_END_TYPES = new Set<number>([
+  SEQUENCE_LTYPE.loopEnd,
+  SEQUENCE_LTYPE.altEnd,
+  SEQUENCE_LTYPE.optEnd,
+  SEQUENCE_LTYPE.parEnd,
+  SEQUENCE_LTYPE.criticalEnd,
+  SEQUENCE_LTYPE.breakEnd,
+]);
+
+const SEQUENCE_FRAME_FALLBACK_LABELS: Record<SequenceFrameKind, string> = {
+  opt: "optional",
+  loop: "loop",
+  alt: "",
+  par: "parallel",
+  critical: "critical",
+  break: "break",
+};
+
+const SEQUENCE_NOTE_PLACEMENTS: SequenceNotePlacement[] = ["leftOf", "rightOf", "over"];
+
+interface SequenceSignal {
+  from?: string;
+  to?: string;
+  message?: unknown;
+  type: number;
+  placement?: number;
+}
+
+interface SequenceActor {
+  description?: string;
+  type?: string;
+}
+
+interface SequenceBoxData {
+  name?: string;
+  fill?: string;
+  actorKeys?: string[];
+}
+
+interface SequenceDb {
+  getActors(): Map<string, SequenceActor>;
+  getBoxes(): SequenceBoxData[];
+  getCreatedActors(): Map<string, number>;
+  getDestroyedActors(): Map<string, number>;
+  getMessages(): SequenceSignal[];
+}
+
+function sequenceSignalLabel(message: unknown): string {
+  return typeof message === "string" ? decodeSequenceEntities(message) : "";
+}
+
+function decodeSequenceEntities(text: string): string {
+  // Mermaid's jison lexer encodes entity codes (e.g. `#59;` for `;`) before
+  // parsing; decode like mermaid does at render time, then resolve the numeric
+  // entities so draw.io labels carry the real characters.
+  return text
+    .replace(/ﬂ°°/g, "&#")
+    .replace(/ﬂ°/g, "&")
+    .replace(/¶ß/g, ";")
+    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_match, code: string) => String.fromCodePoint(parseInt(code, 16)));
+}
+
+function requireSignalParticipant(signal: SequenceSignal, key: "from" | "to"): string {
+  const participantId = signal[key];
+  if (!participantId) {
+    throw new Error(`parse_error: sequence signal of type ${signal.type} is missing "${key}"`);
+  }
+  return participantId;
+}
+
+async function parseSequence(request: MermaidParseRequest): Promise<IntermediateDiagram> {
+  const { mermaid } = await import("./mermaid-env.js");
+
+  let db: SequenceDb;
+  try {
+    // parse() registers the lazily loaded sequence diagram and validates syntax
+    await mermaid.parse(request.mermaid);
+    db = (await mermaid.mermaidAPI.getDiagramFromText(request.mermaid)).db as SequenceDb;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`parse_error: ${message.split("\n")[0]}`);
+  }
+
   const participants: IntermediateSequenceParticipant[] = [];
-  const participantById = new Map<string, IntermediateSequenceParticipant>();
+  for (const [id, actor] of db.getActors()) {
+    const participant: IntermediateSequenceParticipant = {
+      id,
+      label: actor.description ? decodeSequenceEntities(actor.description) : id,
+    };
+    if (actor.type === "actor") {
+      participant.type = "actor";
+    }
+    participants.push(participant);
+  }
+
+  const boxes: IntermediateSequenceBox[] = db.getBoxes().map((box) => ({
+    label: box.name ? decodeSequenceEntities(box.name) : "",
+    fillColor: box.fill,
+    participantIds: box.actorKeys ?? [],
+  }));
+
+  const warnings: string[] = [];
+  const createdActors = db.getCreatedActors();
+  if (createdActors.size > 0) {
+    warnings.push(
+      `ignored_sequence_create: ${Array.from(createdActors.keys()).join(", ")} rendered as regular participants`,
+    );
+  }
+  const destroyedActors = db.getDestroyedActors();
+  if (destroyedActors.size > 0) {
+    warnings.push(
+      `ignored_sequence_destroy: ${Array.from(destroyedActors.keys()).join(", ")} end markers are not rendered`,
+    );
+  }
+
   const messages: IntermediateSequenceMessage[] = [];
   const notes: IntermediateSequenceNote[] = [];
   const activations: IntermediateSequenceActivation[] = [];
   const frames: IntermediateSequenceFrame[] = [];
-  const warnings: string[] = [];
   const activationStackByParticipant = new Map<string, Array<{ startOrder: number; depth: number }>>();
   const frameStack: Array<{
-    kind: "opt" | "loop" | "rect";
+    kind: SequenceFrameKind;
     label: string;
     startOrder: number;
     depth: number;
     participantIds: Set<string>;
+    sections: IntermediateSequenceFrameSection[];
   }> = [];
   let order = 0;
+  let sequenceNumbering: { next: number; step: number } | undefined;
 
-  function markFrameParticipants(participantIds: string[]): void {
+  function markFrameParticipants(participantIds: Array<string | undefined>): void {
     for (const frame of frameStack) {
       for (const participantId of participantIds) {
-        frame.participantIds.add(participantId);
+        if (participantId) {
+          frame.participantIds.add(participantId);
+        }
       }
     }
   }
 
-  function upsertParticipant(id: string, label?: string): void {
-    const existing = participantById.get(id);
-    if (existing) {
-      if (label && existing.label === existing.id) {
-        existing.label = label;
-      }
-      return;
-    }
-
-    const participant = {
-      id,
-      label: label ? normalizeLabel(label) : id,
-    };
-    participantById.set(id, participant);
-    participants.push(participant);
+  function startActivation(participantId: string, startOrder: number): void {
+    const stack = activationStackByParticipant.get(participantId) ?? [];
+    stack.push({ startOrder, depth: stack.length });
+    activationStackByParticipant.set(participantId, stack);
   }
 
-  for (const line of lines.slice(1)) {
-    ensureSupportedSequenceLine(line);
+  function stopActivation(participantId: string, endOrder: number): void {
+    const stack = activationStackByParticipant.get(participantId);
+    const activeSpan = stack?.pop();
+    if (!activeSpan) {
+      throw new Error(`parse_error: deactivate without matching activate for "${participantId}"`);
+    }
+    activations.push({
+      participantId,
+      startOrder: activeSpan.startOrder,
+      endOrder: Math.max(activeSpan.startOrder, endOrder),
+      depth: activeSpan.depth,
+    });
+  }
 
-    if (line === "end") {
+  for (const signal of db.getMessages()) {
+    const frameKind = SEQUENCE_FRAME_KIND_BY_START_TYPE[signal.type];
+    if (frameKind) {
+      frameStack.push({
+        kind: frameKind,
+        label: sequenceSignalLabel(signal.message) || SEQUENCE_FRAME_FALLBACK_LABELS[frameKind],
+        startOrder: order,
+        depth: frameStack.length,
+        participantIds: new Set<string>(),
+        sections: [],
+      });
+      continue;
+    }
+
+    if (SEQUENCE_FRAME_DIVIDER_TYPES.has(signal.type)) {
+      const frame = frameStack[frameStack.length - 1];
+      if (!frame) {
+        throw new Error("parse_error: frame divider without matching sequence frame");
+      }
+      frame.sections.push({ order, label: sequenceSignalLabel(signal.message) });
+      continue;
+    }
+
+    if (SEQUENCE_FRAME_END_TYPES.has(signal.type)) {
       const frame = frameStack.pop();
       if (!frame) {
-        throw new Error('parse_error: unexpected "end" without matching sequence frame');
+        throw new Error("parse_error: unexpected frame end without matching sequence frame");
       }
-
-      if (frame.kind !== "rect") {
-        frames.push({
-          kind: frame.kind,
-          label: frame.label,
-          startOrder: frame.startOrder,
-          endOrder: Math.max(frame.startOrder, Math.max(0, order - 1)),
-          depth: frame.depth,
-          participantIds: Array.from(frame.participantIds),
-        });
-      }
-      continue;
-    }
-
-    if (line.startsWith("rect ")) {
-      frameStack.push({
-        kind: "rect",
-        label: line,
-        startOrder: order,
-        depth: frameStack.length,
-        participantIds: new Set<string>(),
-      });
-      warnings.push(`ignored_sequence_wrapper: "${line}"`);
-      continue;
-    }
-
-    const participant = parseSequenceParticipant(line);
-    if (participant) {
-      upsertParticipant(participant.id, participant.label);
-      continue;
-    }
-
-    const frameStart = parseSequenceFrameStart(line);
-    if (frameStart) {
-      frameStack.push({
-        kind: frameStart.kind,
-        label: frameStart.label,
-        startOrder: order,
-        depth: frameStack.length,
-        participantIds: new Set<string>(),
+      frames.push({
+        kind: frame.kind,
+        label: frame.label,
+        startOrder: frame.startOrder,
+        endOrder: Math.max(frame.startOrder, Math.max(0, order - 1)),
+        depth: frame.depth,
+        participantIds: Array.from(frame.participantIds),
+        sections: frame.sections.length > 0 ? frame.sections : undefined,
       });
       continue;
     }
 
-    const note = parseSequenceNote(line);
-    if (note) {
-      for (const participantId of note.participantIds) {
-        upsertParticipant(participantId);
-      }
-      markFrameParticipants(note.participantIds);
+    if (signal.type === SEQUENCE_LTYPE.rectStart) {
+      warnings.push(`ignored_sequence_wrapper: "rect ${sequenceSignalLabel(signal.message)}"`);
+      continue;
+    }
+    if (signal.type === SEQUENCE_LTYPE.rectEnd) {
+      continue;
+    }
+
+    if (signal.type === SEQUENCE_LTYPE.autonumber) {
+      const config = signal.message as { start?: number; step?: number; visible?: boolean } | undefined;
+      sequenceNumbering = config?.visible === false
+        ? undefined
+        : { next: config?.start ?? 1, step: config?.step ?? 1 };
+      continue;
+    }
+
+    if (signal.type === SEQUENCE_LTYPE.activeStart) {
+      const participantId = requireSignalParticipant(signal, "from");
+      markFrameParticipants([participantId]);
+      startActivation(participantId, Math.max(0, order - 1));
+      continue;
+    }
+    if (signal.type === SEQUENCE_LTYPE.activeEnd) {
+      const participantId = requireSignalParticipant(signal, "from");
+      markFrameParticipants([participantId]);
+      stopActivation(participantId, Math.max(0, order - 1));
+      continue;
+    }
+
+    if (signal.type === SEQUENCE_LTYPE.note) {
+      const participantIds = [...new Set([signal.from, signal.to].filter((id): id is string => Boolean(id)))];
+      markFrameParticipants(participantIds);
       notes.push({
         order,
-        participantIds: note.participantIds,
-        label: note.label,
-        placement: "over",
+        participantIds,
+        label: sequenceSignalLabel(signal.message),
+        placement: SEQUENCE_NOTE_PLACEMENTS[signal.placement ?? 2] ?? "over",
       });
       order += 1;
       continue;
     }
 
-    const activation = parseSequenceActivation(line);
-    if (activation) {
-      upsertParticipant(activation.participantId);
-      markFrameParticipants([activation.participantId]);
-      const stack = activationStackByParticipant.get(activation.participantId) ?? [];
-      stack.push({
-        startOrder: Math.max(0, order - 1),
-        depth: stack.length,
-      });
-      activationStackByParticipant.set(activation.participantId, stack);
-      continue;
+    const kind = SEQUENCE_MESSAGE_KIND_BY_TYPE[signal.type];
+    if (!kind) {
+      warnings.push(
+        `unsupported_arrow_variant: message type ${signal.type} rendered as a solid arrow`,
+      );
     }
+    const message: IntermediateSequenceMessage = {
+      order,
+      sourceId: requireSignalParticipant(signal, "from"),
+      targetId: requireSignalParticipant(signal, "to"),
+      label: sequenceSignalLabel(signal.message),
+      kind: kind ?? "solid",
+    };
+    markFrameParticipants([message.sourceId, message.targetId]);
+    if (sequenceNumbering) {
+      message.number = sequenceNumbering.next;
+      sequenceNumbering.next += sequenceNumbering.step;
+    }
+    messages.push(message);
+    order += 1;
+  }
 
-    const deactivation = parseSequenceDeactivation(line);
-    if (deactivation) {
-      upsertParticipant(deactivation.participantId);
-      markFrameParticipants([deactivation.participantId]);
-      const stack = activationStackByParticipant.get(deactivation.participantId);
-      const activeSpan = stack?.pop();
-      if (!activeSpan) {
-        throw new Error(`parse_error: deactivate without matching activate for "${deactivation.participantId}"`);
-      }
+  if (frameStack.length > 0) {
+    throw new Error("parse_error: unclosed sequence frame");
+  }
+  for (const [participantId, stack] of activationStackByParticipant.entries()) {
+    for (const activeSpan of stack) {
       activations.push({
-        participantId: deactivation.participantId,
+        participantId,
         startOrder: activeSpan.startOrder,
         endOrder: Math.max(activeSpan.startOrder, Math.max(0, order - 1)),
         depth: activeSpan.depth,
       });
-      continue;
-    }
-
-    const message = parseSequenceMessage(line);
-    if (message) {
-      upsertParticipant(message.sourceId);
-      upsertParticipant(message.targetId);
-      markFrameParticipants([message.sourceId, message.targetId]);
-      messages.push({
-        order,
-        sourceId: message.sourceId,
-        targetId: message.targetId,
-        label: message.label,
-        kind: message.kind,
-      });
-      order += 1;
-      continue;
-    }
-
-    throw new Error(`unsupported_construct: "${line}"`);
-  }
-
-  for (const [participantId, stack] of activationStackByParticipant.entries()) {
-    if (stack.length > 0) {
-      throw new Error(`parse_error: unclosed activation for "${participantId}"`);
+      warnings.push(`unclosed_activation: "${participantId}" auto-closed at the end of the diagram`);
     }
   }
-  if (frameStack.length > 0) {
-    throw new Error("parse_error: unclosed sequence frame");
+
+  let sequenceGeometry: import("./mermaid-geometry.js").SequenceGeometry | undefined;
+  try {
+    const { renderSequenceGeometry } = await import("./mermaid-geometry.js");
+    sequenceGeometry = await renderSequenceGeometry(request.mermaid, {
+      participants,
+      messages,
+      notes,
+      frames,
+      activations,
+      boxes,
+    });
+    if (sequenceGeometry === undefined) {
+      warnings.push("sequence_geometry_unavailable: canvas text measurement is unavailable on this platform");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warnings.push(`sequence_geometry_unavailable: ${message.split("\n")[0]}`);
   }
 
   return {
@@ -2398,11 +2494,13 @@ function parseSequence(request: MermaidParseRequest, lines: string[]): Intermedi
     sequenceNotes: notes,
     sequenceActivations: activations,
     sequenceFrames: frames,
+    sequenceBoxes: boxes,
+    sequenceGeometry,
     warnings,
   };
 }
 
-export function parseMermaid(request: MermaidParseRequest): IntermediateDiagram {
+export async function parseMermaid(request: MermaidParseRequest): Promise<IntermediateDiagram> {
   const rawLines = normalizeLines(request.mermaid);
   if (rawLines.length === 0) {
     throw new Error("parse_error: Mermaid input is empty");
@@ -2417,7 +2515,7 @@ export function parseMermaid(request: MermaidParseRequest): IntermediateDiagram 
   }
 
   if (header.diagramType === "sequence") {
-    return parseSequence(request, lines);
+    return parseSequence(request);
   }
   if (header.diagramType === "state") {
     return parseStateDiagram(request, lines);
