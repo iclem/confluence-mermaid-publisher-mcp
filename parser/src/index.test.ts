@@ -153,17 +153,123 @@ describe("parseMermaid", () => {
     ]);
   });
 
+  it("supports alt frames with else sections", () => {
+    const diagram = parseMermaid({
+      mermaid: `
+        sequenceDiagram
+        A->>B: Try
+        alt No cache
+          A->>B: Render
+        else Cached
+          A->>B: Passthrough
+        end
+        B-->>A: Done
+      `,
+    });
+
+    expect(diagram.sequenceMessages.map((message) => message.kind)).toEqual([
+      "solid",
+      "solid",
+      "solid",
+      "dotted",
+    ]);
+    expect(diagram.sequenceFrames).toEqual([
+      {
+        kind: "alt",
+        label: "No cache",
+        startOrder: 1,
+        endOrder: 2,
+        depth: 0,
+        participantIds: ["A", "B"],
+        sections: [{ order: 2, label: "Cached" }],
+      },
+    ]);
+  });
+
   it("rejects unsupported sequence constructs explicitly", () => {
     expect(() =>
       parseMermaid({
         mermaid: `
           sequenceDiagram
-          alt Branch
+          box Group
             A->>B: Message
           end
         `,
       }),
     ).toThrow(/unsupported_construct/);
+  });
+
+  it("supports the full sequence message arrow set", () => {
+    const diagram = parseMermaid({
+      mermaid: `
+        sequenceDiagram
+        A->>B: filled
+        A-->>B: dotted filled
+        A->B: open
+        A-->B: dotted open
+        A-xB: cross
+        A--xB: dotted cross
+        A-)B: point
+        A--)B: dotted point
+        A<<->>B: both
+        A<<-->>B: both dotted
+      `,
+    });
+
+    expect(diagram.sequenceMessages.map((message) => message.kind)).toEqual([
+      "solid",
+      "dotted",
+      "solid-open",
+      "dotted-open",
+      "solid-cross",
+      "dotted-cross",
+      "solid-point",
+      "dotted-point",
+      "bidirectional-solid",
+      "bidirectional-dotted",
+    ]);
+  });
+
+  it("supports par, critical, and break frames with actors", () => {
+    const diagram = parseMermaid({
+      mermaid: `
+        sequenceDiagram
+        actor U as User
+        par Task one
+          U->>A: One
+        and Task two
+          U->>A: Two
+        end
+        critical Commit
+          A->>B: Commit
+        option Rollback
+          A-xB: Reject
+        end
+        break Abort
+          B-->U: Stopped
+        end
+      `,
+    });
+
+    expect(diagram.sequenceParticipants).toEqual([
+      { id: "U", label: "User", type: "actor" },
+      { id: "A", label: "A" },
+      { id: "B", label: "B" },
+    ]);
+    expect(diagram.sequenceFrames.map((frame) => [frame.kind, frame.label])).toEqual([
+      ["par", "Task one"],
+      ["critical", "Commit"],
+      ["break", "Abort"],
+    ]);
+    expect(diagram.sequenceFrames[0].sections).toEqual([{ order: 1, label: "Task two" }]);
+    expect(diagram.sequenceFrames[1].sections).toEqual([{ order: 3, label: "Rollback" }]);
+    expect(diagram.sequenceMessages.map((message) => message.kind)).toEqual([
+      "solid",
+      "solid",
+      "solid",
+      "solid-cross",
+      "dotted-open",
+    ]);
   });
 
   it("supports semicolon-separated statements and chained edges", () => {
@@ -814,7 +920,7 @@ write use case"]
         sourceId: "B",
         targetId: "A",
         label: "Ack",
-        kind: "dashed",
+        kind: "dotted",
       },
     ]);
   });
@@ -893,7 +999,7 @@ write use case"]
         sourceId: "B",
         targetId: "A",
         label: "Ack",
-        kind: "dashed",
+        kind: "dotted",
       },
     ]);
     expect(diagram.sequenceFrames).toEqual([]);

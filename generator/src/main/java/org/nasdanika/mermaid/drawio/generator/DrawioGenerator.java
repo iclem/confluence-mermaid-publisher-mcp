@@ -56,6 +56,7 @@ public class DrawioGenerator {
     private static final int SEQUENCE_FRAME_MARGIN = 10;
     private static final int SEQUENCE_FRAME_DEPTH_OFFSET = 12;
     private static final int SEQUENCE_FRAME_LABEL_HEIGHT = 28;
+    private static final int SEQUENCE_FRAME_TAB_HEIGHT = 20;
     private static final int SEQUENCE_FRAME_BOTTOM_OFFSET = 36;
     private static final int SEQUENCE_FRAME_INNER_VERTICAL_OFFSET = 22;
 
@@ -220,7 +221,8 @@ public class DrawioGenerator {
         int currentX = SEQUENCE_LEFT;
         for (int i = 0; i < participants.size(); i++) {
             IntermediateSequenceParticipant participant = participants.get(i);
-            int width = computeParticipantWidth(participant.label());
+            boolean isActor = "actor".equals(participant.type());
+            int width = isActor ? 35 : computeParticipantWidth(participant.label());
             Node lifeline = layer.createNode();
             lifeline.setProperty("id", participant.id());
             lifeline.setLabel(formatLabel(participant.label()));
@@ -229,9 +231,6 @@ public class DrawioGenerator {
             style.shape("umlLifeline");
             style.container(true);
             style.collapsible(false);
-            style.backgroundColor("#eeeeee");
-            style.color("#999999");
-            style.fontColor("#333333");
             lifeline.style("perimeter", "lifelinePerimeter");
             lifeline.style("dropTarget", "0");
             lifeline.style("recursiveResize", "0");
@@ -242,6 +241,13 @@ public class DrawioGenerator {
             lifeline.style(
                     "newEdgeStyle",
                     "{\"edgeStyle\":\"elbowEdgeStyle\",\"elbow\":\"vertical\",\"curved\":0,\"rounded\":0}");
+            if (isActor) {
+                lifeline.style("participant", "umlActor");
+                lifeline.style("verticalAlign", "bottom");
+                lifeline.style("labelPosition", "center");
+                lifeline.style("verticalLabelPosition", "top");
+                lifeline.style("align", "center");
+            }
 
             lifeline.getGeometry().setBounds(currentX, SEQUENCE_TOP, width, participantHeight);
             frames.put(
@@ -298,22 +304,49 @@ public class DrawioGenerator {
                         + SEQUENCE_FRAME_BOTTOM_OFFSET - verticalInset * 2);
 
         Node frameNode = layer.createNode();
-        frameNode.setProperty(
-                "id",
-                "sequence-frame-" + frame.kind() + "-" + frame.startOrder() + "-" + frame.depth());
-        frameNode.setLabel(formatLabel(frame.kind() + " " + frame.label()));
+        String frameId = "sequence-frame-" + frame.kind() + "-" + frame.startOrder() + "-" + frame.depth();
+        frameNode.setProperty("id", frameId);
+        frameNode.setLabel(formatLabel(frame.kind()));
         NodeStyle style = frameNode.getStyle();
-        style.shape("rectangle");
-        style.backgroundColor("none");
-        style.color("#666666");
-        style.fontColor("#333333");
-        style.align("left");
-        style.verticalAlign("top");
-        style.width("2");
-        frameNode.style("whiteSpace", "wrap");
-        frameNode.style("spacingLeft", "8");
-        frameNode.style("spacingTop", "6");
+        style.shape("umlFrame");
+        frameNode.style("dashed", "1");
+        frameNode.style("pointerEvents", "0");
+        frameNode.style("dropTarget", "0");
+        frameNode.style("strokeColor", "#B3B3B3");
+        int tabWidth = frame.kind().length() * 10;
+        frameNode.style("width", Integer.toString(tabWidth));
+        frameNode.style("height", Integer.toString(SEQUENCE_FRAME_TAB_HEIGHT));
         frameNode.getGeometry().setBounds(x, y, width, height);
+
+        Node title = frameNode.createNode();
+        title.setProperty("id", frameId + "-title");
+        title.setLabel(formatLabel(frame.label()));
+        NodeStyle titleStyle = title.getStyle();
+        titleStyle.shape("text");
+        titleStyle.backgroundColor("none");
+        titleStyle.color("none");
+        titleStyle.align("center");
+        titleStyle.verticalAlign("middle");
+        title.style("whiteSpace", "wrap");
+        title.getGeometry().setBounds(tabWidth, 0, width - tabWidth, SEQUENCE_FRAME_TAB_HEIGHT);
+
+        if (frame.sections() != null) {
+            for (IntermediateSequenceFrameSection section : frame.sections()) {
+                Node divider = frameNode.createNode();
+                divider.setProperty("id", frameId + "-section-" + section.order());
+                divider.setLabel(formatLabel(section.label()));
+                divider.style("shape", "line");
+                divider.style("dashed", "1");
+                divider.style("whiteSpace", "wrap");
+                divider.style("verticalAlign", "top");
+                divider.style("labelPosition", "center");
+                divider.style("verticalLabelPosition", "middle");
+                divider.style("align", "center");
+                divider.style("strokeColor", "#B3B3B3");
+                int dividerY = computeSequenceEventY(section.order()) - SEQUENCE_ROW_SPACING / 2 - y;
+                divider.getGeometry().setBounds(0, dividerY, width, SEQUENCE_FRAME_TAB_HEIGHT);
+            }
+        }
     }
 
     private void createSequenceActivation(
@@ -330,10 +363,14 @@ public class DrawioGenerator {
                 "sequence-activation-" + activation.participantId() + "-" + activation.startOrder() + "-" + activation.depth());
         NodeStyle style = activationNode.getStyle();
         style.shape("rectangle");
-        style.backgroundColor("#ffffff");
-        style.color("#333333");
-        style.width("2");
-        style.rounded(false);
+        activationNode.style("points", "[]");
+        activationNode.style("perimeter", "orthogonalPerimeter");
+        activationNode.style("outlineConnect", "0");
+        activationNode.style("targetShapes", "umlLifeline");
+        activationNode.style("portConstraint", "eastwest");
+        activationNode.style(
+                "newEdgeStyle",
+                "{\"edgeStyle\":\"elbowEdgeStyle\",\"elbow\":\"vertical\",\"curved\":0,\"rounded\":0}");
 
         int x = (frame.width() - SEQUENCE_ACTIVATION_WIDTH) / 2 + activation.depth() * SEQUENCE_ACTIVATION_OFFSET;
         int y = computeSequenceEventY(activation.startOrder()) - SEQUENCE_TOP + SEQUENCE_ACTIVATION_TOP_OFFSET;
@@ -374,7 +411,6 @@ public class DrawioGenerator {
         noteStyle.shape("rectangle");
         noteStyle.backgroundColor("#ffff88");
         noteStyle.color("#9E916F");
-        noteStyle.fontColor("#333333");
         noteStyle.align("center");
         noteStyle.verticalAlign("middle");
         noteNode.style("whiteSpace", "wrap");
@@ -429,16 +465,61 @@ public class DrawioGenerator {
     private void configureSequenceMessageStyle(Connection connection, String kind) {
         ConnectionStyle style = connection.getStyle();
         style.edgeStyle("elbowEdgeStyle");
-        style.endArrow("block");
         style.rounded(false);
-        style.color("#666666");
         connection.style("verticalAlign", "bottom");
         connection.style("elbow", "vertical");
         connection.style("curved", "0");
-        if ("dashed".equals(kind)) {
-            style.dashed("1");
-        } else {
-            style.dashed("0");
+
+        boolean dotted = false;
+        boolean bidirectional = false;
+        String endArrow = "block";
+        switch (kind == null ? "solid" : kind) {
+            case "dashed": // legacy alias for dotted
+            case "dotted":
+                dotted = true;
+                break;
+            case "solid-open":
+                endArrow = "none";
+                break;
+            case "dotted-open":
+                dotted = true;
+                endArrow = "none";
+                break;
+            case "solid-cross":
+                endArrow = "cross";
+                break;
+            case "dotted-cross":
+                dotted = true;
+                endArrow = "cross";
+                break;
+            case "solid-point":
+                endArrow = "classic";
+                break;
+            case "dotted-point":
+                dotted = true;
+                endArrow = "classic";
+                break;
+            case "bidirectional-solid":
+                bidirectional = true;
+                break;
+            case "bidirectional-dotted":
+                dotted = true;
+                bidirectional = true;
+                break;
+            default:
+                break;
+        }
+
+        style.dashed(dotted ? "1" : "0");
+        if (dotted) {
+            connection.style("dashPattern", "2 3");
+        }
+        style.endArrow(endArrow);
+        if ("classic".equals(endArrow)) {
+            connection.style("endSize", "10");
+        }
+        if (bidirectional) {
+            connection.style("startArrow", "block");
         }
     }
 

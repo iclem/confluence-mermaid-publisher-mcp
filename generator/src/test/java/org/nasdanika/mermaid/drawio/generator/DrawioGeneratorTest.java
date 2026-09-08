@@ -443,14 +443,25 @@ class DrawioGeneratorTest {
                         new IntermediateSequenceFrame("loop", "Retry until success", 1, 1, 1)),
                 List.of());
 
-        Document document = Document.load(new DrawioGenerator().generate(diagram), null);
+        String xml = new DrawioGenerator().generate(diagram);
+        assertTrue(xml.contains("umlFrame"));
+
+        Document document = Document.load(xml, null);
         Layer<?> layer = document.getPages().get(0).getModel().getRoot().getLayers().get(0);
 
         Node optFrame = findNode(layer, "sequence-frame-opt-0-0");
         Node loopFrame = findNode(layer, "sequence-frame-loop-1-1");
 
-        assertEquals("opt Cache miss", optFrame.getLabel());
-        assertEquals("loop Retry until success", loopFrame.getLabel());
+        assertEquals("opt", optFrame.getLabel());
+        assertEquals("loop", loopFrame.getLabel());
+
+        Node optTitle = optFrame.getChildren().stream()
+                .filter(Node.class::isInstance)
+                .map(Node.class::cast)
+                .filter(node -> "sequence-frame-opt-0-0-title".equals(node.getProperty("id")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Frame title not found"));
+        assertEquals("Cache miss", optTitle.getLabel());
         assertTrue(optFrame.getGeometry().getY() < loopFrame.getGeometry().getY());
         assertTrue(optFrame.getGeometry().getX() < loopFrame.getGeometry().getX());
         assertTrue(
@@ -501,6 +512,56 @@ class DrawioGeneratorTest {
         assertTrue(scopedLeft <= workerLeft);
         assertTrue(scopedRight >= workerRight);
         assertTrue(scopedRight < auditRight);
+    }
+
+    @Test
+    void generatesSequenceFrameSectionsAndArrowStyles() throws Exception {
+        IntermediateDiagram diagram = new IntermediateDiagram(
+                "SequenceAlt",
+                "sequence",
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(
+                        new IntermediateSequenceParticipant("A", "API"),
+                        new IntermediateSequenceParticipant("B", "Worker")),
+                List.of(
+                        new IntermediateSequenceMessage(0, "A", "B", "Try", "solid"),
+                        new IntermediateSequenceMessage(1, "A", "B", "Render", "solid"),
+                        new IntermediateSequenceMessage(2, "A", "B", "Passthrough", "solid"),
+                        new IntermediateSequenceMessage(3, "B", "A", "Failed", "dotted-cross"),
+                        new IntermediateSequenceMessage(4, "B", "A", "Done", "solid-point")),
+                List.of(),
+                List.of(),
+                List.of(new IntermediateSequenceFrame(
+                        "alt",
+                        "No cache",
+                        1,
+                        2,
+                        0,
+                        List.of("A", "B"),
+                        List.of(new IntermediateSequenceFrameSection(2, "Cached")))),
+                List.of());
+
+        String xml = new DrawioGenerator().generate(diagram);
+        assertTrue(xml.contains("endArrow=cross"));
+        assertTrue(xml.contains("dashPattern=2 3"));
+        assertTrue(xml.contains("endArrow=classic"));
+
+        Document document = Document.load(xml, null);
+        Layer<?> layer = document.getPages().get(0).getModel().getRoot().getLayers().get(0);
+
+        Node altFrame = findNode(layer, "sequence-frame-alt-1-0");
+        assertEquals("alt", altFrame.getLabel());
+
+        Node divider = altFrame.getChildren().stream()
+                .filter(Node.class::isInstance)
+                .map(Node.class::cast)
+                .filter(node -> "sequence-frame-alt-1-0-section-2".equals(node.getProperty("id")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Frame section divider not found"));
+        assertEquals("Cached", divider.getLabel());
     }
 
     private Node findNode(Layer<?> layer, String id) {

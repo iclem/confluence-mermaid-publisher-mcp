@@ -35,7 +35,7 @@ Source of Mermaid diagram-type list:
 | Radar | `radar-beta` | `not-started` | No parser or mapping yet. |
 | Requirement diagram | `requirementDiagram` | `not-started` | No parser or mapping yet. |
 | Sankey | `sankey-beta` | `not-started` | No parser or mapping yet. |
-| Sequence diagram | `sequenceDiagram` | `partial` | Supports participants, `->>` / `-->>` messages, self-messages, `Note over`, explicit activation bars, and `opt` / `loop` control frames; branching frames are still missing. |
+| Sequence diagram | `sequenceDiagram` | `partial` | Supports participants and actors, the full message arrow set, self-messages, `Note over`, explicit activation bars, and `opt` / `loop` / `alt` / `par` / `critical` / `break` control frames with section dividers; participant boxes, autonumbering, and create/destroy are still missing. |
 | State diagram | `stateDiagram-v2`, `stateDiagram` | `partial` | Supports a narrow v1 slice: transitions, start/end markers, explicit direction (`TD`, `TB`, `LR`, `RL`), and right/left-of notes rendered through the flowchart generator path. |
 | Timeline | `timeline` | `not-started` | No parser or mapping yet. |
 | Tree view | `treeView-beta` | `not-started` | No parser or mapping yet. |
@@ -92,17 +92,26 @@ The current implementation is intentionally narrow. It is usable for simple proc
 | Sequence header | `sequenceDiagram` | `supported` | Dispatches to the sequence parser/generator path. |
 | Explicit participants | `participant AC as api-catalogue` | `supported` | Preserves declaration order and aliases. |
 | Implicit participants from messages/notes | `AC->>MQ: Publish` | `supported` | Auto-created when referenced before declaration. |
-| Solid messages | `A->>B: Message` | `supported` | Rendered as horizontal arrows between lifelines. |
+| Solid messages | `A->>B: Message` | `supported` | Rendered as horizontal arrows between lifelines with filled arrowheads. |
 | Self-messages | `A->>A: Persist` | `supported` | Rendered as right-hand loopback arrows. |
 | Notes over one or more participants | `Note over AC: text` | `supported` | Rendered as yellow note boxes spanning one or more lifelines. |
-| Dashed messages | `A-->>B: Ack` | `supported` | Rendered as dashed arrows. |
+| Dashed messages | `A-->>B: Ack` | `supported` | Rendered as dashed arrows with `dashPattern=2 3`, matching stock draw.io Mermaid import. |
+| Open messages without arrowheads | `A->B` / `A-->B` | `supported` | Rendered as plain solid/dotted lines, matching stock draw.io Mermaid import. |
+| Cross messages | `A-xB` / `A--xB` | `supported` | Rendered with cross arrowheads. |
+| Open-arrow (async) messages | `A-)B` / `A--)B` | `supported` | Rendered with open (`classic`) arrowheads. |
+| Bidirectional messages | `A<<->>B` / `A<<-->>B` | `supported` | Rendered with arrowheads on both ends. |
 | Participant aliases with rich labels | `participant BO as Backoffice / Internal` | `supported` | Multiline aliases are preserved as labels. |
+| Actors | `actor U as User` | `supported` | Rendered as stick-figure lifelines (`umlActor`), matching stock draw.io Mermaid import. |
 | Activation bars | `activate A` / `deactivate A` | `supported` | Explicit activation spans are rendered as nested bars on lifelines. |
-| `opt` control frame | `opt Cache miss ... end` | `supported` | Rendered as a labeled frame spanning the affected sequence area. |
-| `loop` control frame | `loop Retry ... end` | `supported` | Rendered as a labeled frame spanning the affected sequence area. |
+| `opt` control frame | `opt Cache miss ... end` | `supported` | Rendered as a `umlFrame` with a label tab, matching stock draw.io Mermaid import. |
+| `loop` control frame | `loop Retry ... end` | `supported` | Rendered as a `umlFrame` with a label tab, matching stock draw.io Mermaid import. |
+| `alt` / `else` frames | `alt No cache ... else Cached ... end` | `supported` | Rendered as a `umlFrame` with dashed section dividers between `else` branches, matching stock draw.io Mermaid import. |
+| `par` / `and` frames | `par Task ... and ... end` | `supported` | Rendered as a `umlFrame` with dashed section dividers. |
+| `critical` / `option` frames | `critical ... option ... end` | `supported` | Rendered as a `umlFrame` with dashed section dividers. |
+| `break` frames | `break Abort ... end` | `supported` | Rendered as a `umlFrame` with a label tab. |
 | `rect` grouping wrappers | `rect rgb(...) ... end` | `partial` | Wrapper is ignored with a warning so inner sequence content can still convert. |
-| Other control blocks | `alt`, `par`, `critical`, `break` | `not-started` | Explicitly rejected today. |
-| Actor / boundary shortcuts | `actor User` | `not-started` | Explicitly rejected today. |
+| Participant boxes | `box Group ... end` | `not-started` | Explicitly rejected today. |
+| Autonumbering | `autonumber` | `not-started` | Explicitly rejected today. |
 | Create / destroy semantics | `create participant A` | `not-started` | Explicitly rejected today. |
 
 ## State diagram feature coverage

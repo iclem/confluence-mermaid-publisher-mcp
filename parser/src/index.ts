@@ -16,7 +16,19 @@ export type NodeShape =
   | "ellipse";
 
 export type EdgeKind = "directed" | "dashed-directed" | "plain";
-export type SequenceMessageKind = "solid" | "dashed";
+export type SequenceMessageKind =
+  | "solid"
+  | "dotted"
+  | "solid-open"
+  | "dotted-open"
+  | "solid-cross"
+  | "dotted-cross"
+  | "solid-point"
+  | "dotted-point"
+  | "bidirectional-solid"
+  | "bidirectional-dotted"
+  // Legacy alias kept for backwards compatibility with previously generated payloads
+  | "dashed";
 
 export interface IntermediateNode {
   id: string;
@@ -54,6 +66,7 @@ export interface IntermediateSubgraph {
 export interface IntermediateSequenceParticipant {
   id: string;
   label: string;
+  type?: "participant" | "actor";
 }
 
 export interface IntermediateSequenceMessage {
@@ -78,13 +91,21 @@ export interface IntermediateSequenceActivation {
   depth: number;
 }
 
+export type SequenceFrameKind = "opt" | "loop" | "alt" | "par" | "critical" | "break";
+
+export interface IntermediateSequenceFrameSection {
+  order: number;
+  label: string;
+}
+
 export interface IntermediateSequenceFrame {
-  kind: "opt" | "loop";
+  kind: SequenceFrameKind;
   label: string;
   startOrder: number;
   endOrder: number;
   depth: number;
   participantIds?: string[];
+  sections?: IntermediateSequenceFrameSection[];
 }
 
 export interface IntermediateDiagram {
@@ -105,12 +126,7 @@ export interface IntermediateDiagram {
 const SUPPORTED_DIRECTIONS = new Set<LayoutDirection>(["TD", "TB", "LR", "RL"]);
 const IGNORED_FLOWCHART_PREFIXES = ["style ", "linkStyle", "click ", "%%{"];
 const UNSUPPORTED_SEQUENCE_PREFIXES = [
-  "actor ",
   "autonumber",
-  "alt ",
-  "par ",
-  "critical ",
-  "break ",
   "box ",
   "destroy ",
   "create ",
@@ -122,13 +138,34 @@ const NODE_PATTERN =
   /^(?<id>[A-Za-z_][A-Za-z0-9_-]*)(?:(?<terminal>\(\((?<terminalLabel>[\s\S]+)\)\))|(?<rounded>\((?<roundedLabel>[\s\S]+)\))|(?<decision>\{(?<decisionLabel>[\s\S]+)\})|(?<process>\[(?<processLabel>[\s\S]+)\]))?$/;
 const PARTICIPANT_PATTERN =
   /^participant\s+(?<id>[A-Za-z_][A-Za-z0-9_-]*)(?:\s+as\s+(?<label>[\s\S]+))?$/;
+const ACTOR_PATTERN =
+  /^actor\s+(?<id>[A-Za-z_][A-Za-z0-9_-]*)(?:\s+as\s+(?<label>[\s\S]+))?$/;
 const NOTE_PATTERN = /^Note\s+over\s+(?<participants>[^:]+?)\s*:\s*(?<label>[\s\S]+)$/;
 const SEQUENCE_MESSAGE_PATTERN =
-  /^(?<source>[A-Za-z_][A-Za-z0-9_-]*?)(?=\s*-{1,2}>>)\s*(?<arrow>-{1,2}>>)\s*(?<target>[A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(?<label>[\s\S]+)$/;
+  /^(?<source>[A-Za-z_][A-Za-z0-9_-]*?)\s*(?<arrow><<-{1,2}>>|-->>|->>|-->|->|--x|-x|--\)|-\))\s*(?<target>[A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(?<label>[\s\S]+)$/;
+const SEQUENCE_MESSAGE_KINDS: Record<string, SequenceMessageKind> = {
+  "->>": "solid",
+  "-->>": "dotted",
+  "->": "solid-open",
+  "-->": "dotted-open",
+  "-x": "solid-cross",
+  "--x": "dotted-cross",
+  "-)": "solid-point",
+  "--)": "dotted-point",
+  "<<->>": "bidirectional-solid",
+  "<<-->>": "bidirectional-dotted",
+};
 const ACTIVATE_PATTERN = /^activate\s+(?<participantId>[A-Za-z_][A-Za-z0-9_-]*)$/;
 const DEACTIVATE_PATTERN = /^deactivate\s+(?<participantId>[A-Za-z_][A-Za-z0-9_-]*)$/;
 const OPT_PATTERN = /^opt(?:\s+(?<label>[\s\S]+))?$/;
 const LOOP_PATTERN = /^loop(?:\s+(?<label>[\s\S]+))?$/;
+const ALT_PATTERN = /^alt(?:\s+(?<label>[\s\S]+))?$/;
+const PAR_PATTERN = /^par(?:\s+(?<label>[\s\S]+))?$/;
+const CRITICAL_PATTERN = /^critical(?:\s+(?<label>[\s\S]+))?$/;
+const BREAK_PATTERN = /^break(?:\s+(?<label>[\s\S]+))?$/;
+const ELSE_PATTERN = /^else(?:\s+(?<label>[\s\S]+))?$/;
+const AND_PATTERN = /^and(?:\s+(?<label>[\s\S]+))?$/;
+const OPTION_PATTERN = /^option(?:\s+(?<label>[\s\S]+))?$/;
 const STATE_TRANSITION_PATTERN =
   /^(?<source>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)\s*-->\s*(?<target>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)(?:\s*:\s*(?<label>[\s\S]+))?$/;
 const STATE_NOTE_START_PATTERN = /^note\s+(?:left|right)\s+of\s+(?<target>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)$/i;
@@ -976,6 +1013,15 @@ function parseFlowchart(
 function parseSequenceParticipant(
   line: string,
 ): IntermediateSequenceParticipant | undefined {
+  const actorMatch = line.match(ACTOR_PATTERN);
+  if (actorMatch?.groups) {
+    return {
+      id: actorMatch.groups.id,
+      label: normalizeLabel(actorMatch.groups.label ?? actorMatch.groups.id),
+      type: "actor",
+    };
+  }
+
   const match = line.match(PARTICIPANT_PATTERN);
   if (!match?.groups) {
     return undefined;
@@ -1022,7 +1068,7 @@ function parseSequenceMessage(line: string): {
     sourceId: match.groups.source,
     targetId: match.groups.target,
     label: normalizeLabel(match.groups.label),
-    kind: match.groups.arrow.startsWith("--") ? "dashed" : "solid",
+    kind: SEQUENCE_MESSAGE_KINDS[match.groups.arrow] ?? "solid",
   };
 }
 
@@ -1044,21 +1090,35 @@ function parseSequenceDeactivation(line: string): { participantId: string } | un
   return { participantId: match.groups.participantId };
 }
 
-function parseSequenceFrameStart(line: string): { kind: "opt" | "loop"; label: string } | undefined {
-  const optMatch = line.match(OPT_PATTERN);
-  if (optMatch?.groups) {
-    return {
-      kind: "opt",
-      label: normalizeLabel(optMatch.groups.label ?? "optional"),
-    };
+function parseSequenceFrameStart(line: string): { kind: SequenceFrameKind; label: string } | undefined {
+  const framePatterns: Array<[RegExp, SequenceFrameKind, string]> = [
+    [OPT_PATTERN, "opt", "optional"],
+    [LOOP_PATTERN, "loop", "loop"],
+    [ALT_PATTERN, "alt", ""],
+    [PAR_PATTERN, "par", "parallel"],
+    [CRITICAL_PATTERN, "critical", "critical"],
+    [BREAK_PATTERN, "break", "break"],
+  ];
+
+  for (const [pattern, kind, fallbackLabel] of framePatterns) {
+    const match = line.match(pattern);
+    if (match?.groups) {
+      return {
+        kind,
+        label: normalizeLabel(match.groups.label ?? fallbackLabel),
+      };
+    }
   }
 
-  const loopMatch = line.match(LOOP_PATTERN);
-  if (loopMatch?.groups) {
-    return {
-      kind: "loop",
-      label: normalizeLabel(loopMatch.groups.label ?? "loop"),
-    };
+  return undefined;
+}
+
+function parseSequenceFrameDivider(line: string): string | undefined {
+  for (const pattern of [ELSE_PATTERN, AND_PATTERN, OPTION_PATTERN]) {
+    const match = line.match(pattern);
+    if (match?.groups) {
+      return normalizeLabel(match.groups.label ?? "");
+    }
   }
 
   return undefined;
@@ -2227,11 +2287,12 @@ function parseSequence(request: MermaidParseRequest, lines: string[]): Intermedi
   const warnings: string[] = [];
   const activationStackByParticipant = new Map<string, Array<{ startOrder: number; depth: number }>>();
   const frameStack: Array<{
-    kind: "opt" | "loop" | "rect";
+    kind: SequenceFrameKind | "rect";
     label: string;
     startOrder: number;
     depth: number;
     participantIds: Set<string>;
+    sections: IntermediateSequenceFrameSection[];
   }> = [];
   let order = 0;
 
@@ -2243,19 +2304,25 @@ function parseSequence(request: MermaidParseRequest, lines: string[]): Intermedi
     }
   }
 
-  function upsertParticipant(id: string, label?: string): void {
+  function upsertParticipant(id: string, label?: string, type?: "participant" | "actor"): void {
     const existing = participantById.get(id);
     if (existing) {
       if (label && existing.label === existing.id) {
         existing.label = label;
       }
+      if (type === "actor") {
+        existing.type = "actor";
+      }
       return;
     }
 
-    const participant = {
+    const participant: IntermediateSequenceParticipant = {
       id,
       label: label ? normalizeLabel(label) : id,
     };
+    if (type) {
+      participant.type = type;
+    }
     participantById.set(id, participant);
     participants.push(participant);
   }
@@ -2277,6 +2344,7 @@ function parseSequence(request: MermaidParseRequest, lines: string[]): Intermedi
           endOrder: Math.max(frame.startOrder, Math.max(0, order - 1)),
           depth: frame.depth,
           participantIds: Array.from(frame.participantIds),
+          sections: frame.sections.length > 0 ? frame.sections : undefined,
         });
       }
       continue;
@@ -2289,6 +2357,7 @@ function parseSequence(request: MermaidParseRequest, lines: string[]): Intermedi
         startOrder: order,
         depth: frameStack.length,
         participantIds: new Set<string>(),
+        sections: [],
       });
       warnings.push(`ignored_sequence_wrapper: "${line}"`);
       continue;
@@ -2296,7 +2365,7 @@ function parseSequence(request: MermaidParseRequest, lines: string[]): Intermedi
 
     const participant = parseSequenceParticipant(line);
     if (participant) {
-      upsertParticipant(participant.id, participant.label);
+      upsertParticipant(participant.id, participant.label, participant.type);
       continue;
     }
 
@@ -2308,7 +2377,18 @@ function parseSequence(request: MermaidParseRequest, lines: string[]): Intermedi
         startOrder: order,
         depth: frameStack.length,
         participantIds: new Set<string>(),
+        sections: [],
       });
+      continue;
+    }
+
+    const frameDivider = parseSequenceFrameDivider(line);
+    if (frameDivider !== undefined) {
+      const frame = frameStack[frameStack.length - 1];
+      if (!frame || frame.kind === "rect") {
+        throw new Error(`parse_error: frame divider without matching sequence frame "${line}"`);
+      }
+      frame.sections.push({ order, label: frameDivider });
       continue;
     }
 
