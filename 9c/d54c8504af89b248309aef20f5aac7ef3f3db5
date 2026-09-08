@@ -1,0 +1,61 @@
+generator/src/test/java/org/nasdanika/mermaid/drawio/generator/DrawioGeneratorTest.java
+  s_d6c1289407a35d::t_34d5b87c773bfb 567-605
+doc/architecture.md
+  s_d6c1289407a35d::t_67e6ea5fa07373 49-50
+doc/spec.md
+  s_d6c1289407a35d::t_586168788ba26c 17
+  s_d6c1289407a35d::t_292ebf3f7bbd48 191
+parser/src/index.test.ts
+  s_d6c1289407a35d::t_bdc9f4a0626701 16-17,50-51,64-65,97-98,126-127,156-157,201-202,232-233,274-275,297-298,319-320,347-348,368-369,386-387,400-401,442-443,455-456,486-487,508-509,531-532,555-556,578-579,627-628,688-689,704-705,714,717-718,727,730-731,740,743-744,768-769,791-792,800,803-804,873-874,920-921,932-933,968-969
+  s_d6c1289407a35d::t_d1db302eaefbf0 189-190,194-195,198,860-870,929
+parser/package.json
+  s_d6c1289407a35d::t_ee4a5c298e6370 14,18
+scripts/test-e2e.sh
+  s_d6c1289407a35d::t_ca3dfe4783f602 14,69-76
+  s_d6c1289407a35d::t_3c02d60b7a0070 77
+parser/src/mermaid-env.ts
+  s_d6c1289407a35d::t_03e9f63e33ac51 1-15
+test-data/sequence-boxes-autonumber.mermaid
+  s_d6c1289407a35d::t_26642af9b7946a 12-13
+  s_d6c1289407a35d::t_229103633799d4 10
+  s_d6c1289407a35d::t_8a373e6e616f3f 1-9,11,14-16
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/DrawioGenerator.java
+  s_d6c1289407a35d::t_1eeabc21319402 202-204,273-307
+  s_d6c1289407a35d::t_07dd4fa50b5d97 308,488-494,505-536
+  s_d6c1289407a35d::t_e52c8321105e87 62-63,446-459
+  s_d6c1289407a35d::t_d3acb222f120c7 309
+parser/src/index.ts
+  s_d6c1289407a35d::t_c138d98ccdc70d 78,81-82,87,114-119,132
+  s_d6c1289407a35d::t_da63dd3c7b3293 2405
+  s_d6c1289407a35d::t_dde2bc98585c77 2131-2256,2258-2288,2295,2303,2305,2308-2310,2315-2318,2321-2325,2327-2333,2335-2337,2339-2340,2349-2354,2358-2370,2375-2376,2379,2383-2387,2391-2400,2404,2406-2407,2409-2411,2417-2421,2423-2436,2438,2442-2452,2465
+  s_d6c1289407a35d::t_16c65b9dc93402 2470,2485
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/IntermediateDiagram.java
+  s_d6c1289407a35d::t_fbdddc867affd4 17,19-47
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/IntermediateSequenceBox.java
+  s_d6c1289407a35d::t_389a20024a7858 1-9
+doc/coverage-matrix.md
+  s_d6c1289407a35d::t_97ca7f9d6c89c0 38
+  s_d6c1289407a35d::t_2cafd23f3786df 112-113,115-117
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/IntermediateSequenceMessage.java
+  s_d6c1289407a35d::t_a02cd172e149d6 8-13
+parser/src/cli.ts
+  s_d6c1289407a35d::t_fb623102761836 20
+parser/package-lock.json
+  s_d6c1289407a35d::t_b7c08082d706ef 12,16,35-65,72-83,135-268,729-745,1413-1432,1443-1449,1604-1612,1706-1718,2218-2244,2269-2274,2303-2314,2423-2434,2456-2461,2469-2508,2575-2583,2606-2611,2685-2696,2795-2812,2888-2899,2949-2954,3018-3059,3089-3097,3345-3388,3405-3419
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "9cd54c8504af89b248309aef20f5aac7ef3f3db5",
+  "prompts": {},
+  "sessions": {
+    "s_d6c1289407a35d": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "3cad191d-b3a8-47c8-b61e-b6e675462b91",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
