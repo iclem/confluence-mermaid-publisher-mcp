@@ -1,0 +1,53 @@
+parser/probe-flow.mjs
+  s_4d6d6ff91d55ed::t_fbf169865ac959 1-14
+parser/probe-render.mjs
+  s_4d6d6ff91d55ed::t_1535e411accb57 1-6
+parser/probe-render2.mjs
+  s_4d6d6ff91d55ed::t_2aea8ef355a347 1-7
+parser/probe-flow3.mjs
+  s_4d6d6ff91d55ed::t_f536dfeab61b10 1-24
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/DrawioGenerator.java
+  s_4d6d6ff91d55ed::t_dfbc1b4b22ed38 855-881,944-949,952-963,965
+doc/architecture.md
+  s_4d6d6ff91d55ed::t_07d07eda5e6406 52
+parser/src/svg-bbox.ts
+  s_4d6d6ff91d55ed::t_836be282386bf2 1-348
+parser/probe-flow2.mjs
+  s_4d6d6ff91d55ed::t_6c72442004ceea 1-12
+parser/src/mermaid-geometry.ts
+  s_4d6d6ff91d55ed::t_070694e2c74e9b 336-444
+  s_4d6d6ff91d55ed::t_98f27e73b351ca 9,17
+parser/probe-shapes.mjs
+  s_4d6d6ff91d55ed::t_8c5a6683dd5cb8 1-21
+parser/src/index.test.ts
+  s_4d6d6ff91d55ed::t_1a594a1157ca7d 97-111,115-118,123-181,185-221
+  s_4d6d6ff91d55ed::t_44e01153624baf 222
+parser/probe-flow4.mjs
+  s_4d6d6ff91d55ed::t_4e2df2a6b876c7 1-11
+parser/probe-rgb2.mjs
+  s_4d6d6ff91d55ed::t_192b54f67b7b7a 1-13
+parser/src/index.ts
+  s_4d6d6ff91d55ed::t_981a17259c0fdb 16-37,570-578,580-587,589-647,649-659,661-679,681-684,687-689,691-710,713,716-717,720-726,729-731,734-738,740-756,758-768,770-776,779-786,788-807,809-811,813,815-825,827-830,832-840,842-847,855,858,860,2051
+doc/coverage-matrix.md
+  s_4d6d6ff91d55ed::t_22e75a923ca334 21,51,62,65-69,74-84,86,88
+parser/src/mermaid-render.ts
+  s_4d6d6ff91d55ed::t_a69256ac1774e5 6,30-33,35-41,52-54,56-59,71,76-82,87-89
+parser/probe-rgb.mjs
+  s_4d6d6ff91d55ed::t_032e3bf482d3ed 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "2cde585344e3222c3a94f19651c93ec24179a2ef",
+  "prompts": {},
+  "sessions": {
+    "s_4d6d6ff91d55ed": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "804c4182-424e-455c-838c-6670cb033318",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
