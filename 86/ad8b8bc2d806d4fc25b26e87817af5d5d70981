@@ -1,0 +1,23 @@
+parser/src/index.ts
+  s_d6c1289407a35d::t_7ca2331ec01634 2233-2245,2273,2282
+doc/coverage-matrix.md
+  s_d6c1289407a35d::t_dc21fce4606610 116
+parser/src/index.test.ts
+  s_d6c1289407a35d::t_18fa8c5c9d2c00 860-874
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "86ad8b8bc2d806d4fc25b26e87817af5d5d70981",
+  "prompts": {},
+  "sessions": {
+    "s_d6c1289407a35d": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "3cad191d-b3a8-47c8-b61e-b6e675462b91",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
