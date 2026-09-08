@@ -154,8 +154,6 @@ export interface IntermediateDiagram {
 }
 
 const SUPPORTED_DIRECTIONS = new Set<LayoutDirection>(["TD", "TB", "LR", "RL"]);
-const STATE_TRANSITION_PATTERN =
-  /^(?<source>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)\s*-->\s*(?<target>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)(?:\s*:\s*(?<label>[\s\S]+))?$/;
 const STATE_NOTE_START_PATTERN = /^note\s+(?:left|right)\s+of\s+(?<target>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)$/i;
 
 const GANTT_LABEL_COLUMN_WIDTH = 280;
@@ -427,29 +425,6 @@ function applyClassStyles(node: IntermediateNode, classNames: string[], classSty
     nextNode.fontColor ??= style.fontColor;
   }
   return nextNode;
-}
-
-function mergeNode(existing: IntermediateNode | undefined, incoming: IntermediateNode): IntermediateNode {
-  if (!existing) {
-    return incoming;
-  }
-
-  const existingSpecificity =
-    (existing.label !== existing.id ? 1 : 0) +
-    (existing.shape !== "rectangle" ? 1 : 0) +
-    (existing.fillColor ? 1 : 0) +
-    (existing.strokeColor ? 1 : 0) +
-    (existing.fontColor ? 1 : 0) +
-    (existing.x !== undefined ? 1 : 0);
-  const incomingSpecificity =
-    (incoming.label !== incoming.id ? 1 : 0) +
-    (incoming.shape !== "rectangle" ? 1 : 0) +
-    (incoming.fillColor ? 1 : 0) +
-    (incoming.strokeColor ? 1 : 0) +
-    (incoming.fontColor ? 1 : 0) +
-    (incoming.x !== undefined ? 1 : 0);
-
-  return incomingSpecificity >= existingSpecificity ? incoming : existing;
 }
 
 function estimateNodeDimensions(node: IntermediateNode): { width: number; height: number } {
@@ -864,22 +839,6 @@ async function parseFlowchart(
     sequenceActivations: [],
     sequenceFrames: [],
     warnings,
-  };
-}
-
-function createStateNode(token: string, role: "source" | "target"): IntermediateNode {
-  if (token === "[*]") {
-    return {
-      id: role === "source" ? "__state_start__" : "__state_end__",
-      label: role === "source" ? "Start" : "End",
-      shape: "ellipse",
-    };
-  }
-
-  return {
-    id: token,
-    label: token,
-    shape: "rounded-rectangle",
   };
 }
 
@@ -1536,111 +1495,259 @@ async function parseXychartDiagram(request: MermaidParseRequest): Promise<Interm
   };
 }
 
-function parseStateDirection(line: string): LayoutDirection | undefined {
-  const match = /^direction\s+(TD|TB|LR|RL)$/i.exec(line);
-  if (!match) {
-    return undefined;
-  }
-
-  return match[1].toUpperCase() as LayoutDirection;
+interface StateDbNode {
+  id: string;
+  label?: string;
+  shape?: string;
+  domId?: string;
+  parentId?: string;
+  isGroup?: boolean;
+  cssClasses?: string;
+  cssStyles?: string[];
 }
 
-function parseStateDiagram(request: MermaidParseRequest, lines: string[]): IntermediateDiagram {
-  const nodeMap = new Map<string, IntermediateNode>();
-  const edges: IntermediateEdge[] = [];
+interface StateDbEdge {
+  id: string;
+  start: string;
+  end: string;
+  label?: string;
+}
+
+interface StateDb {
+  nodes?: StateDbNode[];
+  edges?: StateDbEdge[];
+  classes?: Map<string, FlowchartClassData>;
+  getDirection(): string | undefined;
+}
+
+const STATE_BUILT_IN_CLASSES = new Set(["statediagram-state", "statediagram-cluster"]);
+const STATE_NOTE_COLORS = {
+  fillColor: "#fff3bf",
+  strokeColor: "#f08c00",
+  fontColor: "#333333",
+} as const;
+const STATE_PSEUDOSTATE_COLORS = {
+  fillColor: "#333333",
+  strokeColor: "#333333",
+  fontColor: "#ffffff",
+} as const;
+
+function mapStateNodeId(id: string): string {
+  if (id === "root_start") {
+    return "__state_start__";
+  }
+  if (id === "root_end") {
+    return "__state_end__";
+  }
+  return id;
+}
+
+function mapStateNode(dbNode: StateDbNode): IntermediateNode {
+  const base: IntermediateNode = {
+    id: mapStateNodeId(dbNode.id),
+    label: "",
+    shape: "rounded-rectangle",
+  };
+  if (dbNode.shape === "stateStart") {
+    return { ...base, shape: "ellipse", label: dbNode.id === "root_start" ? "Start" : "" };
+  }
+  if (dbNode.shape === "stateEnd") {
+    return { ...base, shape: "ellipse", label: dbNode.id === "root_end" ? "End" : "" };
+  }
+  if (dbNode.shape === "fork" || dbNode.shape === "join") {
+    return { ...base, shape: "rectangle", ...STATE_PSEUDOSTATE_COLORS };
+  }
+  if (dbNode.shape === "choice") {
+    return { ...base, shape: "rhombus", ...STATE_PSEUDOSTATE_COLORS };
+  }
+  return {
+    ...base,
+    label: normalizeFlowchartLabel(dbNode.label ?? dbNode.id),
+  };
+}
+
+async function parseStateDiagram(request: MermaidParseRequest): Promise<IntermediateDiagram> {
+  const { mermaid } = await import("./mermaid-env.js");
   const warnings: string[] = [];
-  let direction: LayoutDirection = "TD";
-  let pendingNoteTarget: string | undefined;
-  let pendingNoteLines: string[] = [];
+
+  let db: StateDb;
+  try {
+    await mermaid.parse(request.mermaid);
+    db = (await mermaid.mermaidAPI.getDiagramFromText(request.mermaid)).db as unknown as StateDb;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`parse_error: ${message.split("\n")[0]}`);
+  }
+
+  const rawDirection = db.getDirection();
+  const direction: LayoutDirection =
+    rawDirection === "LR" || rawDirection === "RL" ? rawDirection : "TD";
+
+  const classStyles = new Map<string, MermaidClassStyle>();
+  if (db.classes instanceof Map) {
+    for (const [className, classDef] of db.classes) {
+      if (className === "default") {
+        continue;
+      }
+      classStyles.set(
+        className,
+        parseFlowchartStyles([...(classDef.styles ?? []), ...(classDef.textStyles ?? [])]),
+      );
+    }
+  }
+
+  const dbNodes = db.nodes ?? [];
+  const dbEdges = db.edges ?? [];
+  const noteDbIds = new Set(dbNodes.filter((node) => node.shape === "note").map((node) => node.id));
+  const groupIds = new Set(
+    dbNodes.filter((node) => node.isGroup && node.shape !== "noteGroup").map((node) => node.id),
+  );
+
+  const nodes: IntermediateNode[] = [];
+  const subgraphs: IntermediateSubgraph[] = [];
+  const noteIdByDbId = new Map<string, string>();
+  const domIdByNodeId = new Map<string, string>();
+  const parentByNodeId = new Map<string, string>();
   let noteSequence = 0;
 
-  const upsertNode = (node: IntermediateNode): void => {
-    nodeMap.set(node.id, mergeNode(nodeMap.get(node.id), node));
-  };
-
-  const flushNote = (): void => {
-    if (!pendingNoteTarget) {
-      return;
+  for (const dbNode of dbNodes) {
+    if (dbNode.shape === "noteGroup") {
+      continue;
     }
-    noteSequence += 1;
-    const noteId = `state-note-${noteSequence}`;
-    upsertNode({
-      id: noteId,
-      label: pendingNoteLines.join("\n").trim(),
-      shape: "rectangle",
-      fillColor: "#fff3bf",
-      strokeColor: "#f08c00",
-      fontColor: "#333333",
-    });
-    edges.push({
-      sourceId: pendingNoteTarget,
-      targetId: noteId,
-      kind: "plain",
-    });
-    pendingNoteTarget = undefined;
-    pendingNoteLines = [];
-  };
-
-  for (const line of lines.slice(1)) {
-    if (pendingNoteTarget) {
-      if (line.toLowerCase() === "end note") {
-        flushNote();
-      } else {
-        pendingNoteLines.push(line.trim());
+    if (dbNode.isGroup) {
+      subgraphs.push({
+        id: dbNode.id,
+        label: dbNode.shape === "divider" ? "" : (dbNode.label ?? dbNode.id).trim(),
+        nodeIds: [],
+        parentId: dbNode.parentId && groupIds.has(dbNode.parentId) ? dbNode.parentId : undefined,
+      });
+      continue;
+    }
+    if (dbNode.shape === "note") {
+      noteSequence += 1;
+      const noteId = `state-note-${noteSequence}`;
+      noteIdByDbId.set(dbNode.id, noteId);
+      nodes.push({
+        id: noteId,
+        label: (dbNode.label ?? "")
+          .split("\n")
+          .map((line) => line.trim())
+          .join("\n")
+          .trim(),
+        shape: "rectangle",
+        ...STATE_NOTE_COLORS,
+      });
+      if (dbNode.domId) {
+        domIdByNodeId.set(noteId, dbNode.domId);
       }
       continue;
     }
 
-    const parsedDirection = parseStateDirection(line);
-    if (parsedDirection) {
-      direction = parsedDirection;
-      continue;
+    let node = mapStateNode(dbNode);
+    const userClasses = (dbNode.cssClasses ?? "")
+      .split(/\s+/)
+      .filter((className) => className && !STATE_BUILT_IN_CLASSES.has(className));
+    node = applyClassStyles(node, userClasses, classStyles);
+    const inlineStyle = parseFlowchartStyles(dbNode.cssStyles ?? []);
+    if (inlineStyle.fillColor !== undefined) {
+      node = { ...node, fillColor: inlineStyle.fillColor };
     }
-
-    const noteMatch = line.match(STATE_NOTE_START_PATTERN);
-    if (noteMatch?.groups?.target) {
-      const targetNode = createStateNode(noteMatch.groups.target, "source");
-      upsertNode(targetNode);
-      pendingNoteTarget = targetNode.id;
-      pendingNoteLines = [];
-      continue;
+    if (inlineStyle.strokeColor !== undefined) {
+      node = { ...node, strokeColor: inlineStyle.strokeColor };
     }
+    if (inlineStyle.fontColor !== undefined) {
+      node = { ...node, fontColor: inlineStyle.fontColor };
+    }
+    nodes.push(node);
+    if (dbNode.domId) {
+      domIdByNodeId.set(node.id, dbNode.domId);
+    }
+    if (dbNode.parentId && groupIds.has(dbNode.parentId)) {
+      parentByNodeId.set(node.id, dbNode.parentId);
+    }
+  }
 
-    const transitionMatch = line.match(STATE_TRANSITION_PATTERN);
-    if (transitionMatch?.groups) {
-      const sourceNode = createStateNode(transitionMatch.groups.source, "source");
-      const targetNode = createStateNode(transitionMatch.groups.target, "target");
-      upsertNode(sourceNode);
-      upsertNode(targetNode);
+  for (const subgraph of subgraphs) {
+    for (const dbNode of dbNodes) {
+      if (dbNode.parentId === subgraph.id && !dbNode.isGroup && dbNode.shape !== "noteGroup") {
+        const modelId = dbNode.shape === "note" ? noteIdByDbId.get(dbNode.id) : mapStateNodeId(dbNode.id);
+        if (modelId) {
+          subgraph.nodeIds.push(modelId);
+        }
+      }
+    }
+  }
+
+  const edges: IntermediateEdge[] = [];
+  const edgeGeometryKeys: string[] = [];
+  for (const dbEdge of dbEdges) {
+    // Note edges link a note node to its state in either direction depending
+    // on the note placement; the model keeps state -> note.
+    const noteId = noteIdByDbId.get(dbEdge.start) ?? noteIdByDbId.get(dbEdge.end);
+    if (noteId) {
+      const stateDbId = noteIdByDbId.has(dbEdge.start) ? dbEdge.end : dbEdge.start;
       edges.push({
-        sourceId: sourceNode.id,
-        targetId: targetNode.id,
-        label: transitionMatch.groups.label ? normalizeLabel(transitionMatch.groups.label) : undefined,
-        kind: "directed",
+        sourceId: mapStateNodeId(stateDbId),
+        targetId: noteId,
+        kind: "plain",
       });
       continue;
     }
-
-    throw new Error(`unsupported_construct: "${line}"`);
+    edges.push({
+      sourceId: mapStateNodeId(dbEdge.start),
+      targetId: mapStateNodeId(dbEdge.end),
+      label: normalizeFlowchartLabel(dbEdge.label ?? "").trim() || undefined,
+      kind: "directed",
+    });
+    edgeGeometryKeys.push(dbEdge.id);
   }
 
-  if (pendingNoteTarget) {
-    throw new Error("parse_error: unclosed state note");
+  let nodeLayouts: Map<string, NodeLayout>;
+  const edgeLayouts = new Map<number, IntermediatePoint[]>();
+  let geometry: import("./mermaid-geometry.js").FlowchartGeometry | undefined;
+  try {
+    const { renderStateGeometry } = await import("./mermaid-geometry.js");
+    geometry = await renderStateGeometry(request.mermaid, {
+      vertices: nodes.map((node) => ({ id: node.id, domId: domIdByNodeId.get(node.id) })),
+      edgeIds: edgeGeometryKeys,
+    });
+    if (geometry === undefined) {
+      warnings.push("state_geometry_unavailable: canvas text measurement is unavailable on this platform");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warnings.push(`state_geometry_unavailable: ${message.split("\n")[0]}`);
   }
 
-  const nodes = Array.from(nodeMap.values());
-  const layouts = computeFlowchartLayout(nodes, edges, [], direction);
+  if (geometry) {
+    nodeLayouts = new Map(
+      geometry.nodes.map((node) => [node.id, { x: node.x, y: node.y, width: node.width, height: node.height }]),
+    );
+    const pointsByEdgeId = new Map(geometry.edges.map((edge) => [edge.id, edge.points]));
+    edgeGeometryKeys.forEach((key, index) => {
+      const points = pointsByEdgeId.get(key);
+      if (points) {
+        edgeLayouts.set(index, points);
+      }
+    });
+  } else {
+    const layouts = computeFlowchartLayout(nodes, edges, subgraphs, direction);
+    nodeLayouts = layouts.nodeLayouts;
+    for (const [index, points] of layouts.edgeLayouts) {
+      edgeLayouts.set(index, points);
+    }
+  }
 
   return {
     pageName: derivePageName(request.sourceName),
     diagramType: "state",
     direction,
-    nodes: nodes.map((node) => ({ ...node, ...layouts.nodeLayouts.get(node.id) })),
+    nodes: nodes.map((node) => ({ ...node, ...nodeLayouts.get(node.id) })),
     edges: edges.map((edge, index) => ({
       ...edge,
-      points: layouts.edgeLayouts.get(index),
+      points: edgeLayouts.get(index),
     })),
-    subgraphs: [],
+    subgraphs,
     sequenceParticipants: [],
     sequenceMessages: [],
     sequenceNotes: [],
@@ -2039,7 +2146,7 @@ export async function parseMermaid(request: MermaidParseRequest): Promise<Interm
     return parseSequence(request);
   }
   if (header.diagramType === "state") {
-    return parseStateDiagram(request, lines);
+    return parseStateDiagram(request);
   }
   if (header.diagramType === "gantt") {
     return parseGanttDiagram(request);

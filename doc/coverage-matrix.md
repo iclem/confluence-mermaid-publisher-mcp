@@ -36,7 +36,7 @@ Source of Mermaid diagram-type list:
 | Requirement diagram | `requirementDiagram` | `not-started` | No parser or mapping yet. |
 | Sankey | `sankey-beta` | `not-started` | No parser or mapping yet. |
 | Sequence diagram | `sequenceDiagram` | `supported` | Parsed through Mermaid's own sequence parser and laid out with Mermaid's render geometry (headless render with canvas-backed text measurement), matching stock draw.io mermaid import: participants, actors, boxes, autonumbering, the full message arrow set, inline `->>+` activation, activation bars, `Note over/left of/right of`, and `opt` / `loop` / `alt` / `par` / `critical` / `break` frames with section dividers. `create` / `destroy` and `rect` are ignored with warnings. When canvas is unavailable on a platform, conversion falls back to a computed grid layout with a warning. |
-| State diagram | `stateDiagram-v2`, `stateDiagram` | `partial` | Supports a narrow v1 slice: transitions, start/end markers, explicit direction (`TD`, `TB`, `LR`, `RL`), and right/left-of notes rendered through the flowchart generator path. |
+| State diagram | `stateDiagram-v2`, `stateDiagram` | `supported` | Parsed with Mermaid's own state parser (transitions, labels, notes, descriptions, composite/nested states, concurrent regions, fork/join/choice pseudostates, direction, classDef/class styling) and laid out with Mermaid's render geometry (headless render), falling back to a computed Dagre layout when canvas is unavailable. |
 | Timeline | `timeline` | `not-started` | No parser or mapping yet. |
 | Tree view | `treeView-beta` | `not-started` | No parser or mapping yet. |
 | Treemap | `treemap-beta` | `not-started` | No parser or mapping yet. |
@@ -131,10 +131,10 @@ Flowcharts are parsed with Mermaid's own parser and laid out with geometry extra
 | Diagram direction | `direction LR` | `supported` | `TD`, `TB`, `LR`, and `RL` are honored; default is `TD` to match Mermaid's usual top-down rendering. |
 | Right/left notes | `note right of A ... end note` | `supported` | Rendered as yellow note boxes attached to the referenced state. |
 | Multiline notes | note block with multiple lines | `supported` | Note sizing now respects real line breaks instead of collapsing to a single line. |
-| Composite states / nested blocks | `state Foo { ... }` | `not-started` | No nested state containers yet. |
-| Choice / fork / join pseudostates | Mermaid pseudostate syntax | `not-started` | Not mapped today. |
-| Concurrent regions | nested `--` regions | `not-started` | Not parsed today. |
-| State styling directives | `classDef`, `style` | `not-started` | No state-specific styling support yet. |
+| Composite states / nested blocks | `state Foo { ... }` | `supported` | Rendered as Draw.io container nodes with nested states and transitions; nested start/end markers are supported. |
+| Choice / fork / join pseudostates | `state f <<fork>>` | `supported` | Forks/joins render as dark bars, choices as rhombi. |
+| Concurrent regions | nested `--` regions | `partial` | Regions render as nested containers inside the composite state. |
+| State styling directives | `classDef`, `class`, `style` | `partial` | Node `fill`, `stroke`, and text `color` are mapped, as for flowcharts. |
 
 ## Gantt feature coverage
 

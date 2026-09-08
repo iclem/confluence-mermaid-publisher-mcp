@@ -50,12 +50,13 @@ let renderCounter = 0;
 /**
  * Renders mermaid text to SVG in a headless DOM. Returns undefined when canvas
  * text measurement is unavailable on this platform. `configOverrides` are
- * one-level mermaid config section merges applied only for this render (e.g.
- * `{ flowchart: { htmlLabels: false } }`).
+ * injected as an `%%{init: ...}%%` directive (mermaid's render re-reads config
+ * from directives, so setConfig cannot be used); a leading frontmatter block
+ * is preserved first. User-supplied directives come later and win conflicts.
  */
 export async function renderMermaidSvg(
   mermaidText: string,
-  configOverrides?: Record<string, Record<string, unknown>>,
+  configOverrides?: Record<string, unknown>,
 ): Promise<string | undefined> {
   const { createCanvas } = await import("canvas");
 
@@ -68,25 +69,22 @@ export async function renderMermaidSvg(
     DOMParser: globalThis.DOMParser,
     CSSStyleSheet: globalThis.CSSStyleSheet,
   };
-  const previousConfig = configOverrides ? mermaid.mermaidAPI.getConfig() : undefined;
+  let textToRender = mermaidText;
+  if (configOverrides) {
+    const directive = `%%{init: ${JSON.stringify(configOverrides)}}%%\n`;
+    const frontmatter = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(mermaidText);
+    textToRender = frontmatter
+      ? mermaidText.slice(0, frontmatter[0].length) + directive + mermaidText.slice(frontmatter[0].length)
+      : directive + mermaidText;
+  }
   globalThis.window = dom.window as unknown as Window & typeof globalThis;
   globalThis.document = dom.window.document;
   globalThis.DOMParser = dom.window.DOMParser as unknown as typeof globalThis.DOMParser;
   globalThis.CSSStyleSheet = dom.window.CSSStyleSheet as unknown as typeof CSSStyleSheet;
-  if (configOverrides && previousConfig) {
-    const merged: Record<string, unknown> = { ...previousConfig };
-    for (const [section, values] of Object.entries(configOverrides)) {
-      merged[section] = { ...((previousConfig as Record<string, unknown>)[section] ?? {}), ...values };
-    }
-    mermaid.mermaidAPI.setConfig(merged);
-  }
   try {
-    const { svg } = await mermaid.render(`mmd-render-${renderCounter++}`, mermaidText);
+    const { svg } = await mermaid.render(`mmd-render-${renderCounter++}`, textToRender);
     return svg;
   } finally {
-    if (previousConfig) {
-      mermaid.mermaidAPI.setConfig(previousConfig);
-    }
     globalThis.window = previous.window;
     globalThis.document = previous.document;
     globalThis.DOMParser = previous.DOMParser;

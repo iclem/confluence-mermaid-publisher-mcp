@@ -50,6 +50,7 @@ The parser owns Mermaid-specific concerns:
 - sequence layout geometry from a headless Mermaid render (jsdom + canvas text measurement), matching stock draw.io coordinates; falls back to a computed grid when canvas is unavailable
 - gantt and xychart parsing through Mermaid's own parser (`mermaid.parse` + the gantt/xychart diagram DBs), then converter-owned explicit layouts (month/day columns for gantt; band/linear scaling for xychart)
 - flowchart parsing through Mermaid's own flowchart DB (all node shapes, edge types, `&` branch groups, chains, nested subgraphs, `classDef`/`class`/inline `style`), with node rectangles and edge polylines extracted from a headless Mermaid (Dagre) render; falls back to a converter-side Dagre layout when canvas is unavailable
+- state diagram parsing through Mermaid's own state DB (transitions, notes, descriptions, composite states, concurrent regions, fork/join/choice pseudostates), with geometry from the same headless render path
 - supported subset parsing for the other diagram families
 - Mermaid validation and normalization
 - stable intermediate-model output

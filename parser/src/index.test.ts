@@ -580,6 +580,101 @@ write use case"]
     expect(diagram.direction).toBe("LR");
   });
 
+  it("parses composite states into subgraphs with nested transitions", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        [*] --> Running
+        state Running {
+          [*] --> Warm
+          Warm --> Hot : heat
+        }
+        Running --> [*]
+      `,
+    });
+
+    expect(diagram.subgraphs).toEqual([
+      { id: "Running", label: "Running", nodeIds: ["Running_start", "Warm", "Hot"], parentId: undefined },
+    ]);
+    const nodeIds = diagram.nodes.map((node) => node.id);
+    expect(nodeIds).toContain("Running_start");
+    expect(nodeIds).toContain("Warm");
+    expect(nodeIds).toContain("Hot");
+    expect(diagram.edges.map(stripEdgePoints)).toEqual([
+      { sourceId: "__state_start__", targetId: "Running", label: undefined, kind: "directed" },
+      { sourceId: "Running_start", targetId: "Warm", label: undefined, kind: "directed" },
+      { sourceId: "Warm", targetId: "Hot", label: "heat", kind: "directed" },
+      { sourceId: "Running", targetId: "__state_end__", label: undefined, kind: "directed" },
+    ]);
+    const nestedStart = diagram.nodes.find((node) => node.id === "Running_start");
+    expect(nestedStart).toMatchObject({ shape: "ellipse", label: "" });
+  });
+
+  it("parses fork, join, and choice pseudostates", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        state f <<fork>>
+        state j <<join>>
+        state c <<choice>>
+        [*] --> f
+        f --> a
+        f --> b
+        a --> j
+        b --> j
+        j --> c
+        c --> [*]
+      `,
+    });
+
+    expect(diagram.nodes.find((node) => node.id === "f")).toMatchObject({ shape: "rectangle", fillColor: "#333333" });
+    expect(diagram.nodes.find((node) => node.id === "j")).toMatchObject({ shape: "rectangle", fillColor: "#333333" });
+    expect(diagram.nodes.find((node) => node.id === "c")).toMatchObject({ shape: "rhombus", fillColor: "#333333" });
+    expect(diagram.edges).toHaveLength(7);
+  });
+
+  it("uses state descriptions as labels", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        Slow : A named state
+        [*] --> Slow
+      `,
+    });
+
+    expect(diagram.nodes.find((node) => node.id === "Slow")).toMatchObject({ label: "A named state" });
+  });
+
+  it("extracts mermaid render geometry for state diagrams", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        direction LR
+        [*] --> Idle : boot
+        Idle --> Running : start
+        Running --> [*]
+      `,
+    });
+
+    const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+    const start = byId.get("__state_start__")!;
+    const idle = byId.get("Idle")!;
+    const running = byId.get("Running")!;
+    // LR layout: start left of Idle, Idle left of Running
+    expect(start.x! + start.width!).toBeLessThanOrEqual(idle.x! + 1);
+    expect(idle.x! + idle.width!).toBeLessThanOrEqual(running.x! + 1);
+    for (const edge of diagram.edges) {
+      expect(edge.points?.length ?? 0).toBeGreaterThan(1);
+    }
+  });
+
   it("parses a gantt slice with month headers and month-aligned task starts", async () => {
     const diagram = await parseMermaid({
       sourceName: "delivery-plan-gantt.mermaid",

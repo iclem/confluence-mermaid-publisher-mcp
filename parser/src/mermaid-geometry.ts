@@ -374,12 +374,32 @@ export async function renderFlowchartGeometry(
   mermaidText: string,
   context: FlowchartGeometryContext,
 ): Promise<FlowchartGeometry | undefined> {
+  // htmlLabels render through foreignObject, which jsdom cannot measure;
+  // mermaid reads the top-level htmlLabels flag.
+  return renderGraphGeometry(mermaidText, context, { htmlLabels: false });
+}
+
+/**
+ * Same extraction for state diagrams (stateDiagram-v2 renders with SVG text
+ * labels and the same node/edge id conventions).
+ */
+export async function renderStateGeometry(
+  mermaidText: string,
+  context: FlowchartGeometryContext,
+): Promise<FlowchartGeometry | undefined> {
+  return renderGraphGeometry(mermaidText, context);
+}
+
+async function renderGraphGeometry(
+  mermaidText: string,
+  context: FlowchartGeometryContext,
+  configOverrides?: Record<string, unknown>,
+): Promise<FlowchartGeometry | undefined> {
   if (!isCanvasAvailable()) {
     return undefined;
   }
   const { renderMermaidSvg } = await import("./mermaid-render.js");
-  // htmlLabels render through foreignObject, which jsdom cannot measure
-  const svg = await renderMermaidSvg(mermaidText, { flowchart: { htmlLabels: false } });
+  const svg = await renderMermaidSvg(mermaidText, configOverrides);
   if (!svg) {
     return undefined;
   }
