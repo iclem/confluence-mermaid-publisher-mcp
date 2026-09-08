@@ -62,6 +62,14 @@ public class DrawioGenerator {
     private static final int SEQUENCE_BOX_MARGIN = 15;
     private static final int SEQUENCE_NUMBER_BADGE_SIZE = 14;
 
+    // Style constants mirroring draw.io's native mermaid import (default mermaid theme)
+    private static final String SEQUENCE_FONT_FAMILY = "Trebuchet MS,Verdana,Arial,sans-serif";
+    private static final String SEQUENCE_TEXT_COLOR = "light-dark(#333333,#cccccc)";
+    private static final String SEQUENCE_FILL = "light-dark(#ECECFF,#1f2020)";
+    private static final String SEQUENCE_LINE_COLOR = "light-dark(#9370DB,#cccccc)";
+    private static final String SEQUENCE_NOTE_FILL = "light-dark(#fff5ad,#2a2a2a)";
+    private static final String SEQUENCE_NOTE_STROKE = "light-dark(#aaaa33,#cccccc)";
+
     private record Bounds(int x, int y, int width, int height) {
     }
 
@@ -304,7 +312,7 @@ public class DrawioGenerator {
             int y = pg != null ? (int) Math.round(pg.y()) : SEQUENCE_TOP;
             int headerHeight = pg != null ? (int) Math.round(pg.height()) : SEQUENCE_HEADER_SIZE;
             int height = pg != null
-                    ? Math.max(headerHeight, (int) Math.round(pg.lifelineBottom() - pg.y()))
+                    ? Math.max(headerHeight, (int) Math.round(pg.lifelineBottom() - pg.y() + pg.height()))
                     : participantHeight;
 
             Node lifeline = layer.createNode();
@@ -322,6 +330,19 @@ public class DrawioGenerator {
             lifeline.style("portConstraint", "eastwest");
             lifeline.style("whiteSpace", "wrap");
             lifeline.style("size", Integer.toString(headerHeight));
+            lifeline.style("html", "1");
+            lifeline.style("strokeWidth", "2");
+            lifeline.style("rounded", "1");
+            lifeline.style("absoluteArcSize", "1");
+            lifeline.style("arcSize", "6");
+            lifeline.style("lifelineDashed", "0");
+            lifeline.style("lifelineMirror", "1");
+            lifeline.style("lifelineColor", SEQUENCE_LINE_COLOR);
+            lifeline.style("fillColor", SEQUENCE_FILL);
+            lifeline.style("strokeColor", SEQUENCE_LINE_COLOR);
+            lifeline.style("fontColor", SEQUENCE_TEXT_COLOR);
+            lifeline.style("fontFamily", SEQUENCE_FONT_FAMILY);
+            lifeline.style("fontSize", "16");
             lifeline.style(
                     "newEdgeStyle",
                     "{\"edgeStyle\":\"elbowEdgeStyle\",\"elbow\":\"vertical\",\"curved\":0,\"rounded\":0}");
@@ -443,10 +464,19 @@ public class DrawioGenerator {
         NodeStyle style = frameNode.getStyle();
         style.shape("umlFrame");
         frameNode.style("dashed", "1");
+        frameNode.style("fixDash", "1");
+        frameNode.style("dashPattern", "2 2");
+        frameNode.style("strokeWidth", "2");
         frameNode.style("pointerEvents", "0");
         frameNode.style("dropTarget", "0");
-        frameNode.style("strokeColor", "#B3B3B3");
-        int tabWidth = frame.kind().length() * 10;
+        frameNode.style("fillColor", SEQUENCE_FILL);
+        frameNode.style("strokeColor", SEQUENCE_LINE_COLOR);
+        frameNode.style("fontColor", SEQUENCE_TEXT_COLOR);
+        frameNode.style("fontFamily", SEQUENCE_FONT_FAMILY);
+        frameNode.style("fontSize", "16");
+        frameNode.style("align", "center");
+        frameNode.style("verticalAlign", "middle");
+        int tabWidth = Math.max(50, frame.kind().length() * 10);
         frameNode.style("width", Integer.toString(tabWidth));
         frameNode.style("height", Integer.toString(SEQUENCE_FRAME_TAB_HEIGHT));
         frameNode.getGeometry().setBounds(x, y, width, height);
@@ -460,23 +490,22 @@ public class DrawioGenerator {
         titleStyle.color("none");
         titleStyle.align("center");
         titleStyle.verticalAlign("middle");
+        titleStyle.fontSize("16");
+        title.style("fontFamily", SEQUENCE_FONT_FAMILY);
+        title.style("fontColor", SEQUENCE_TEXT_COLOR);
         title.style("whiteSpace", "wrap");
-        title.getGeometry().setBounds(tabWidth, 0, width - tabWidth, SEQUENCE_FRAME_TAB_HEIGHT);
+        title.getGeometry().setBounds(tabWidth + 4, 2, width - tabWidth - 4, SEQUENCE_FRAME_TAB_HEIGHT - 4);
 
         if (frame.sections() != null) {
             int sectionIndex = 0;
             for (IntermediateSequenceFrameSection section : frame.sections()) {
                 Node divider = frameNode.createNode();
                 divider.setProperty("id", frameId + "-section-" + section.order());
-                divider.setLabel(formatLabel(section.label()));
                 divider.style("shape", "line");
                 divider.style("dashed", "1");
-                divider.style("whiteSpace", "wrap");
-                divider.style("verticalAlign", "top");
-                divider.style("labelPosition", "center");
-                divider.style("verticalLabelPosition", "middle");
-                divider.style("align", "center");
-                divider.style("strokeColor", "#B3B3B3");
+                divider.style("fixDash", "1");
+                divider.style("dashPattern", "2 2");
+                divider.style("strokeColor", SEQUENCE_LINE_COLOR);
                 int dividerY;
                 if (frameGeometry != null
                         && frameGeometry.dividerYs() != null
@@ -485,7 +514,22 @@ public class DrawioGenerator {
                 } else {
                     dividerY = computeSequenceEventY(section.order()) - SEQUENCE_ROW_SPACING / 2 - y;
                 }
-                divider.getGeometry().setBounds(0, dividerY, width, SEQUENCE_FRAME_TAB_HEIGHT);
+                divider.getGeometry().setBounds(0, dividerY, width, 1);
+
+                Node sectionLabel = frameNode.createNode();
+                sectionLabel.setProperty("id", frameId + "-section-label-" + section.order());
+                sectionLabel.setLabel(formatLabel(section.label()));
+                NodeStyle labelStyle = sectionLabel.getStyle();
+                labelStyle.shape("text");
+                labelStyle.backgroundColor("none");
+                labelStyle.color("none");
+                labelStyle.align("center");
+                labelStyle.verticalAlign("middle");
+                labelStyle.fontSize("16");
+                sectionLabel.style("fontFamily", SEQUENCE_FONT_FAMILY);
+                sectionLabel.style("fontColor", SEQUENCE_TEXT_COLOR);
+                sectionLabel.style("whiteSpace", "wrap");
+                sectionLabel.getGeometry().setBounds(0, dividerY + 2, width, SEQUENCE_FRAME_TAB_HEIGHT - 4);
                 sectionIndex += 1;
             }
         }
@@ -576,8 +620,12 @@ public class DrawioGenerator {
         noteNode.setLabel(formatLabel(note.label()));
         NodeStyle noteStyle = noteNode.getStyle();
         noteStyle.shape("rectangle");
-        noteStyle.backgroundColor("#ffff88");
-        noteStyle.color("#9E916F");
+        noteStyle.backgroundColor(SEQUENCE_NOTE_FILL);
+        noteStyle.color(SEQUENCE_NOTE_STROKE);
+        noteStyle.fontColor(SEQUENCE_TEXT_COLOR);
+        noteStyle.fontSize("16");
+        noteNode.style("fontFamily", SEQUENCE_FONT_FAMILY);
+        noteNode.style("html", "1");
         noteStyle.align("center");
         noteStyle.verticalAlign("middle");
         noteNode.style("whiteSpace", "wrap");
@@ -695,6 +743,12 @@ public class DrawioGenerator {
         connection.style("verticalAlign", "bottom");
         connection.style("elbow", "vertical");
         connection.style("curved", "0");
+        connection.style("fontSize", "16");
+        connection.style("fontFamily", SEQUENCE_FONT_FAMILY);
+        connection.style("labelBackgroundColor", "none");
+        connection.style("strokeWidth", "1.5");
+        connection.style("strokeColor", SEQUENCE_TEXT_COLOR);
+        connection.style("fontColor", SEQUENCE_TEXT_COLOR);
 
         boolean dotted = false;
         boolean bidirectional = false;
@@ -736,14 +790,15 @@ public class DrawioGenerator {
                 break;
         }
 
-        style.dashed(dotted ? "1" : "0");
         if (dotted) {
-            connection.style("dashPattern", "2 3");
+            connection.style("dashed", "1");
+            connection.style("fixDash", "1");
+            connection.style("dashPattern", "3 3");
+        } else {
+            style.dashed("0");
         }
         style.endArrow(endArrow);
-        if ("classic".equals(endArrow)) {
-            connection.style("endSize", "10");
-        }
+        connection.style("endSize", "classic".equals(endArrow) ? "10" : "9");
         if (bidirectional) {
             connection.style("startArrow", "block");
         }

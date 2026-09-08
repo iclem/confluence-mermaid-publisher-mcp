@@ -547,7 +547,7 @@ class DrawioGeneratorTest {
 
         String xml = new DrawioGenerator().generate(diagram);
         assertTrue(xml.contains("endArrow=cross"));
-        assertTrue(xml.contains("dashPattern=2 3"));
+        assertTrue(xml.contains("dashPattern=3 3"));
         assertTrue(xml.contains("endArrow=classic"));
 
         Document document = Document.load(xml, null);
@@ -562,7 +562,14 @@ class DrawioGeneratorTest {
                 .filter(node -> "sequence-frame-alt-1-0-section-2".equals(node.getProperty("id")))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Frame section divider not found"));
-        assertEquals("Cached", divider.getLabel());
+
+        Node sectionLabel = altFrame.getChildren().stream()
+                .filter(Node.class::isInstance)
+                .map(Node.class::cast)
+                .filter(node -> "sequence-frame-alt-1-0-section-label-2".equals(node.getProperty("id")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Frame section label not found"));
+        assertEquals("Cached", sectionLabel.getLabel());
     }
 
     @Test
@@ -646,7 +653,7 @@ class DrawioGeneratorTest {
         Node api = findNode(layer, "A");
         assertEquals(10.0, api.getGeometry().getX(), 0.01);
         assertEquals(150.0, api.getGeometry().getWidth(), 0.01);
-        assertEquals(400.0, api.getGeometry().getHeight(), 0.01);
+        assertEquals(465.0, api.getGeometry().getHeight(), 0.01);
 
         Node worker = findNode(layer, "B");
         Node activation = worker.getChildren().stream()

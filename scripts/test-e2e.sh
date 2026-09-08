@@ -64,7 +64,7 @@ grep -q "sequence-frame-alt-1-0" "${TMP_DIR}/sequence-alt.drawio"
 grep -q "sequence-frame-alt-1-0-section-2" "${TMP_DIR}/sequence-alt.drawio"
 grep -q "cache passthrough" "${TMP_DIR}/sequence-alt.drawio"
 grep -q "umlFrame" "${TMP_DIR}/sequence-alt.drawio"
-grep -q "dashPattern=2 3" "${TMP_DIR}/sequence-alt.drawio"
+grep -q "dashPattern=3 3" "${TMP_DIR}/sequence-alt.drawio"
 
 "${ROOT_DIR}/scripts/convert.sh" "${SEQUENCE_BOX_FIXTURE}" "${TMP_DIR}/sequence-boxes.drawio" >/dev/null
 grep -q "sequence-box-B" "${TMP_DIR}/sequence-boxes.drawio"
