@@ -695,4 +695,62 @@ class DrawioGeneratorTest {
                 .orElseThrow(() -> new AssertionError("Node not found: " + id));
     }
 
+    @Test
+    void resolvesEdgesToSubgraphContainers() throws Exception {
+        // State diagrams connect transitions to/from composite states, whose
+        // endpoints resolve to subgraph containers, not plain nodes
+        IntermediateDiagram diagram = new IntermediateDiagram(
+                "Composite",
+                "state",
+                "TD",
+                List.of(
+                        new IntermediateNode("__state_start__", "Start", "ellipse"),
+                        new IntermediateNode("Inner", "Inner", "rounded-rectangle")),
+                List.of(
+                        new IntermediateEdge("__state_start__", "Cluster", null, "directed"),
+                        new IntermediateEdge("Cluster", "Inner", null, "directed")),
+                List.of(new IntermediateSubgraph("Cluster", "Cluster", List.of("Inner"), null)),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of());
+
+        String xml = new DrawioGenerator().generate(diagram);
+
+        assertTrue(xml.contains("Cluster"));
+        assertTrue(xml.contains("Inner"));
+        Document document = Document.load(xml, null);
+        Layer<?> layer = document.getPages().get(0).getModel().getRoot().getLayers().get(0);
+        long connections = layer.getElements().stream()
+                .filter(Connection.class::isInstance)
+                .count();
+        assertEquals(2, connections);
+    }
+
+    @Test
+    void rendersBidirectionalThickEdgesWithBothArrowheads() throws Exception {
+        IntermediateDiagram diagram = new IntermediateDiagram(
+                "Bidirectional",
+                "flowchart",
+                "TD",
+                List.of(
+                        new IntermediateNode("A", "A", "rectangle"),
+                        new IntermediateNode("B", "B", "rectangle")),
+                List.of(new IntermediateEdge("A", "B", null, "bidirectional-thick-directed")),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of());
+
+        String xml = new DrawioGenerator().generate(diagram);
+
+        assertTrue(xml.contains("startArrow=classic"));
+        assertTrue(xml.contains("strokeWidth=2"));
+    }
+
 }

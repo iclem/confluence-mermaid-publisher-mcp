@@ -81,7 +81,7 @@ Flowcharts are parsed with Mermaid's own parser and laid out with geometry extra
 | `linkStyle` directives | `linkStyle 0 stroke:#333` | `not-started` | Ignored with a warning. |
 | `click` directives | `click A href ...` | `not-started` | Parsed by Mermaid; links are not rendered (warning). |
 | Mermaid directives | `%%{init: ...}%%` | `partial` | Handled by Mermaid during parsing/rendering; the converter does not map theme variables into draw.io styles. |
-| Frontmatter config | `--- ... ---` | `partial` | Handled by Mermaid during parsing; not mapped into draw.io styles. |
+| Frontmatter config | `--- ... ---` | `partial` | Skipped for header detection and handled by Mermaid during parsing; config is not mapped into draw.io styles. |
 | Mermaid themes / looks | `look: handDrawn` | `not-started` | No theme parity with Mermaid. |
 | ELK layout | `layout: elk` | `not-started` | Stock draw.io uses ELK for flowcharts; the converter uses Mermaid's own Dagre geometry instead. |
 | Rich text / quoted labels | `"A label"` forms | `supported` | Quoted node labels and multiline quoted labels inside supported node shapes are parsed. |
@@ -142,7 +142,7 @@ Flowcharts are parsed with Mermaid's own parser and laid out with geometry extra
 | --- | --- | --- | --- |
 | Gantt header | `gantt` | `supported` | Dispatches to the gantt parser/generator path. |
 | Chart title | `title Delivery plan` | `supported` | Rendered as a top text node. |
-| Date formats | `dateFormat YYYY-MM-DD`, `YYYY-MM`, `YYYY-MM-DD HH:mm`, ... | `supported` | Parsed by Mermaid's gantt parser, so every Mermaid `dateFormat` is accepted. Charts whose format carries months but no day/time tokens render month columns; everything else renders day columns. |
+| Date formats | `dateFormat YYYY-MM-DD`, `YYYY-MM`, `YYYY-MM-DD HH:mm`, ... | `supported` | Parsed by Mermaid's gantt parser, so every Mermaid `dateFormat` is accepted. Charts whose format carries months but no day/time tokens render month columns; everything else renders day columns. The former bespoke `YYYY-QQ` quarter dialect was **removed** (Mermaid/dayjs has no quarter support and silently degraded it); quarter-token formats now fail explicitly with `unsupported_construct`. |
 | Axis format directive | `axisFormat %Y-%m` | `partial` | Accepted and preserved as a warning today; explicit axis-format rendering is not implemented yet. |
 | Sections | `section api-catalogue` | `supported` | Rendered as grey band rows. |
 | Explicit task ids | `Task :task1, ...` | `supported` | Preserved for `after` references. |

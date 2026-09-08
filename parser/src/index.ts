@@ -34,7 +34,8 @@ export type EdgeKind =
   | "thick-plain"
   | "invisible"
   | "bidirectional-directed"
-  | "bidirectional-dashed-directed";
+  | "bidirectional-dashed-directed"
+  | "bidirectional-thick-directed";
 export type SequenceMessageKind =
   | "solid"
   | "dotted"
@@ -688,6 +689,9 @@ function mapFlowchartEdgeKind(edge: FlowchartEdgeData, warnings: string[]): Edge
   if (bidirectional && directed === "dashed-directed") {
     return "bidirectional-dashed-directed";
   }
+  if (bidirectional && directed === "thick-directed") {
+    return "bidirectional-thick-directed";
+  }
   return directed;
 }
 
@@ -718,7 +722,15 @@ async function parseFlowchart(
     );
   }
 
-  const vertices = Array.from(db.getVertices().values());
+  const dbSubgraphs = db.getSubGraphs();
+  const subgraphDbIds = new Set(dbSubgraphs.map((subgraph) => subgraph.id));
+
+  // flowDb auto-creates a vertex when an edge references a subgraph id;
+  // exclude those stand-ins from the node list (the subgraph container owns
+  // the id) and skip the attached edges below.
+  const vertices = Array.from(db.getVertices().values()).filter(
+    (vertex) => !subgraphDbIds.has(vertex.id),
+  );
   const vertexIds = new Set(vertices.map((vertex) => vertex.id));
 
   const nodes: IntermediateNode[] = vertices.map((vertex) => {
@@ -751,7 +763,8 @@ async function parseFlowchart(
   const edges: IntermediateEdge[] = [];
   const edgeGeometryKeys: string[] = [];
   for (const dbEdge of db.getEdges()) {
-    if (!vertexIds.has(dbEdge.start) || !vertexIds.has(dbEdge.end)) {
+    if (subgraphDbIds.has(dbEdge.start) || subgraphDbIds.has(dbEdge.end) ||
+        !vertexIds.has(dbEdge.start) || !vertexIds.has(dbEdge.end)) {
       warnings.push(
         `unsupported_subgraph_edge: edge "${dbEdge.id}" attached to a subgraph endpoint is not rendered`,
       );
@@ -766,7 +779,6 @@ async function parseFlowchart(
     edgeGeometryKeys.push(dbEdge.id);
   }
 
-  const dbSubgraphs = db.getSubGraphs();
   const subgraphIdByDbId = new Map<string, string>();
   dbSubgraphs.forEach((subgraph, index) => {
     subgraphIdByDbId.set(
@@ -787,7 +799,7 @@ async function parseFlowchart(
     };
   });
 
-  for (const line of normalizeLines(request.mermaid, true).slice(1)) {
+  for (const line of normalizeLines(request.mermaid, true)) {
     if (line.startsWith("linkStyle")) {
       warnings.push(`ignored_flowchart_directive: "${line}"`);
     }
@@ -909,6 +921,17 @@ function ganttLocalEpochDay(date: Date): number {
   return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / GANTT_DAY_MS);
 }
 
+function requireSupportedGanttDateFormat(dateFormat: string): string {
+  // Mermaid (dayjs) has no quarter support: YYYY-QQ-style formats degrade
+  // silently into wrong dates, so reject them explicitly instead.
+  if (/Q/.test(dateFormat)) {
+    throw new Error(
+      `unsupported_construct: gantt dateFormat "${dateFormat}" uses quarter tokens, which mermaid does not support; use YYYY-MM or YYYY-MM-DD instead`,
+    );
+  }
+  return dateFormat;
+}
+
 function createGanttScale(dateFormat: string): GanttScale {
   // Month columns when the declared format references months but carries no
   // day or time tokens (e.g. "YYYY-MM"); everything else gets day columns.
@@ -995,7 +1018,7 @@ async function parseGanttDiagram(request: MermaidParseRequest): Promise<Intermed
     throw new Error("parse_error: gantt input contains no tasks");
   }
 
-  const scale = createGanttScale(db.getDateFormat() ?? "");
+  const scale = createGanttScale(requireSupportedGanttDateFormat(db.getDateFormat() ?? ""));
   const sections: Array<{ label: string; tasks: ParsedGanttTask[] }> = [];
   for (const dbTask of dbTasks) {
     const sectionLabel = dbTask.section?.trim() || "Tasks";
@@ -1685,7 +1708,8 @@ async function parseStateDiagram(request: MermaidParseRequest): Promise<Intermed
   }
 
   const edges: IntermediateEdge[] = [];
-  const edgeGeometryKeys: string[] = [];
+  // Stays index-aligned with edges: note edges have no extracted geometry
+  const edgeGeometryKeys: Array<string | undefined> = [];
   for (const dbEdge of dbEdges) {
     // Note edges link a note node to its state in either direction depending
     // on the note placement; the model keeps state -> note.
@@ -1697,6 +1721,7 @@ async function parseStateDiagram(request: MermaidParseRequest): Promise<Intermed
         targetId: noteId,
         kind: "plain",
       });
+      edgeGeometryKeys.push(undefined);
       continue;
     }
     edges.push({
@@ -1715,7 +1740,7 @@ async function parseStateDiagram(request: MermaidParseRequest): Promise<Intermed
     const { renderStateGeometry } = await import("./mermaid-geometry.js");
     geometry = await renderStateGeometry(request.mermaid, {
       vertices: nodes.map((node) => ({ id: node.id, domId: domIdByNodeId.get(node.id) })),
-      edgeIds: edgeGeometryKeys,
+      edgeIds: edgeGeometryKeys.filter((key): key is string => key !== undefined),
     });
     if (geometry === undefined) {
       warnings.push("state_geometry_unavailable: canvas text measurement is unavailable on this platform");
@@ -1731,6 +1756,9 @@ async function parseStateDiagram(request: MermaidParseRequest): Promise<Intermed
     );
     const pointsByEdgeId = new Map(geometry.edges.map((edge) => [edge.id, edge.points]));
     edgeGeometryKeys.forEach((key, index) => {
+      if (key === undefined) {
+        return;
+      }
       const points = pointsByEdgeId.get(key);
       if (points) {
         edgeLayouts.set(index, points);
@@ -2135,18 +2163,15 @@ async function parseSequence(request: MermaidParseRequest): Promise<Intermediate
 }
 
 export async function parseMermaid(request: MermaidParseRequest): Promise<IntermediateDiagram> {
-  const rawLines = normalizeLines(request.mermaid);
+  // Frontmatter (---\n...\n---) is mermaid-level config; skip it for header
+  // detection — the full text still goes to mermaid.parse for each diagram type.
+  const body = request.mermaid.replace(/^---\r?\n[\s\S]*?\r?\n---(\r?\n|$)/, "");
+  const rawLines = normalizeLines(body);
   if (rawLines.length === 0) {
     throw new Error("parse_error: Mermaid input is empty");
   }
 
   const header = parseHeader(rawLines[0]);
-  const lines = header.diagramType === "flowchart"
-    ? normalizeLines(request.mermaid, true)
-    : rawLines;
-  if (lines.length === 0) {
-    throw new Error("parse_error: Mermaid input is empty");
-  }
 
   if (header.diagramType === "sequence") {
     return parseSequence(request);

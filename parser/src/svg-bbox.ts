@@ -281,8 +281,7 @@ export function samplePath(d: string, curveSteps = 4, collinearTolerance = 1.5):
   return simplified;
 }
 
-function parseTranslate(transform: string | null): SvgPoint {
-  if (!transform) {
+function parseTranslate(transform: string | null): SvgPoint {  if (!transform) {
     return { x: 0, y: 0 };
   }
   const match = /translate\(\s*(-?[\d.]+)(?:[ ,]\s*(-?[\d.]+))?\s*\)/.exec(transform);
@@ -294,6 +293,21 @@ function parseTranslate(transform: string | null): SvgPoint {
 
 function attr(el: Element, name: string): number {
   return Number(el.getAttribute(name) ?? 0);
+}
+
+/** Sums translate transforms from the element's ancestors up to the document
+ * root (composite/cluster diagrams nest content under translated groups). */
+export function ancestorOffset(el: Element): SvgPoint {
+  let x = 0;
+  let y = 0;
+  let current = el.parentElement;
+  while (current) {
+    const offset = parseTranslate(current.getAttribute("transform"));
+    x += offset.x;
+    y += offset.y;
+    current = current.parentElement;
+  }
+  return { x, y };
 }
 
 export type ElementTextMeasure = (el: Element) => SvgBBox | undefined;

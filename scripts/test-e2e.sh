@@ -13,6 +13,7 @@ SEQUENCE_FRAME_FIXTURE="${ROOT_DIR}/test-data/sequence-control-frames.mermaid"
 SEQUENCE_ALT_FIXTURE="${ROOT_DIR}/test-data/sequence-alt-frames.mermaid"
 SEQUENCE_BOX_FIXTURE="${ROOT_DIR}/test-data/sequence-boxes-autonumber.mermaid"
 STATE_FIXTURE="${ROOT_DIR}/test-data/state-rollout.mermaid"
+STATE_COMPOSITE_FIXTURE="${ROOT_DIR}/test-data/state-composite-edge.mermaid"
 GANTT_FIXTURE="${ROOT_DIR}/test-data/delivery-plan-gantt.mermaid"
 XYCHART_COST_FIXTURE="${ROOT_DIR}/test-data/cost-estimation-classify-embedding-p50.mermaid"
 XYCHART_JUDGE_FIXTURE="${ROOT_DIR}/test-data/cost-estimation-judge-phase-impact-p50.mermaid"
@@ -79,6 +80,11 @@ grep -q "watched async" "${TMP_DIR}/sequence-boxes.drawio"
 grep -q "LegacyOnly" "${TMP_DIR}/state-rollout.drawio"
 grep -q "EventDriven" "${TMP_DIR}/state-rollout.drawio"
 grep -q "state-note-1" "${TMP_DIR}/state-rollout.drawio"
+
+"${ROOT_DIR}/scripts/convert.sh" "${STATE_COMPOSITE_FIXTURE}" "${TMP_DIR}/state-composite.drawio" >/dev/null
+grep -q "Review" "${TMP_DIR}/state-composite.drawio"
+grep -q "Screening" "${TMP_DIR}/state-composite.drawio"
+grep -q "sign off" "${TMP_DIR}/state-composite.drawio"
 
 "${ROOT_DIR}/scripts/convert.sh" "${GANTT_FIXTURE}" "${TMP_DIR}/delivery-plan-gantt.drawio" >/dev/null
 grep -q "EDA Migration" "${TMP_DIR}/delivery-plan-gantt.drawio"

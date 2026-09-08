@@ -155,6 +155,13 @@ public class DrawioGenerator {
         for (IntermediateEdge edge : diagram.edges() == null ? List.<IntermediateEdge>of() : diagram.edges()) {
             Node source = nodeMap.get(edge.sourceId());
             Node target = nodeMap.get(edge.targetId());
+            if (source == null) {
+                // state diagrams connect to/from composite states (subgraph containers)
+                source = subgraphNodeMap.get(edge.sourceId());
+            }
+            if (target == null) {
+                target = subgraphNodeMap.get(edge.targetId());
+            }
             if (source == null || target == null) {
                 throw new IllegalArgumentException("Unknown edge endpoint: " + edge);
             }
@@ -956,7 +963,7 @@ public class DrawioGenerator {
             connection.style("startArrow", "classic");
             connection.style("startFill", "1");
         }
-        if (kind.startsWith("thick-")) {
+        if (kind.contains("thick")) {
             connection.style("strokeWidth", "2");
         }
         if ("invisible".equals(kind)) {
@@ -1008,13 +1015,20 @@ public class DrawioGenerator {
         Map<String, List<String>> outgoing = new HashMap<>();
         Map<String, List<String>> incoming = new HashMap<>();
         Map<String, Integer> indegree = new HashMap<>();
+        Set<String> nodeIds = new HashSet<>();
         for (IntermediateNode node : nodes) {
+            nodeIds.add(node.id());
             outgoing.put(node.id(), new ArrayList<>());
             incoming.put(node.id(), new ArrayList<>());
             indegree.put(node.id(), 0);
         }
 
         for (IntermediateEdge edge : diagram.edges() == null ? List.<IntermediateEdge>of() : diagram.edges()) {
+            // Edges incident to subgraph containers (composite states) do not
+            // participate in node ranking
+            if (!nodeIds.contains(edge.sourceId()) || !nodeIds.contains(edge.targetId())) {
+                continue;
+            }
             outgoing.computeIfAbsent(edge.sourceId(), key -> new ArrayList<>()).add(edge.targetId());
             incoming.computeIfAbsent(edge.targetId(), key -> new ArrayList<>()).add(edge.sourceId());
             indegree.computeIfPresent(edge.targetId(), (key, value) -> value + 1);

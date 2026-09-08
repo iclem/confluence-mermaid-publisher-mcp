@@ -563,8 +563,12 @@ write use case"]
     ]);
 
     const noteNode = diagram.nodes.find((node) => node.id === "state-note-1");
-    expect(noteNode?.width).toBe(295);
-    expect(noteNode?.height).toBe(64);
+    // Real text measurement sizes the two-line note; font metrics vary a bit
+    // across platforms, so assert a plausible band instead of exact pixels.
+    expect(noteNode?.width!).toBeGreaterThan(150);
+    expect(noteNode?.width!).toBeLessThan(400);
+    expect(noteNode?.height!).toBeGreaterThan(40);
+    expect(noteNode?.height!).toBeLessThan(120);
   });
 
   it("honors explicit state diagram direction declarations", async () => {
@@ -743,6 +747,175 @@ write use case"]
     expect(layouts.nodeLayouts.get("Inner")).toBeDefined();
     expect(layouts.edgeLayouts.get(0)).toBeUndefined();
     expect(layouts.edgeLayouts.get(2)).toBeDefined();
+  });
+
+  it("keeps state edge geometry aligned when notes sit between transitions", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        [*] --> A
+        note right of A : a note between transitions
+        A --> B : first
+        B --> C : second
+      `,
+    });
+
+    // The note edge must not shift the polyline of the transitions after it:
+    // every transition's route starts at its own source state's level.
+    const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+    const transitions = diagram.edges.filter((edge) => edge.kind === "directed");
+    expect(transitions.map((edge) => [edge.sourceId, edge.targetId])).toEqual([
+      ["__state_start__", "A"],
+      ["A", "B"],
+      ["B", "C"],
+    ]);
+    for (const edge of transitions) {
+      const source = byId.get(edge.sourceId)!;
+      const target = byId.get(edge.targetId)!;
+      const points = edge.points!;
+      expect(points.length).toBeGreaterThan(1);
+      expect(points[0].y).toBeGreaterThanOrEqual(source.y! + source.height! / 2 - 1);
+      expect(points[0].y).toBeLessThanOrEqual(source.y! + source.height! + 1);
+      const last = points[points.length - 1];
+      expect(last.y).toBeGreaterThanOrEqual(target.y! - 1);
+      expect(last.y).toBeLessThanOrEqual(target.y! + target.height! / 2 + 1);
+    }
+  });
+
+  it("positions composite state contents with ancestor transforms applied", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        [*] --> Draft
+        Draft --> Review
+        state Review {
+          [*] --> Screening
+        }
+        Review --> Live
+        state Live {
+          [*] --> Serving
+        }
+      `,
+    });
+
+    const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+    const draft = byId.get("Draft")!;
+    const screening = byId.get("Screening")!;
+    // Screening is nested inside Review, rendered below Draft: without the
+    // ancestor translate offsets its coordinates would sit near the origin.
+    expect(screening.y!).toBeGreaterThan(draft.y! + draft.height!);
+    // Serving sits in the second composite below Review: only correct when
+    // the ancestor cluster translates are accumulated for both.
+    expect(byId.get("Serving")!.y!).toBeGreaterThan(screening.y!);
+    // Labels are measured (markdown state labels render as foreignObjects
+    // unless htmlLabels are forced off, producing degenerate 16x16 boxes)
+    expect(draft.width!).toBeGreaterThan(30);
+  });
+
+  it("excludes subgraph-endpoint edges and auto-created vertices from flowcharts", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart TD
+        subgraph sg [Group]
+          A --> B
+        end
+        sg --> C
+      `,
+    });
+
+    // No duplicate/phantom node for the subgraph id
+    expect(diagram.nodes.filter((node) => node.id === "sg")).toEqual([]);
+    expect(diagram.edges.map(stripEdgePoints)).toEqual([
+      { sourceId: "A", targetId: "B", label: undefined, kind: "directed" },
+    ]);
+    expect(diagram.warnings.some((warning) => warning.startsWith("unsupported_subgraph_edge:"))).toBe(true);
+    // Geometry extraction still succeeded for the remaining nodes
+    for (const node of diagram.nodes) {
+      expect(node.x).toBeTypeOf("number");
+      expect(node.y).toBeTypeOf("number");
+    }
+  });
+
+  it("keeps the start arrowhead on thick bidirectional edges", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart TD
+        A <==> B
+      `,
+    });
+
+    expect(diagram.edges.map(stripEdgePoints)).toEqual([
+      { sourceId: "A", targetId: "B", label: undefined, kind: "bidirectional-thick-directed" },
+    ]);
+  });
+
+  it("skips frontmatter before diagram header detection", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `---
+title: My Diagram
+config:
+  theme: base
+---
+flowchart LR
+  A --> B
+`,
+    });
+
+    expect(diagram.diagramType).toBe("flowchart");
+    expect(diagram.direction).toBe("LR");
+    expect(diagram.nodes.map(stripLayout)).toEqual([
+      { id: "A", label: "A", shape: "rectangle" },
+      { id: "B", label: "B", shape: "rectangle" },
+    ]);
+  });
+
+  it("skips frontmatter for non-flowchart diagram types too", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `---
+title: Plan
+---
+gantt
+  dateFormat YYYY-MM-DD
+  section S
+  A :a, 2026-01-01, 2d
+`,
+    });
+
+    expect(diagram.diagramType).toBe("gantt");
+  });
+
+  it("rejects gantt quarter date formats explicitly", async () => {
+    await expect(
+      parseMermaid({
+        mermaid: `
+          gantt
+          dateFormat YYYY-QQ
+          section S
+          A :a, 2026-01, 3M
+        `,
+      }),
+    ).rejects.toThrow(/unsupported_construct: gantt dateFormat "YYYY-QQ" uses quarter tokens/);
   });
 
   it("parses a gantt slice with month headers and month-aligned task starts", async () => {

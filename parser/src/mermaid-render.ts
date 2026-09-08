@@ -29,7 +29,20 @@ function installTextMeasurement(dom: JSDOM, measureCtx: MeasureContext): void {
   };
   const textBBox = (el: Element): SvgBBox => {
     const size = parseFloat(fontFor(el)) || 16;
-    return { x: 0, y: 0, width: textWidth(el), height: size * 1.2 };
+    // Multi-line labels are structured as tspan.row children; measuring the
+    // whole text element would concatenate all rows into one bogus width.
+    const rows = Array.from(el.children).filter(
+      (child) => child.tagName.toLowerCase() === "tspan" && child.classList.contains("row"),
+    );
+    if (rows.length === 0) {
+      return { x: 0, y: 0, width: textWidth(el), height: size * 1.2 };
+    }
+    return {
+      x: 0,
+      y: 0,
+      width: Math.max(...rows.map((row) => textWidth(row))),
+      height: size * 1.2 * rows.length,
+    };
   };
   proto.getBBox = function (this: Element) {
     const tag = this.tagName.toLowerCase();
@@ -41,7 +54,13 @@ function installTextMeasurement(dom: JSDOM, measureCtx: MeasureContext): void {
     return elementBBox(this, textBBox) ?? textBBox(this);
   };
   proto.getComputedTextLength = function (this: Element) {
-    return textWidth(this);
+    const rows = Array.from(this.children).filter(
+      (child) => child.tagName.toLowerCase() === "tspan" && child.classList.contains("row"),
+    );
+    if (rows.length === 0) {
+      return textWidth(this);
+    }
+    return Math.max(...rows.map((row) => textWidth(row)));
   };
 }
 

@@ -14,7 +14,7 @@ import type {
   IntermediateSequenceNote,
   IntermediateSequenceParticipant,
 } from "./index.js";
-import { elementBBox, samplePath, unionBBoxes, type SvgBBox } from "./svg-bbox.js";
+import { ancestorOffset, elementBBox, samplePath, unionBBoxes, type SvgBBox } from "./svg-bbox.js";
 
 // Geometry extracted from a headless mermaid render, keyed so the generator can
 // look elements up without relying on ordering assumptions.
@@ -380,14 +380,15 @@ export async function renderFlowchartGeometry(
 }
 
 /**
- * Same extraction for state diagrams (stateDiagram-v2 renders with SVG text
- * labels and the same node/edge id conventions).
+ * Same extraction for state diagrams (stateDiagram-v2 renders with the same
+ * node/edge id conventions). htmlLabels are forced off: state labels are
+ * markdown-typed, which otherwise renders as unmeasurable foreignObjects.
  */
 export async function renderStateGeometry(
   mermaidText: string,
   context: FlowchartGeometryContext,
 ): Promise<FlowchartGeometry | undefined> {
-  return renderGraphGeometry(mermaidText, context);
+  return renderGraphGeometry(mermaidText, context, { htmlLabels: false });
 }
 
 async function renderGraphGeometry(
@@ -409,17 +410,22 @@ async function renderGraphGeometry(
   const rawNodes: FlowchartNodeGeometry[] = [];
   for (const vertex of context.vertices) {
     if (!vertex.domId) {
-      return undefined;
+      throw new Error(`render_mismatch: node "${vertex.id}" has no domId in the diagram DB`);
     }
     const group = doc.querySelector(`g.node[id$="-${vertex.domId}"]`);
     const box = group ? elementBBox(group) : undefined;
-    if (!box) {
-      return undefined;
+    if (!group || !box) {
+      throw new Error(`render_mismatch: node "${vertex.id}" was not found in the rendered SVG`);
     }
-    rawNodes.push({ id: vertex.id, ...roundBBox(box) });
+    // Cluster contents are nested under translated ancestor groups
+    const offset = ancestorOffset(group);
+    rawNodes.push({
+      id: vertex.id,
+      ...roundBBox({ ...box, x: box.x + offset.x, y: box.y + offset.y }),
+    });
   }
   if (rawNodes.length === 0 && context.vertices.length > 0) {
-    return undefined;
+    throw new Error("render_mismatch: no rendered nodes matched the diagram DB");
   }
 
   const rawEdges: FlowchartEdgeGeometry[] = [];
@@ -428,7 +434,11 @@ async function renderGraphGeometry(
     if (!path) {
       continue;
     }
-    const points = samplePath(path.getAttribute("d") ?? "");
+    const offset = ancestorOffset(path);
+    const points = samplePath(path.getAttribute("d") ?? "").map((point) => ({
+      x: point.x + offset.x,
+      y: point.y + offset.y,
+    }));
     if (points.length >= 2) {
       rawEdges.push({ id: edgeId, points });
     }

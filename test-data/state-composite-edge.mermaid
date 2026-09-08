@@ -1,0 +1,9 @@
+stateDiagram-v2
+    [*] --> Review
+    state Review {
+        [*] --> Screening
+        Screening --> Detailed: pass
+        Screening --> [*]: reject
+    }
+    Review --> Live: sign off
+    Live --> [*]: sunset
