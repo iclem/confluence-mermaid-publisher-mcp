@@ -1,0 +1,38 @@
+doc/coverage-matrix.md
+  s_4d6d6ff91d55ed::t_70856147b7ec9b 39,134-137
+doc/spec.md
+  s_4d6d6ff91d55ed::t_e545f08d1ce80f 18
+parser/src/mermaid-render.ts
+  s_4d6d6ff91d55ed::t_75baf7bcb42f7f 59
+  s_4d6d6ff91d55ed::t_ab63e544b1f39e 53-55,72-79,85
+parser/src/index.test.ts
+  s_4d6d6ff91d55ed::t_8d2e72aaacd99e 583-677
+parser/src/mermaid-geometry.ts
+  s_4d6d6ff91d55ed::t_33e34d64d3aff4 377-379
+  s_4d6d6ff91d55ed::t_a0f1684045bb27 376,380-395,402
+  s_4d6d6ff91d55ed::t_8eee4c6afbca8b 396
+parser/src/index.ts
+  s_4d6d6ff91d55ed::t_476407afb0641c 1498-1537,1539-1543,1545-1566,1569-1570,1573-1580,1582-1595,1597-1604,1606-1641,1646-1653,1655-1668,1670-1677,1679,1681-1683,1696-1702,1705-1719,1722-1739,1745,1748,1750,2149
+  s_4d6d6ff91d55ed::t_f2b318d2653169 1684-1688,1690-1692
+parser/src/preview-cli.ts
+  s_4d6d6ff91d55ed::t_0ceedd3da1ad34 13-14,16
+  s_4d6d6ff91d55ed::t_0ffda7a1f3f531 15,17
+doc/architecture.md
+  s_4d6d6ff91d55ed::t_161159bfb54d55 53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "ab2f6dee3b7279e4e2fab52e785d288b2315b5c9",
+  "prompts": {},
+  "sessions": {
+    "s_4d6d6ff91d55ed": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "804c4182-424e-455c-838c-6670cb033318",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
