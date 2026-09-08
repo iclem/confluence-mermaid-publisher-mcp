@@ -1,0 +1,19 @@
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/DrawioGenerator.java
+  s_d6c1289407a35d::t_a92781495d4c0e 325
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "7d52ba115c858235a7ac129684373518b68457df",
+  "prompts": {},
+  "sessions": {
+    "s_d6c1289407a35d": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "3cad191d-b3a8-47c8-b61e-b6e675462b91",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
