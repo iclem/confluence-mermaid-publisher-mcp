@@ -1,0 +1,25 @@
+publisher/src/drawio.ts
+  s_d6c1289407a35d::t_f2e2c2c2185670 344,353-358
+  s_d6c1289407a35d::t_f05ddff6ad4b54 235-236,246-247
+publisher/src/service.ts
+  s_d6c1289407a35d::t_f9c4d51947f65d 222-225
+  s_d6c1289407a35d::t_2d2af0ab77d50f 350,359,365,369-370,376-377
+  s_d6c1289407a35d::t_bac7554835da05 328-331
+  s_d6c1289407a35d::t_42bd281d2d2afa 261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "876f535daad06dd66a28832b5b2d4c6378ecaba0",
+  "prompts": {},
+  "sessions": {
+    "s_d6c1289407a35d": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "3cad191d-b3a8-47c8-b61e-b6e675462b91",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
