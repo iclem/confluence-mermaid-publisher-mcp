@@ -322,7 +322,7 @@ public class DrawioGenerator {
             NodeStyle style = lifeline.getStyle();
             style.shape("umlLifeline");
             style.container(true);
-            style.collapsible(false);
+            lifeline.style("collapsible", "0");
             lifeline.style("perimeter", "lifelinePerimeter");
             lifeline.style("dropTarget", "0");
             lifeline.style("recursiveResize", "0");
