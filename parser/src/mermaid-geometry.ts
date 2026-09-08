@@ -6,6 +6,7 @@ import { JSDOM } from "jsdom";
 
 import type {
   IntermediateDiagram,
+  IntermediatePoint,
   IntermediateSequenceActivation,
   IntermediateSequenceBox,
   IntermediateSequenceFrame,
@@ -13,6 +14,7 @@ import type {
   IntermediateSequenceNote,
   IntermediateSequenceParticipant,
 } from "./index.js";
+import { elementBBox, samplePath, unionBBoxes, type SvgBBox } from "./svg-bbox.js";
 
 // Geometry extracted from a headless mermaid render, keyed so the generator can
 // look elements up without relying on ordering assumptions.
@@ -330,4 +332,113 @@ function extractGeometry(
   // stock draw.io wraps only the participant headers — the generator computes
   // the header-area box from participant geometry instead.
   return { participants, eventYs, frames, notes, activations, selfMessages };
+}
+
+// ---------------------------------------------------------------------------
+// Flowchart geometry (node rects + edge polylines from mermaid's dagre render)
+// ---------------------------------------------------------------------------
+
+export interface FlowchartNodeGeometry {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface FlowchartEdgeGeometry {
+  id: string;
+  points: IntermediatePoint[];
+}
+
+export interface FlowchartGeometry {
+  nodes: FlowchartNodeGeometry[];
+  edges: FlowchartEdgeGeometry[];
+}
+
+export interface FlowchartGeometryContext {
+  /** Vertex ids paired with the domId mermaid assigns them in the SVG. */
+  vertices: Array<{ id: string; domId?: string }>;
+  /** DB edge ids (e.g. "L_A_C_0") in declaration order. */
+  edgeIds: string[];
+}
+
+const FLOWCHART_RENDER_MARGIN = 8;
+
+/**
+ * Renders a flowchart with mermaid in a headless DOM and extracts absolute
+ * node rectangles and edge polylines. Returns undefined when rendering is
+ * unavailable on this platform.
+ */
+export async function renderFlowchartGeometry(
+  mermaidText: string,
+  context: FlowchartGeometryContext,
+): Promise<FlowchartGeometry | undefined> {
+  if (!isCanvasAvailable()) {
+    return undefined;
+  }
+  const { renderMermaidSvg } = await import("./mermaid-render.js");
+  // htmlLabels render through foreignObject, which jsdom cannot measure
+  const svg = await renderMermaidSvg(mermaidText, { flowchart: { htmlLabels: false } });
+  if (!svg) {
+    return undefined;
+  }
+  const dom = new JSDOM("<!doctype html><html><body></body></html>");
+  const doc = new dom.window.DOMParser().parseFromString(svg, "image/svg+xml");
+
+  const rawNodes: FlowchartNodeGeometry[] = [];
+  for (const vertex of context.vertices) {
+    if (!vertex.domId) {
+      return undefined;
+    }
+    const group = doc.querySelector(`g.node[id$="-${vertex.domId}"]`);
+    const box = group ? elementBBox(group) : undefined;
+    if (!box) {
+      return undefined;
+    }
+    rawNodes.push({ id: vertex.id, ...roundBBox(box) });
+  }
+  if (rawNodes.length === 0 && context.vertices.length > 0) {
+    return undefined;
+  }
+
+  const rawEdges: FlowchartEdgeGeometry[] = [];
+  for (const edgeId of context.edgeIds) {
+    const path = doc.querySelector(`path[id$="-${edgeId}"]`);
+    if (!path) {
+      continue;
+    }
+    const points = samplePath(path.getAttribute("d") ?? "");
+    if (points.length >= 2) {
+      rawEdges.push({ id: edgeId, points });
+    }
+  }
+
+  // Normalize so no coordinate is smaller than the margin
+  const allBoxes: SvgBBox[] = rawNodes.map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height }));
+  for (const edge of rawEdges) {
+    for (const point of edge.points) {
+      allBoxes.push({ x: point.x, y: point.y, width: 0, height: 0 });
+    }
+  }
+  const bounds = unionBBoxes(allBoxes);
+  const offsetX = bounds ? Math.min(0, bounds.x - FLOWCHART_RENDER_MARGIN) : 0;
+  const offsetY = bounds ? Math.min(0, bounds.y - FLOWCHART_RENDER_MARGIN) : 0;
+
+  return {
+    nodes: rawNodes.map((node) => ({ ...node, x: node.x - offsetX, y: node.y - offsetY })),
+    edges: rawEdges.map((edge) => ({
+      id: edge.id,
+      points: edge.points.map((point) => ({ x: point.x - offsetX, y: point.y - offsetY })),
+    })),
+  };
+}
+
+function roundBBox(box: SvgBBox): { x: number; y: number; width: number; height: number } {
+  return {
+    x: Math.round(box.x),
+    y: Math.round(box.y),
+    width: Math.max(1, Math.round(box.width)),
+    height: Math.max(1, Math.round(box.height)),
+  };
 }

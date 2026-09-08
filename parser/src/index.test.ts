@@ -94,33 +94,130 @@ describe("parseMermaid", () => {
     expect(diagram.warnings).toEqual([]);
   });
 
-  it("preserves rgb and rgba values in classDef directives", async () => {
+  it("rejects classDef declarations that mermaid itself cannot parse (rgb functions)", async () => {
+    // Mermaid's own parser (used by stock draw.io) rejects rgb()/rgba() values
+    // in classDef declarations; we inherit that behavior for parity.
+    await expect(
+      parseMermaid({
+        mermaid: `
+          flowchart TD
+          classDef themed fill:rgb(230, 240, 255),stroke:rgba(25, 113, 194, 0.8),color:rgb(10, 20, 30)
+          A[Start]:::themed --> B[Finish]:::themed
+        `,
+      }),
+    ).rejects.toThrow(/parse_error/);
+  });
+
+  it("supports the full flowchart node shape set", async () => {
     const diagram = await parseMermaid({
       mermaid: `
         flowchart TD
-        classDef themed fill:rgb(230, 240, 255),stroke:rgba(25, 113, 194, 0.8),color:rgb(10, 20, 30)
-        A[Start]:::themed --> B[Finish]:::themed
+        A[square] --> B(round) --> C([stadium]) --> D[[subroutine]] --> E[(cylinder)]
+        E --> F((circle)) --> G(((double))) --> H{diamond} --> I{{hexagon}} --> J>odd]
+        J --> K[/para/] --> L[\\para-alt\\] --> M[/trap\\] --> N[\\trap-alt/]
+        N --> O@{ shape: circ }
       `,
     });
 
     expect(diagram.nodes.map(stripLayout)).toEqual([
-      {
-        id: "A",
-        label: "Start",
-        shape: "rectangle",
-        fillColor: "rgb(230, 240, 255)",
-        strokeColor: "rgba(25, 113, 194, 0.8)",
-        fontColor: "rgb(10, 20, 30)",
-      },
-      {
-        id: "B",
-        label: "Finish",
-        shape: "rectangle",
-        fillColor: "rgb(230, 240, 255)",
-        strokeColor: "rgba(25, 113, 194, 0.8)",
-        fontColor: "rgb(10, 20, 30)",
-      },
+      { id: "A", label: "square", shape: "rectangle" },
+      { id: "B", label: "round", shape: "rounded-rectangle" },
+      { id: "C", label: "stadium", shape: "stadium" },
+      { id: "D", label: "subroutine", shape: "subroutine" },
+      { id: "E", label: "cylinder", shape: "cylinder" },
+      { id: "F", label: "circle", shape: "ellipse" },
+      { id: "G", label: "double", shape: "double-circle" },
+      { id: "H", label: "diamond", shape: "rhombus" },
+      { id: "I", label: "hexagon", shape: "hexagon" },
+      { id: "J", label: "odd", shape: "odd" },
+      { id: "K", label: "para", shape: "parallelogram" },
+      { id: "L", label: "para-alt", shape: "parallelogram-alt" },
+      { id: "M", label: "trap", shape: "trapezoid" },
+      { id: "N", label: "trap-alt", shape: "trapezoid-alt" },
+      { id: "O", label: "O", shape: "ellipse" },
     ]);
+  });
+
+  it("supports thick, open, invisible, and bidirectional flowchart edges", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart TD
+        A ==> B
+        B --- C
+        C -.- D
+        D ~~~ E
+        E <--> F
+        G --o H
+      `,
+    });
+
+    expect(diagram.edges.map(stripEdgePoints)).toEqual([
+      { sourceId: "A", targetId: "B", label: undefined, kind: "thick-directed" },
+      { sourceId: "B", targetId: "C", label: undefined, kind: "plain" },
+      { sourceId: "C", targetId: "D", label: undefined, kind: "dashed-plain" },
+      { sourceId: "D", targetId: "E", label: undefined, kind: "invisible" },
+      { sourceId: "E", targetId: "F", label: undefined, kind: "bidirectional-directed" },
+      { sourceId: "G", targetId: "H", label: undefined, kind: "directed" },
+    ]);
+    expect(diagram.warnings.some((warning) => warning.startsWith("unsupported_arrow_variant:"))).toBe(true);
+  });
+
+  it("supports nested subgraphs with explicit and generated ids", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart TD
+        subgraph outer [Outer]
+          subgraph inner [Inner]
+            A[X]
+          end
+          B[Y]
+        end
+        A --> B
+      `,
+    });
+
+    expect(diagram.subgraphs).toEqual([
+      { id: "inner", label: "Inner", nodeIds: ["A"], parentId: "outer" },
+      { id: "outer", label: "Outer", nodeIds: ["B"], parentId: undefined },
+    ]);
+  });
+
+  it("extracts mermaid render geometry for flowchart diagrams", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart LR
+        A[Start] --> B{Decision}
+        B -->|yes| C[Done]
+        B -->|no| D[Retry]
+      `,
+    });
+
+    const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+    const a = byId.get("A")!;
+    const b = byId.get("B")!;
+    const c = byId.get("C")!;
+    const d = byId.get("D")!;
+    // LR layout: A left of B, B left of C/D; C and D stacked vertically
+    expect(a.x! + a.width!).toBeLessThanOrEqual(b.x! + 1);
+    expect(b.x! + b.width!).toBeLessThanOrEqual(c.x! + 1);
+    expect(c.y).not.toBe(d.y);
+    for (const node of diagram.nodes) {
+      expect(node.width).toBeGreaterThan(0);
+      expect(node.height).toBeGreaterThan(0);
+    }
+    // Edge routes follow the rendered splines
+    for (const edge of diagram.edges) {
+      expect(edge.points?.length ?? 0).toBeGreaterThan(1);
+    }
+    const ab = diagram.edges[0];
+    expect(ab.points![0].x).toBeLessThan(ab.points![ab.points!.length - 1].x);
   });
 
   it("applies class assignments declared separately from node definitions", async () => {

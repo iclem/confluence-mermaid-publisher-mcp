@@ -13,9 +13,28 @@ export type NodeShape =
   | "rectangle"
   | "rounded-rectangle"
   | "rhombus"
-  | "ellipse";
+  | "ellipse"
+  | "stadium"
+  | "cylinder"
+  | "hexagon"
+  | "parallelogram"
+  | "parallelogram-alt"
+  | "trapezoid"
+  | "trapezoid-alt"
+  | "subroutine"
+  | "double-circle"
+  | "odd";
 
-export type EdgeKind = "directed" | "dashed-directed" | "plain";
+export type EdgeKind =
+  | "directed"
+  | "dashed-directed"
+  | "plain"
+  | "dashed-plain"
+  | "thick-directed"
+  | "thick-plain"
+  | "invisible"
+  | "bidirectional-directed"
+  | "bidirectional-dashed-directed";
 export type SequenceMessageKind =
   | "solid"
   | "dotted"
@@ -135,11 +154,6 @@ export interface IntermediateDiagram {
 }
 
 const SUPPORTED_DIRECTIONS = new Set<LayoutDirection>(["TD", "TB", "LR", "RL"]);
-const IGNORED_FLOWCHART_PREFIXES = ["style ", "linkStyle", "click ", "%%{"];
-const EDGE_SEGMENT_PATTERN =
-  /(-\.->|-->|---)(?:\|([\s\S]*?)\|)?|--\s*"([\s\S]*?)"\s*-->/g;
-const NODE_PATTERN =
-  /^(?<id>[A-Za-z_][A-Za-z0-9_-]*)(?:(?<terminal>\(\((?<terminalLabel>[\s\S]+)\)\))|(?<rounded>\((?<roundedLabel>[\s\S]+)\))|(?<decision>\{(?<decisionLabel>[\s\S]+)\})|(?<process>\[(?<processLabel>[\s\S]+)\]))?$/;
 const STATE_TRANSITION_PATTERN =
   /^(?<source>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)\s*-->\s*(?<target>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)(?:\s*:\s*(?<label>[\s\S]+))?$/;
 const STATE_NOTE_START_PATTERN = /^note\s+(?:left|right)\s+of\s+(?<target>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)$/i;
@@ -235,17 +249,6 @@ interface ParsedXychart {
 }
 
 
-interface ParsedEdgeSegment {
-  source: ParsedNodeToken;
-  target: ParsedNodeToken;
-  label?: string;
-  kind: EdgeKind;
-}
-
-interface SubgraphParseResult {
-  id: string;
-  label: string;
-}
 
 interface MermaidClassStyle {
   fillColor?: string;
@@ -253,10 +256,6 @@ interface MermaidClassStyle {
   fontColor?: string;
 }
 
-interface ParsedNodeToken {
-  node: IntermediateNode;
-  classNames: string[];
-}
 
 interface NodeLayout {
   x: number;
@@ -324,37 +323,6 @@ function advanceScanState(state: ScanState, char: string): ScanState {
   return nextState;
 }
 
-function splitTopLevel(input: string, separator: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let state = createScanState();
-
-  for (const char of input) {
-    if (char === separator && isTopLevel(state)) {
-      result.push(current.trim());
-      current = "";
-      continue;
-    }
-    current += char;
-    state = advanceScanState(state, char);
-  }
-
-  result.push(current.trim());
-  return result;
-}
-
-function containsTopLevelToken(input: string, token: string): boolean {
-  let state = createScanState();
-
-  for (let index = 0; index < input.length; index += 1) {
-    if (isTopLevel(state) && input.startsWith(token, index)) {
-      return true;
-    }
-    state = advanceScanState(state, input[index]);
-  }
-
-  return false;
-}
 
 function normalizeLines(mermaid: string, splitSemicolons = false): string[] {
   const statements: string[] = [];
@@ -425,15 +393,6 @@ function parseHeader(line: string): ParsedHeader {
   throw new Error(`unsupported_dialect: unsupported header "${line}"`);
 }
 
-function maybeIgnoreFlowchartLine(line: string, warnings: string[]): boolean {
-  for (const prefix of IGNORED_FLOWCHART_PREFIXES) {
-    if (line.startsWith(prefix)) {
-      warnings.push(`ignored_flowchart_directive: "${line}"`);
-      return true;
-    }
-  }
-  return false;
-}
 
 function normalizeLabel(rawLabel: string): string {
   const trimmed = rawLabel.trim();
@@ -451,105 +410,6 @@ function normalizeLabel(rawLabel: string): string {
   return unescaped;
 }
 
-function stripNodeClassSuffixes(value: string): string {
-  return value.replace(/:::[A-Za-z_][A-Za-z0-9_-]*/g, "");
-}
-
-function extractNodeClassNames(value: string): string[] {
-  return Array.from(value.matchAll(/:::([A-Za-z_][A-Za-z0-9_-]*)/g), (match) => match[1]);
-}
-
-function parseClassStyle(line: string): { className: string; style: MermaidClassStyle } | undefined {
-  const match = /^classDef\s+([A-Za-z_][A-Za-z0-9_-]*)\s+(.+)$/.exec(line);
-  if (!match) {
-    return undefined;
-  }
-
-  const style: MermaidClassStyle = {};
-  for (const declaration of splitStyleDeclarations(match[2])) {
-    const separatorIndex = declaration.indexOf(":");
-    if (separatorIndex === -1) {
-      continue;
-    }
-    const rawKey = declaration.slice(0, separatorIndex);
-    const rawValue = declaration.slice(separatorIndex + 1);
-    if (!rawKey || !rawValue) {
-      continue;
-    }
-    const key = rawKey.trim();
-    const value = rawValue.trim();
-    if (key === "fill") {
-      style.fillColor = value;
-    } else if (key === "stroke") {
-      style.strokeColor = value;
-    } else if (key === "color") {
-      style.fontColor = value;
-    }
-  }
-
-  return { className: match[1], style };
-}
-
-function splitStyleDeclarations(rawStyle: string): string[] {
-  const declarations: string[] = [];
-  let current = "";
-  let parenthesesDepth = 0;
-
-  for (const character of rawStyle) {
-    if (character === "(") {
-      parenthesesDepth += 1;
-      current += character;
-      continue;
-    }
-
-    if (character === ")") {
-      parenthesesDepth = Math.max(0, parenthesesDepth - 1);
-      current += character;
-      continue;
-    }
-
-    if (character === "," && parenthesesDepth === 0) {
-      if (current.trim()) {
-        declarations.push(current.trim());
-      }
-      current = "";
-      continue;
-    }
-
-    current += character;
-  }
-
-  if (current.trim()) {
-    declarations.push(current.trim());
-  }
-
-  return declarations;
-}
-
-function parseClassAssignment(line: string): { nodeIds: string[]; classNames: string[] } | undefined {
-  const match = /^class\s+([A-Za-z0-9_,-\s]+)\s+([A-Za-z0-9_:\-\s]+)$/.exec(line);
-  if (!match) {
-    return undefined;
-  }
-
-  return {
-    nodeIds: match[1].split(",").map((entry) => entry.trim()).filter(Boolean),
-    classNames: match[2].split(/[,\s]+/).map((entry) => entry.trim()).filter(Boolean),
-  };
-}
-
-function mergeClassNames(target: Map<string, string[]>, nodeId: string, classNames: string[]): void {
-  if (classNames.length === 0) {
-    return;
-  }
-  const existing = target.get(nodeId) ?? [];
-  for (const className of classNames) {
-    if (!existing.includes(className)) {
-      existing.push(className);
-    }
-  }
-  target.set(nodeId, existing);
-}
 
 function applyClassStyles(node: IntermediateNode, classNames: string[], classStyles: Map<string, MermaidClassStyle>): IntermediateNode {
   if (classNames.length === 0) {
@@ -567,71 +427,6 @@ function applyClassStyles(node: IntermediateNode, classNames: string[], classSty
     nextNode.fontColor ??= style.fontColor;
   }
   return nextNode;
-}
-
-function parseNodeToken(token: string): ParsedNodeToken {
-  const classNames = extractNodeClassNames(token);
-  const bareToken = stripNodeClassSuffixes(token).trim();
-  const match = bareToken.match(NODE_PATTERN);
-  if (!match?.groups) {
-    throw new Error(`parse_error: cannot parse node token "${token}"`);
-  }
-
-  const id = match.groups.id;
-  if (match.groups.terminal) {
-    return {
-      node: {
-        id,
-        label: normalizeLabel(match.groups.terminalLabel),
-        shape: "ellipse",
-      },
-      classNames,
-    };
-  }
-  if (match.groups.rounded) {
-    return {
-      node: {
-        id,
-        label: normalizeLabel(match.groups.roundedLabel),
-        shape: "rounded-rectangle",
-      },
-      classNames,
-    };
-  }
-  if (match.groups.decision) {
-    return {
-      node: {
-        id,
-        label: normalizeLabel(match.groups.decisionLabel),
-        shape: "rhombus",
-      },
-      classNames,
-    };
-  }
-  if (match.groups.process) {
-    return {
-      node: {
-        id,
-        label: normalizeLabel(match.groups.processLabel),
-        shape: "rectangle",
-      },
-      classNames,
-    };
-  }
-
-  return {
-    node: { id, label: id, shape: "rectangle" },
-    classNames,
-  };
-}
-
-function parseNodeGroup(token: string): ParsedNodeToken[] {
-  const groupTokens = splitTopLevel(token, "&").map((nodeToken) => nodeToken.trim());
-  if (groupTokens.some((nodeToken) => nodeToken.length === 0)) {
-    throw new Error(`parse_error: malformed node group "${token}"`);
-  }
-
-  return groupTokens.map(parseNodeToken);
 }
 
 function mergeNode(existing: IntermediateNode | undefined, incoming: IntermediateNode): IntermediateNode {
@@ -772,182 +567,297 @@ function computeFlowchartLayout(
   return { nodeLayouts, edgeLayouts };
 }
 
-function parseEdgeSegments(line: string): ParsedEdgeSegment[] {
-  const matches = Array.from(line.matchAll(EDGE_SEGMENT_PATTERN));
-  if (matches.length === 0) {
-    return [];
-  }
+interface FlowchartVertexData {
+  id: string;
+  domId?: string;
+  text?: string;
+  type?: string;
+  classes?: string[];
+  styles?: string[];
+  link?: string;
+}
 
-  const nodes: string[] = [];
-  let cursor = 0;
-  for (const match of matches) {
-    const index = match.index ?? -1;
-    if (index < cursor) {
-      throw new Error(`parse_error: malformed edge expression "${line}"`);
+interface FlowchartEdgeData {
+  id: string;
+  start: string;
+  end: string;
+  type: string;
+  stroke: string;
+  text?: string;
+}
+
+interface FlowchartSubgraphData {
+  id: string;
+  title?: string;
+  nodes: string[];
+}
+
+interface FlowchartClassData {
+  styles?: string[];
+  textStyles?: string[];
+}
+
+interface FlowchartDb {
+  getVertices(): Map<string, FlowchartVertexData>;
+  getEdges(): FlowchartEdgeData[];
+  getSubGraphs(): FlowchartSubgraphData[];
+  getClasses(): Map<string, FlowchartClassData>;
+  getDirection(): string | undefined;
+}
+
+const FLOWCHART_SHAPE_MAP: Record<string, NodeShape> = {
+  square: "rectangle",
+  rect: "rectangle",
+  process: "rectangle",
+  proc: "rectangle",
+  "fr-rect": "rectangle",
+  "sq": "rectangle",
+  round: "rounded-rectangle",
+  rounded: "rounded-rectangle",
+  stadium: "stadium",
+  pill: "stadium",
+  term: "stadium",
+  terminator: "stadium",
+  subroutine: "subroutine",
+  subproc: "subroutine",
+  "fr-cyl": "cylinder",
+  cylinder: "cylinder",
+  cyl: "cylinder",
+  db: "cylinder",
+  circle: "ellipse",
+  circ: "ellipse",
+  doublecircle: "double-circle",
+  "dbl-circ": "double-circle",
+  diamond: "rhombus",
+  diam: "rhombus",
+  decision: "rhombus",
+  hexagon: "hexagon",
+  hex: "hexagon",
+  odd: "odd",
+  lean_right: "parallelogram",
+  "lean-r": "parallelogram",
+  parallelogram: "parallelogram",
+  para: "parallelogram",
+  lean_left: "parallelogram-alt",
+  "lean-l": "parallelogram-alt",
+  trapezoid: "trapezoid",
+  "trap-b": "trapezoid",
+  inv_trapezoid: "trapezoid-alt",
+  "trap-t": "trapezoid-alt",
+};
+
+function mapFlowchartShape(type: string | undefined, nodeId: string, warnings: string[]): NodeShape {
+  if (!type) {
+    return "rectangle";
+  }
+  const shape = FLOWCHART_SHAPE_MAP[type];
+  if (shape) {
+    return shape;
+  }
+  warnings.push(`unsupported_shape: node "${nodeId}" uses shape "${type}" rendered as rectangle`);
+  return "rectangle";
+}
+
+function parseFlowchartStyles(declarations: string[]): MermaidClassStyle {
+  const style: MermaidClassStyle = {};
+  for (const declaration of declarations) {
+    const separatorIndex = declaration.indexOf(":");
+    if (separatorIndex === -1) {
+      continue;
     }
-    nodes.push(line.slice(cursor, index).trim());
-    cursor = index + match[0].length;
+    const key = declaration.slice(0, separatorIndex).trim().toLowerCase();
+    const value = declaration.slice(separatorIndex + 1).trim();
+    if (key === "fill") {
+      style.fillColor = value;
+    } else if (key === "stroke") {
+      style.strokeColor = value;
+    } else if (key === "color") {
+      style.fontColor = value;
+    }
   }
-  nodes.push(line.slice(cursor).trim());
+  return style;
+}
 
-  if (nodes.some((token) => token.length === 0)) {
-    throw new Error(`parse_error: malformed edge expression "${line}"`);
+function normalizeFlowchartLabel(text: string): string {
+  // Mermaid's flowchart lexer stores entity codes in the same placeholder
+  // encoding as the sequence lexer, so reuse that decoder before normalizing.
+  return normalizeLabel(decodeSequenceEntities(text));
+}
+
+function mapFlowchartEdgeKind(edge: FlowchartEdgeData, warnings: string[]): EdgeKind {
+  if (edge.stroke === "invisible") {
+    return "invisible";
+  }
+  const bidirectional = edge.type.startsWith("double_arrow");
+  const arrowType = bidirectional ? edge.type.slice("double_".length) : edge.type;
+  if (arrowType === "arrow_circle" || arrowType === "arrow_cross") {
+    warnings.push(
+      `unsupported_arrow_variant: ${arrowType === "arrow_circle" ? "circle" : "cross"} arrowhead on edge "${edge.id}" rendered as a block arrow`,
+    );
+  }
+  const dotted = edge.stroke === "dotted";
+  const thick = edge.stroke === "thick";
+  if (arrowType === "arrow_open") {
+    return thick ? "thick-plain" : dotted ? "dashed-plain" : "plain";
+  }
+  const directed: EdgeKind = thick ? "thick-directed" : dotted ? "dashed-directed" : "directed";
+  if (bidirectional && directed === "directed") {
+    return "bidirectional-directed";
+  }
+  if (bidirectional && directed === "dashed-directed") {
+    return "bidirectional-dashed-directed";
+  }
+  return directed;
+}
+
+async function parseFlowchart(
+  request: MermaidParseRequest,
+  direction: LayoutDirection,
+): Promise<IntermediateDiagram> {
+  const { mermaid } = await import("./mermaid-env.js");
+  const warnings: string[] = [];
+
+  let db: FlowchartDb;
+  try {
+    await mermaid.parse(request.mermaid);
+    db = (await mermaid.mermaidAPI.getDiagramFromText(request.mermaid)).db as FlowchartDb;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`parse_error: ${message.split("\n")[0]}`);
   }
 
-  const nodeGroups = nodes.map(parseNodeGroup);
+  const classStyles = new Map<string, MermaidClassStyle>();
+  for (const [className, classDef] of db.getClasses()) {
+    if (className === "default") {
+      continue;
+    }
+    classStyles.set(
+      className,
+      parseFlowchartStyles([...(classDef.styles ?? []), ...(classDef.textStyles ?? [])]),
+    );
+  }
 
-  return matches.flatMap((match, index) => {
-    const sources = nodeGroups[index];
-    const targets = nodeGroups[index + 1];
-    const label = normalizeLabel(match[2] ?? match[3] ?? "").trim() || undefined;
-    const kind = match[1] === "---" ? "plain" : match[1] === "-.->" ? "dashed-directed" : "directed";
+  const vertices = Array.from(db.getVertices().values());
+  const vertexIds = new Set(vertices.map((vertex) => vertex.id));
 
-    return sources.flatMap((source) =>
-      targets.map((target) => ({
-        source,
-        target,
-        label,
-        kind,
-      })),
+  const nodes: IntermediateNode[] = vertices.map((vertex) => {
+    let node: IntermediateNode = {
+      id: vertex.id,
+      label: normalizeFlowchartLabel(vertex.text ?? vertex.id),
+      shape: mapFlowchartShape(vertex.type, vertex.id, warnings),
+    };
+    node = applyClassStyles(
+      node,
+      (vertex.classes ?? []).filter((className) => className !== "clickable"),
+      classStyles,
+    );
+    const inlineStyle = parseFlowchartStyles(vertex.styles ?? []);
+    if (inlineStyle.fillColor !== undefined) {
+      node = { ...node, fillColor: inlineStyle.fillColor };
+    }
+    if (inlineStyle.strokeColor !== undefined) {
+      node = { ...node, strokeColor: inlineStyle.strokeColor };
+    }
+    if (inlineStyle.fontColor !== undefined) {
+      node = { ...node, fontColor: inlineStyle.fontColor };
+    }
+    if (vertex.link) {
+      warnings.push(`ignored_flowchart_directive: "click ${vertex.id}" link is not rendered`);
+    }
+    return node;
+  });
+
+  const edges: IntermediateEdge[] = [];
+  const edgeGeometryKeys: string[] = [];
+  for (const dbEdge of db.getEdges()) {
+    if (!vertexIds.has(dbEdge.start) || !vertexIds.has(dbEdge.end)) {
+      warnings.push(
+        `unsupported_subgraph_edge: edge "${dbEdge.id}" attached to a subgraph endpoint is not rendered`,
+      );
+      continue;
+    }
+    edges.push({
+      sourceId: dbEdge.start,
+      targetId: dbEdge.end,
+      label: normalizeFlowchartLabel(dbEdge.text ?? "").trim() || undefined,
+      kind: mapFlowchartEdgeKind(dbEdge, warnings),
+    });
+    edgeGeometryKeys.push(dbEdge.id);
+  }
+
+  const dbSubgraphs = db.getSubGraphs();
+  const subgraphIdByDbId = new Map<string, string>();
+  dbSubgraphs.forEach((subgraph, index) => {
+    subgraphIdByDbId.set(
+      subgraph.id,
+      /^subGraph\d+$/.test(subgraph.id) ? `subgraph-${index + 1}` : subgraph.id,
     );
   });
-}
+  const subgraphs: IntermediateSubgraph[] = dbSubgraphs.map((subgraph) => {
+    const id = subgraphIdByDbId.get(subgraph.id)!;
+    const parent = dbSubgraphs.find(
+      (candidate) => candidate.id !== subgraph.id && candidate.nodes.includes(subgraph.id),
+    );
+    return {
+      id,
+      label: subgraph.title?.trim() || id,
+      nodeIds: subgraph.nodes.filter((nodeId) => vertexIds.has(nodeId)),
+      parentId: parent ? subgraphIdByDbId.get(parent.id) : undefined,
+    };
+  });
 
-function parseSubgraphStart(line: string, sequence: number): SubgraphParseResult {
-  const body = line.slice("subgraph".length).trim();
-  if (body.length === 0) {
-    throw new Error(`parse_error: malformed subgraph declaration "${line}"`);
+  for (const line of normalizeLines(request.mermaid, true).slice(1)) {
+    if (line.startsWith("linkStyle")) {
+      warnings.push(`ignored_flowchart_directive: "${line}"`);
+    }
   }
 
-  return {
-    id: `subgraph-${sequence}`,
-    label: normalizeLabel(body),
-  };
-}
-
-function parseFlowchart(
-  request: MermaidParseRequest,
-  lines: string[],
-  direction: LayoutDirection,
-): IntermediateDiagram {
-  const nodeMap = new Map<string, IntermediateNode>();
-  const classStyles = new Map<string, MermaidClassStyle>();
-  const nodeClassNames = new Map<string, string[]>();
-  const edges: IntermediateEdge[] = [];
-  const subgraphs = new Map<
-    string,
-    { id: string; label: string; nodeIds: Set<string>; parentId?: string }
-  >();
-  const subgraphStack: string[] = [];
-  const warnings: string[] = [];
-  let subgraphSequence = 0;
-
-  function attachNodeToCurrentSubgraph(nodeId: string): void {
-    const currentSubgraphId = subgraphStack[subgraphStack.length - 1];
-    if (!currentSubgraphId) {
-      return;
+  let nodeLayouts: Map<string, NodeLayout>;
+  const edgeLayouts = new Map<number, IntermediatePoint[]>();
+  let geometry: import("./mermaid-geometry.js").FlowchartGeometry | undefined;
+  try {
+    const { renderFlowchartGeometry } = await import("./mermaid-geometry.js");
+    geometry = await renderFlowchartGeometry(request.mermaid, {
+      vertices: vertices.map((vertex) => ({ id: vertex.id, domId: vertex.domId })),
+      edgeIds: edgeGeometryKeys,
+    });
+    if (geometry === undefined) {
+      warnings.push("flowchart_geometry_unavailable: canvas text measurement is unavailable on this platform");
     }
-    subgraphs.get(currentSubgraphId)?.nodeIds.add(nodeId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warnings.push(`flowchart_geometry_unavailable: ${message.split("\n")[0]}`);
   }
 
-  for (const line of lines.slice(1)) {
-    const parsedClassStyle = parseClassStyle(line);
-    if (parsedClassStyle) {
-      classStyles.set(parsedClassStyle.className, parsedClassStyle.style);
-      continue;
-    }
-
-    const parsedClassAssignment = parseClassAssignment(line);
-    if (parsedClassAssignment) {
-      for (const nodeId of parsedClassAssignment.nodeIds) {
-        mergeClassNames(nodeClassNames, nodeId, parsedClassAssignment.classNames);
+  if (geometry) {
+    nodeLayouts = new Map(
+      geometry.nodes.map((node) => [node.id, { x: node.x, y: node.y, width: node.width, height: node.height }]),
+    );
+    const pointsByEdgeId = new Map(geometry.edges.map((edge) => [edge.id, edge.points]));
+    edgeGeometryKeys.forEach((key, index) => {
+      const points = pointsByEdgeId.get(key);
+      if (points) {
+        edgeLayouts.set(index, points);
       }
-      continue;
+    });
+  } else {
+    const layouts = computeFlowchartLayout(nodes, edges, subgraphs, direction);
+    nodeLayouts = layouts.nodeLayouts;
+    for (const [index, points] of layouts.edgeLayouts) {
+      edgeLayouts.set(index, points);
     }
-
-    if (maybeIgnoreFlowchartLine(line, warnings)) {
-      continue;
-    }
-
-    const normalizedLine = line;
-
-    if (normalizedLine === "end") {
-      if (subgraphStack.length === 0) {
-        throw new Error('parse_error: unexpected "end" without matching subgraph');
-      }
-      subgraphStack.pop();
-      continue;
-    }
-
-    if (normalizedLine.startsWith("subgraph ")) {
-      subgraphSequence += 1;
-      const subgraph = parseSubgraphStart(normalizedLine, subgraphSequence);
-      subgraphs.set(subgraph.id, {
-        id: subgraph.id,
-        label: subgraph.label,
-        nodeIds: new Set<string>(),
-        parentId: subgraphStack[subgraphStack.length - 1],
-      });
-      subgraphStack.push(subgraph.id);
-      continue;
-    }
-
-    const edgeSegments = parseEdgeSegments(normalizedLine);
-    if (edgeSegments.length > 0) {
-      for (const edgeSegment of edgeSegments) {
-        nodeMap.set(
-          edgeSegment.source.node.id,
-          mergeNode(nodeMap.get(edgeSegment.source.node.id), edgeSegment.source.node),
-        );
-        nodeMap.set(
-          edgeSegment.target.node.id,
-          mergeNode(nodeMap.get(edgeSegment.target.node.id), edgeSegment.target.node),
-        );
-        mergeClassNames(nodeClassNames, edgeSegment.source.node.id, edgeSegment.source.classNames);
-        mergeClassNames(nodeClassNames, edgeSegment.target.node.id, edgeSegment.target.classNames);
-        attachNodeToCurrentSubgraph(edgeSegment.source.node.id);
-        attachNodeToCurrentSubgraph(edgeSegment.target.node.id);
-        edges.push({
-          sourceId: edgeSegment.source.node.id,
-          targetId: edgeSegment.target.node.id,
-          label: edgeSegment.label,
-          kind: edgeSegment.kind,
-        });
-      }
-      continue;
-    }
-
-    const parsedNode = parseNodeToken(normalizedLine);
-    nodeMap.set(parsedNode.node.id, mergeNode(nodeMap.get(parsedNode.node.id), parsedNode.node));
-    mergeClassNames(nodeClassNames, parsedNode.node.id, parsedNode.classNames);
-    attachNodeToCurrentSubgraph(parsedNode.node.id);
   }
-
-  if (subgraphStack.length > 0) {
-    throw new Error("parse_error: unclosed subgraph block");
-  }
-
-  const styledNodes = Array.from(nodeMap.values()).map((node) =>
-    applyClassStyles(node, nodeClassNames.get(node.id) ?? [], classStyles),
-  );
-  const subgraphList = Array.from(subgraphs.values()).map((subgraph) => ({
-    id: subgraph.id,
-    label: subgraph.label,
-    nodeIds: Array.from(subgraph.nodeIds),
-    parentId: subgraph.parentId,
-  }));
-  const layouts = computeFlowchartLayout(styledNodes, edges, subgraphList, direction);
 
   return {
     pageName: derivePageName(request.sourceName),
     diagramType: "flowchart",
     direction,
-    nodes: styledNodes.map((node) => ({ ...node, ...layouts.nodeLayouts.get(node.id) })),
+    nodes: nodes.map((node) => ({ ...node, ...nodeLayouts.get(node.id) })),
     edges: edges.map((edge, index) => ({
       ...edge,
-      points: layouts.edgeLayouts.get(index),
+      points: edgeLayouts.get(index),
     })),
-    subgraphs: subgraphList,
+    subgraphs,
     sequenceParticipants: [],
     sequenceMessages: [],
     sequenceNotes: [],
@@ -2138,7 +2048,7 @@ export async function parseMermaid(request: MermaidParseRequest): Promise<Interm
     return parseXychartDiagram(request);
   }
 
-  return parseFlowchart(request, lines, header.direction!);
+  return parseFlowchart(request, header.direction!);
 }
 
 export function serializeIntermediateDiagram(diagram: IntermediateDiagram): string {

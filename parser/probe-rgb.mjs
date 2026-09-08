@@ -1,0 +1,10 @@
+import { JSDOM } from 'jsdom';
+const dom = new JSDOM('<!doctype html><html><body></body></html>');
+globalThis.window = dom.window; globalThis.document = dom.window.document;
+const mermaid = (await import('mermaid')).default;
+mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+const src = 'flowchart TD\n  classDef themed fill:rgb(230, 240, 255),stroke:rgba(25, 113, 194, 0.8),color:rgb(10, 20, 30)\n  A[Start]:::themed --> B[Finish]:::themed';
+await mermaid.parse(src);
+const db = (await mermaid.mermaidAPI.getDiagramFromText(src)).db;
+console.log('classes:', JSON.stringify([...db.getClasses().entries()]));
+for (const [k,x] of db.getVertices()) console.log('V', k, 'classes:', x.classes);

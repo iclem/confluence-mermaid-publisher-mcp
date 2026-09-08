@@ -18,7 +18,7 @@ Source of Mermaid diagram-type list:
 
 | Mermaid diagram type | Mermaid syntax | Status | Notes |
 | --- | --- | --- | --- |
-| Flowchart / Graph | `flowchart`, `graph` | `partial` | Current converter target. Supports a constrained v1 subset only. |
+| Flowchart / Graph | `flowchart`, `graph` | `supported` | Parsed with Mermaid's own flowchart parser and laid out with Mermaid's Dagre render geometry (headless render with canvas-backed text measurement): all node shapes, edge types, `&` branch groups, chains, (nested) subgraphs, `classDef`/`class`/inline `style` styling. Falls back to a computed Dagre layout when canvas is unavailable. |
 | Architecture | `architecture-beta` | `not-started` | No parser or mapping yet. |
 | Block diagram | `block-beta` | `not-started` | No parser or mapping yet. |
 | C4 | `C4Context`, `C4Container`, `C4Component`, `C4Dynamic`, `C4Deployment` | `not-started` | No parser or mapping yet. |
@@ -48,7 +48,7 @@ Source of Mermaid diagram-type list:
 
 ## Flowchart feature coverage
 
-The current implementation is intentionally narrow. It is usable for simple process flows, but it is not close to full Mermaid flowchart coverage yet.
+Flowcharts are parsed with Mermaid's own parser and laid out with geometry extracted from a headless Mermaid render, so syntax coverage matches stock draw.io mermaid import.
 
 | Flowchart feature | Example | Status | Notes |
 | --- | --- | --- | --- |
@@ -59,31 +59,34 @@ The current implementation is intentionally narrow. It is usable for simple proc
 | Decision node | `A{Decision}` | `supported` | Mapped to rhombus. |
 | Terminal node | `A((Done))` | `supported` | Mapped to ellipse. |
 | Bare node identifier | `A` | `supported` | Implicit rectangle node. |
+| Additional flowchart shapes | `A([stadium])`, `A[[subroutine]]`, `A[(db)]`, `A{{hex}}`, `A>odd]`, `A[/para/]`, `A[\para\]`, `A[/trap\]`, `A[\trap/]`, `A(((double)))`, `A@{ shape: ... }` | `supported` | The full classic shape set plus common `@{shape:}` aliases are mapped to stock draw.io shapes (stadium, cylinder, hexagon, parallelogram, trapezoid, predefined process, double circle, etc.). Unknown shapes fall back to rectangle with a warning. |
 | Directed edge | `A --> B` | `supported` | Mapped to arrow connection. |
 | Plain edge | `A --- B` | `supported` | Mapped to plain line connection. |
+| Dotted edges | `A -.-> B`, `A -.- B` | `supported` | Dashed directed and dashed open variants. |
+| Thick edges | `A ==> B`, `A === B` | `supported` | Rendered with a wider stroke. |
+| Invisible edges | `A ~~~ B` | `supported` | Participate in layout, rendered without a stroke. |
+| Bidirectional edges | `A <--> B` | `supported` | Arrowheads on both ends. |
+| Circle / cross arrowheads | `A --o B`, `A --x B` | `partial` | Rendered as block arrows with a warning. |
 | Edge labels | `A -->|yes| B` | `supported` | Label preserved on connection. |
 | Chained edges | `A --> B --> C` | `supported` | Expanded into multiple edges. |
 | Branch targets | `A --> B & C` | `supported` | Expanded into one edge per target. |
 | Chained branch groups | `A --> B & C --> D` | `supported` | Expanded as cross-product between adjacent groups. |
-| Semicolon-separated statements | `A[Start]; B{Check}` | `supported` | Split before parsing. |
-| Deterministic auto-layout | generated | `supported` | Flowcharts now use Dagre-based layered layout on the parser side, and the generator reuses Dagre edge waypoints so branching connections stay closer to Mermaid's routed geometry. |
-| Subgraphs | `subgraph X ... end` | `supported` | Quoted subgraph labels are supported and emitted as Draw.io container nodes. |
-| `classDef` styling | `classDef red fill:#f00,stroke:#900,color:#fff` | `partial` | Node `fill`, `stroke`, and text `color` are mapped into Draw.io node styles; unsupported Mermaid style keys are still ignored. |
-| Node class suffixes | `A[Label]:::danger` | `supported` | Class suffixes now propagate `classDef` node colors into Draw.io output. |
-| Node `style` directives | `style A fill:#f9f` | `not-started` | Ignored support has not been added yet. |
-| `linkStyle` directives | `linkStyle 0 stroke:#333` | `not-started` | Explicitly rejected today. |
-| `click` directives | `click A href ...` | `not-started` | Explicitly rejected today. |
-| Mermaid directives | `%%{init: ...}%%` | `not-started` | Explicitly rejected today. |
-| Frontmatter config | `--- ... ---` | `not-started` | Not parsed by the converter yet. |
+| Semicolon-separated statements | `A[Start]; B{Check}` | `supported` | Handled by Mermaid's parser. |
+| Mermaid render geometry | generated | `supported` | Node rectangles and edge polylines come from a headless Mermaid (Dagre) render with canvas-backed text measurement; without canvas the converter falls back to its own Dagre layout with a warning. |
+| Subgraphs | `subgraph X ... end` | `supported` | Explicit and generated ids, quoted titles, and nested subgraphs are emitted as Draw.io container nodes. |
+| Edges attached to subgraphs | `subgraph A --> B` | `not-started` | Skipped with an `unsupported_subgraph_edge` warning. |
+| `classDef` styling | `classDef red fill:#f00,stroke:#900,color:#fff` | `partial` | Node `fill`, `stroke`, and text `color` are mapped into Draw.io node styles; unsupported Mermaid style keys are still ignored. Note: `rgb()`/`rgba()` values in `classDef` are rejected by Mermaid's own parser. |
+| Node class suffixes | `A[Label]:::danger` | `supported` | Class suffixes propagate `classDef` node colors into Draw.io output. |
+| Node `style` directives | `style A fill:#f9f` | `supported` | Inline node styles override class colors. |
+| `linkStyle` directives | `linkStyle 0 stroke:#333` | `not-started` | Ignored with a warning. |
+| `click` directives | `click A href ...` | `not-started` | Parsed by Mermaid; links are not rendered (warning). |
+| Mermaid directives | `%%{init: ...}%%` | `partial` | Handled by Mermaid during parsing/rendering; the converter does not map theme variables into draw.io styles. |
+| Frontmatter config | `--- ... ---` | `partial` | Handled by Mermaid during parsing; not mapped into draw.io styles. |
 | Mermaid themes / looks | `look: handDrawn` | `not-started` | No theme parity with Mermaid. |
-| ELK / Dagre config passthrough | `layout: elk` | `not-started` | The converter now reuses Mermaid's default Dagre family for flowchart geometry, but explicit Mermaid layout-configuration passthrough is still not implemented. |
-| Additional flowchart shapes | many Mermaid shape aliases | `not-started` | Only the current four node forms are mapped. |
+| ELK layout | `layout: elk` | `not-started` | Stock draw.io uses ELK for flowcharts; the converter uses Mermaid's own Dagre geometry instead. |
 | Rich text / quoted labels | `"A label"` forms | `supported` | Quoted node labels and multiline quoted labels inside supported node shapes are parsed. |
-| Icons / images / markdown strings | Mermaid extensions | `not-started` | No support yet. |
+| Icons / images / markdown strings | Mermaid extensions | `not-started` | Markdown label markup is preserved as literal text. |
 | Alternate quoted edge labels | `A -- "label" --> B` | `supported` | Implemented for directed edges. |
-| Dotted directed edges | `A -.-> B` | `supported` | Parsed as directed edges. |
-| Edge variants beyond `-->`, `-.->`, and `---` | e.g. thick/arrows | `not-started` | No support yet. |
-| Multi-line substructure and nested constructs | various | `not-started` | No support yet. |
 
 ## Sequence diagram feature coverage
 

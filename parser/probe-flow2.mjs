@@ -1,0 +1,12 @@
+import { JSDOM } from 'jsdom';
+const dom = new JSDOM('<!doctype html><html><body></body></html>');
+globalThis.window = dom.window; globalThis.document = dom.window.document;
+const mermaid = (await import('mermaid')).default;
+mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+const src = 'flowchart TD\n  A["Label A<br/>line2"] --> B{{Hex}} \n  B ==>|thick| C([Stadium])\n  C --- D[[Sub]]\n  D ~~~ E[Invisible]\n  F & G --> H\n  A -- "quoted lbl" --> H';
+await mermaid.parse(src);
+const db = (await mermaid.mermaidAPI.getDiagramFromText(src)).db;
+const [first] = db.getVertices().values();
+console.log('vertex keys:', Object.keys(first));
+for (const [k,x] of db.getVertices()) console.log('V', k, x.type, JSON.stringify(x.label), 'domId:', x.domId);
+for (const e of db.getEdges()) console.log('E', e.id, e.type, e.stroke, JSON.stringify(e.text));

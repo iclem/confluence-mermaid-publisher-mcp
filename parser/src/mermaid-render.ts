@@ -3,6 +3,7 @@ import "./canvas-guard.js";
 import { JSDOM } from "jsdom";
 
 import { mermaid } from "./mermaid-env.js";
+import { elementBBox, type SvgBBox } from "./svg-bbox.js";
 
 // Shared headless mermaid rendering: jsdom + canvas-backed text measurement.
 // mermaid.render needs DOM APIs jsdom lacks; only the measurement shims below
@@ -26,9 +27,18 @@ function installTextMeasurement(dom: JSDOM, measureCtx: MeasureContext): void {
     measureCtx.font = fontFor(el);
     return measureCtx.measureText(el.textContent ?? "").width;
   };
+  const textBBox = (el: Element): SvgBBox => {
+    const size = parseFloat(fontFor(el)) || 16;
+    return { x: 0, y: 0, width: textWidth(el), height: size * 1.2 };
+  };
   proto.getBBox = function (this: Element) {
-    const size = parseFloat(fontFor(this)) || 16;
-    return { x: 0, y: 0, width: textWidth(this), height: size * 1.2 };
+    const tag = this.tagName.toLowerCase();
+    if (tag === "text" || tag === "tspan") {
+      return textBBox(this);
+    }
+    // Shapes and groups (including the diagram root, used for the viewBox)
+    // get a geometry-derived box; text is measured with the canvas backend.
+    return elementBBox(this, textBBox) ?? textBBox(this);
   };
   proto.getComputedTextLength = function (this: Element) {
     return textWidth(this);
@@ -39,9 +49,14 @@ let renderCounter = 0;
 
 /**
  * Renders mermaid text to SVG in a headless DOM. Returns undefined when canvas
- * text measurement is unavailable on this platform.
+ * text measurement is unavailable on this platform. `configOverrides` are
+ * one-level mermaid config section merges applied only for this render (e.g.
+ * `{ flowchart: { htmlLabels: false } }`).
  */
-export async function renderMermaidSvg(mermaidText: string): Promise<string | undefined> {
+export async function renderMermaidSvg(
+  mermaidText: string,
+  configOverrides?: Record<string, Record<string, unknown>>,
+): Promise<string | undefined> {
   const { createCanvas } = await import("canvas");
 
   const dom = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true });
@@ -53,14 +68,25 @@ export async function renderMermaidSvg(mermaidText: string): Promise<string | un
     DOMParser: globalThis.DOMParser,
     CSSStyleSheet: globalThis.CSSStyleSheet,
   };
+  const previousConfig = configOverrides ? mermaid.mermaidAPI.getConfig() : undefined;
   globalThis.window = dom.window as unknown as Window & typeof globalThis;
   globalThis.document = dom.window.document;
   globalThis.DOMParser = dom.window.DOMParser as unknown as typeof globalThis.DOMParser;
   globalThis.CSSStyleSheet = dom.window.CSSStyleSheet as unknown as typeof CSSStyleSheet;
+  if (configOverrides && previousConfig) {
+    const merged: Record<string, unknown> = { ...previousConfig };
+    for (const [section, values] of Object.entries(configOverrides)) {
+      merged[section] = { ...((previousConfig as Record<string, unknown>)[section] ?? {}), ...values };
+    }
+    mermaid.mermaidAPI.setConfig(merged);
+  }
   try {
     const { svg } = await mermaid.render(`mmd-render-${renderCounter++}`, mermaidText);
     return svg;
   } finally {
+    if (previousConfig) {
+      mermaid.mermaidAPI.setConfig(previousConfig);
+    }
     globalThis.window = previous.window;
     globalThis.document = previous.document;
     globalThis.DOMParser = previous.DOMParser;

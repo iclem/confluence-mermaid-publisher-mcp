@@ -852,6 +852,33 @@ public class DrawioGenerator {
             style.shape("ellipse");
             style.backgroundColor("#f8cecc");
             style.color("#b85450");
+        } else if ("stadium".equals(shape)) {
+            style.shape("rectangle");
+            style.rounded(true);
+            node.style("arcSize", "50");
+        } else if ("cylinder".equals(shape)) {
+            style.shape("cylinder");
+        } else if ("hexagon".equals(shape)) {
+            style.shape("hexagon");
+        } else if ("parallelogram".equals(shape)) {
+            style.shape("parallelogram");
+        } else if ("parallelogram-alt".equals(shape)) {
+            style.shape("parallelogram");
+            node.style("flipH", "1");
+        } else if ("trapezoid".equals(shape)) {
+            style.shape("trapezoid");
+        } else if ("trapezoid-alt".equals(shape)) {
+            style.shape("trapezoid");
+            node.style("flipV", "1");
+        } else if ("subroutine".equals(shape)) {
+            style.shape("mxgraph.flowchart.predefined_process");
+        } else if ("double-circle".equals(shape)) {
+            // draw.io has no double-bordered ellipse; closest stock shape
+            style.shape("ellipse");
+        } else if ("odd".equals(shape)) {
+            // mermaid's asymmetric right-rounded rectangle; approximate
+            style.shape("rectangle");
+            style.rounded(true);
         }
 
         if (intermediateNode.fillColor() != null && !intermediateNode.fillColor().isBlank()) {
@@ -914,13 +941,28 @@ public class DrawioGenerator {
             style.edgeStyle("orthogonalEdgeStyle").rounded(true);
         }
         style.color("#666666");
-        if ("plain".equals(kind)) {
-            style.endArrow("none");
-        } else {
+        if (kind == null) {
+            kind = "directed";
+        }
+        boolean arrow = !"plain".equals(kind) && !"dashed-plain".equals(kind)
+                && !"thick-plain".equals(kind) && !"invisible".equals(kind);
+        if (arrow) {
             style.endArrow("classic");
             style.endFill(true);
+        } else {
+            style.endArrow("none");
         }
-        style.dashed("dashed-directed".equals(kind) ? "1" : "0");
+        if (kind.startsWith("bidirectional-")) {
+            connection.style("startArrow", "classic");
+            connection.style("startFill", "1");
+        }
+        if (kind.startsWith("thick-")) {
+            connection.style("strokeWidth", "2");
+        }
+        if ("invisible".equals(kind)) {
+            connection.style("strokeColor", "none");
+        }
+        style.dashed(kind.contains("dashed") ? "1" : "0");
     }
 
     private Node createSubgraphContainer(

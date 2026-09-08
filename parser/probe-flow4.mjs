@@ -1,0 +1,11 @@
+import { JSDOM } from 'jsdom';
+const dom = new JSDOM('<!doctype html><html><body></body></html>');
+globalThis.window = dom.window; globalThis.document = dom.window.document;
+const mermaid = (await import('mermaid')).default;
+mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+const src = 'graph TB\n  subgraph "Product Write Path"\n    AC["api-catalogue\nwrite use case"]\n  end\n  AC --> OB["Outbox"]\n  classDef success fill:#ddffdd\n  class AC,OB success\n  X["`markdown **bold**`"] --> Y\n  Z["A &amp; B #35;tag"] --> W';
+await mermaid.parse(src);
+const db = (await mermaid.mermaidAPI.getDiagramFromText(src)).db;
+console.log('subgraphs:', JSON.stringify(db.getSubGraphs()));
+for (const [k,x] of db.getVertices()) console.log('V', k, x.type, JSON.stringify(x.text), x.labelType, 'classes:', x.classes);
+for (const e of db.getEdges()) console.log('E', e.id, e.start, '->', e.end);
