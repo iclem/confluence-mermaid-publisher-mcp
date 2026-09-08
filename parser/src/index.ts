@@ -445,7 +445,7 @@ function estimateNodeDimensions(node: IntermediateNode): { width: number; height
   return { width, height };
 }
 
-function computeFlowchartLayout(
+export function computeFlowchartLayout(
   nodes: IntermediateNode[],
   edges: IntermediateEdge[],
   subgraphs: IntermediateSubgraph[],
@@ -489,7 +489,13 @@ function computeFlowchartLayout(
     }
   }
 
+  const clusterIds = new Set(subgraphs.map((subgraph) => subgraph.id));
   for (const [index, edge] of edges.entries()) {
+    // dagre cannot rank edges incident to cluster (compound) nodes — they are
+    // left without waypoints and the generator orthogonal-routes them
+    if (clusterIds.has(edge.sourceId) || clusterIds.has(edge.targetId)) {
+      continue;
+    }
     if (graph.hasNode(edge.sourceId) && graph.hasNode(edge.targetId)) {
       graph.setEdge(
         edge.sourceId,
@@ -1600,7 +1606,7 @@ async function parseStateDiagram(request: MermaidParseRequest): Promise<Intermed
   const dbEdges = db.edges ?? [];
   const noteDbIds = new Set(dbNodes.filter((node) => node.shape === "note").map((node) => node.id));
   const groupIds = new Set(
-    dbNodes.filter((node) => node.isGroup && node.shape !== "noteGroup").map((node) => node.id),
+    dbNodes.filter((node) => node.isGroup && node.shape !== "noteGroup" && node.shape !== "note").map((node) => node.id),
   );
 
   const nodes: IntermediateNode[] = [];
@@ -1612,15 +1618,6 @@ async function parseStateDiagram(request: MermaidParseRequest): Promise<Intermed
 
   for (const dbNode of dbNodes) {
     if (dbNode.shape === "noteGroup") {
-      continue;
-    }
-    if (dbNode.isGroup) {
-      subgraphs.push({
-        id: dbNode.id,
-        label: dbNode.shape === "divider" ? "" : (dbNode.label ?? dbNode.id).trim(),
-        nodeIds: [],
-        parentId: dbNode.parentId && groupIds.has(dbNode.parentId) ? dbNode.parentId : undefined,
-      });
       continue;
     }
     if (dbNode.shape === "note") {
@@ -1640,6 +1637,15 @@ async function parseStateDiagram(request: MermaidParseRequest): Promise<Intermed
       if (dbNode.domId) {
         domIdByNodeId.set(noteId, dbNode.domId);
       }
+      continue;
+    }
+    if (dbNode.isGroup) {
+      subgraphs.push({
+        id: dbNode.id,
+        label: dbNode.shape === "divider" ? "" : (dbNode.label ?? dbNode.id).trim(),
+        nodeIds: [],
+        parentId: dbNode.parentId && groupIds.has(dbNode.parentId) ? dbNode.parentId : undefined,
+      });
       continue;
     }
 

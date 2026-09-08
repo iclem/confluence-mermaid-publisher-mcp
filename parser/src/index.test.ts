@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseMermaid } from "./index.js";
+import { computeFlowchartLayout, parseMermaid } from "./index.js";
 
 function stripLayout<T extends { x?: number; y?: number; width?: number; height?: number }>(node: T) {
   const { x: _x, y: _y, width: _width, height: _height, ...rest } = node;
@@ -673,6 +673,76 @@ write use case"]
     for (const edge of diagram.edges) {
       expect(edge.points?.length ?? 0).toBeGreaterThan(1);
     }
+  });
+
+  it("parses composite states with internal start/end transitions and fork/join (gallery repro)", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        [*] --> Draft
+        Draft --> Review: submit
+        state Review {
+            [*] --> Screening
+            Screening --> Detailed: pass
+            Screening --> [*]: reject
+        }
+        Review --> Approved: sign off
+        state check <<choice>>
+        Approved --> check
+        check --> Live: metrics ok
+        state Live {
+            state forkState <<fork>>
+            [*] --> forkState
+            forkState --> Serving
+            forkState --> Caching
+            state joinState <<join>>
+            Serving --> joinState
+            Caching --> joinState
+            joinState --> [*]
+        }
+        Live --> [*]: sunset
+        note right of Review : SLA is 2 days
+        classDef hot fill:#f8cecc,stroke:#b85450
+        class Live hot
+      `,
+    });
+
+    expect(diagram.diagramType).toBe("state");
+    expect(diagram.subgraphs.map((subgraph) => subgraph.id).sort()).toEqual(["Live", "Review"]);
+    const review = diagram.subgraphs.find((subgraph) => subgraph.id === "Review")!;
+    expect(review.nodeIds.sort()).toEqual(["Detailed", "Review_end", "Review_start", "Screening"]);
+    expect(diagram.nodes.find((node) => node.id === "check")).toMatchObject({ shape: "rhombus" });
+    expect(diagram.nodes.find((node) => node.id === "forkState")).toMatchObject({ shape: "rectangle" });
+    expect(diagram.nodes.find((node) => node.id === "joinState")).toMatchObject({ shape: "rectangle" });
+    expect(diagram.nodes.find((node) => node.id === "state-note-1")).toMatchObject({ label: "SLA is 2 days" });
+    // Every node is positioned (render geometry or dagre fallback)
+    for (const node of diagram.nodes) {
+      expect(node.x).toBeTypeOf("number");
+      expect(node.y).toBeTypeOf("number");
+    }
+  });
+
+  it("computes fallback layouts for graphs with edges incident to subgraph clusters", () => {
+    // dagre cannot rank edges touching compound (cluster) nodes; the fallback
+    // must skip them instead of crashing ("Cannot set properties of undefined")
+    const layouts = computeFlowchartLayout(
+      [
+        { id: "A", label: "A", shape: "rounded-rectangle" },
+        { id: "Inner", label: "Inner", shape: "rounded-rectangle" },
+        { id: "B", label: "B", shape: "rounded-rectangle" },
+      ],
+      [
+        { sourceId: "A", targetId: "Cluster", kind: "directed" },
+        { sourceId: "Cluster", targetId: "B", kind: "directed" },
+        { sourceId: "A", targetId: "Inner", kind: "directed" },
+      ],
+      [{ id: "Cluster", label: "Cluster", nodeIds: ["Inner"] }],
+      "TD",
+    );
+
+    expect(layouts.nodeLayouts.get("Inner")).toBeDefined();
+    expect(layouts.edgeLayouts.get(0)).toBeUndefined();
+    expect(layouts.edgeLayouts.get(2)).toBeDefined();
   });
 
   it("parses a gantt slice with month headers and month-aligned task starts", async () => {
