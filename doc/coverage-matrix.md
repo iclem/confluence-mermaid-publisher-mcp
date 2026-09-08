@@ -113,6 +113,7 @@ The current implementation is intentionally narrow. It is usable for simple proc
 | Autonumbering | `autonumber` | `supported` | Rendered as numbered badges on messages; `autonumber off`, custom starts, and steps are honored. |
 | `rect` grouping wrappers | `rect rgb(...) ... end` | `partial` | Wrapper is ignored with a warning so inner sequence content can still convert. |
 | Notes left/right of a participant | `Note left of A: text` | `supported` | Rendered beside the lifeline. |
+| Entity escapes | `Note over A: a #59; b` | `supported` | Mermaid numeric entity codes (e.g. `#59;` for `;`, `#35;` for `#`) are decoded to real characters, matching stock rendering. Raw `;` still terminates the statement, as in stock mermaid. |
 | Inline activation | `A->>+B: msg` | `supported` | Parsed through Mermaid's sequence DB, rendered as activation bars. |
 | Create / destroy semantics | `create participant A` | `partial` | Accepted (parsed by Mermaid); created participants render as regular participants, destroy markers are ignored with a warning. |
 

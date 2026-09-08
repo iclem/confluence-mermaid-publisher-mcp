@@ -2230,7 +2230,19 @@ interface SequenceDb {
 }
 
 function sequenceSignalLabel(message: unknown): string {
-  return typeof message === "string" ? message : "";
+  return typeof message === "string" ? decodeSequenceEntities(message) : "";
+}
+
+function decodeSequenceEntities(text: string): string {
+  // Mermaid's jison lexer encodes entity codes (e.g. `#59;` for `;`) before
+  // parsing; decode like mermaid does at render time, then resolve the numeric
+  // entities so draw.io labels carry the real characters.
+  return text
+    .replace(/ﬂ°°/g, "&#")
+    .replace(/ﬂ°/g, "&")
+    .replace(/¶ß/g, ";")
+    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_match, code: string) => String.fromCodePoint(parseInt(code, 16)));
 }
 
 function requireSignalParticipant(signal: SequenceSignal, key: "from" | "to"): string {
@@ -2258,7 +2270,7 @@ async function parseSequence(request: MermaidParseRequest): Promise<Intermediate
   for (const [id, actor] of db.getActors()) {
     const participant: IntermediateSequenceParticipant = {
       id,
-      label: actor.description || id,
+      label: actor.description ? decodeSequenceEntities(actor.description) : id,
     };
     if (actor.type === "actor") {
       participant.type = "actor";
@@ -2267,7 +2279,7 @@ async function parseSequence(request: MermaidParseRequest): Promise<Intermediate
   }
 
   const boxes: IntermediateSequenceBox[] = db.getBoxes().map((box) => ({
-    label: box.name ?? "",
+    label: box.name ? decodeSequenceEntities(box.name) : "",
     fillColor: box.fill,
     participantIds: box.actorKeys ?? [],
   }));

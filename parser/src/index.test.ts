@@ -857,6 +857,21 @@ write use case"]
     expect(diagram.sequenceFrames).toEqual([]);
   });
 
+  it("decodes mermaid entity escapes in sequence text", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        sequenceDiagram
+        participant A as api #35;v1
+        Note over A: first #59; second
+        A->>A: a #59; b #38; c
+      `,
+    });
+
+    expect(diagram.sequenceParticipants[0].label).toBe("api #v1");
+    expect(diagram.sequenceNotes[0].label).toBe("first ; second");
+    expect(diagram.sequenceMessages[0].label).toBe("a ; b & c");
+  });
+
   it("rejects semicolons inside sequence note text like stock mermaid", async () => {
     await expect(
       parseMermaid({
