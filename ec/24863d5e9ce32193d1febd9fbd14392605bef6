@@ -1,0 +1,33 @@
+doc/spec.md
+  s_4d6d6ff91d55ed::t_b1e065a065513a 19-20
+doc/coverage-matrix.md
+  s_4d6d6ff91d55ed::t_2b0bb6b8874459 27,46,142-143,145-150,164
+parser/src/index.ts
+  s_4d6d6ff91d55ed::t_67b555a4e179a8 1165-1168,1187,1189-1190,1235,1348-1349,1351-1358,1360-1364,1366-1368,1370-1373,1376-1389,1396-1406,2135,2138
+  s_4d6d6ff91d55ed::t_b06d697c11aace 977-986,989-994,996-1001,1004-1007,1009-1014,1018-1020,1027-1030,1033-1034,1037-1053,1057-1058,1099-1100,1103-1110,1112-1116,1118-1121,1123-1130,1133-1145,1147-1150,1152-1160
+test-data/delivery-plan-gantt.mermaid
+  s_4d6d6ff91d55ed::t_a11ba4dca3c996 3-4,7-8,11-17,20-24,27,30,33-34
+scripts/test-e2e.sh
+  s_4d6d6ff91d55ed::t_21ab794e4cf7d6 86
+parser/src/index.test.ts
+  s_4d6d6ff91d55ed::t_27379dc5be822a 486,492-493,495-496,503,505-508,514,517,521-525,529-530,532-534,538-554,567,569-571,590,592-595
+  s_4d6d6ff91d55ed::t_b6f291c04e9386 850-863
+doc/architecture.md
+  s_4d6d6ff91d55ed::t_e2f415c9a6a90c 51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "ec24863d5e9ce32193d1febd9fbd14392605bef6",
+  "prompts": {},
+  "sessions": {
+    "s_4d6d6ff91d55ed": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "804c4182-424e-455c-838c-6670cb033318",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
