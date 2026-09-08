@@ -1,0 +1,54 @@
+parser/src/index.test.ts
+  s_4d6d6ff91d55ed::t_73200185a16d6d 752-807,812-820,827-920
+  s_4d6d6ff91d55ed::t_6cef23643f9ecd 808-811,821-826
+  s_4d6d6ff91d55ed::t_f05d5d66fdc08c 566-571
+parser/src/mermaid-geometry.ts
+  s_4d6d6ff91d55ed::t_63a1e632fb7aa1 413,417-418,420-425,428,437-441
+  s_4d6d6ff91d55ed::t_d07de70bb5c860 17
+  s_4d6d6ff91d55ed::t_dc68c0361e8de6 383-385,391
+generator/src/test/java/org/nasdanika/mermaid/drawio/generator/DrawioGeneratorTest.java
+  s_4d6d6ff91d55ed::t_684b2c67e9920e 698-755
+parser/src/canvas.d.ts
+  s_4d6d6ff91d55ed::t_b1f13aa5959568 1-12
+parser/src/mermaid-render.ts
+  s_4d6d6ff91d55ed::t_c6d2cb393e1ff5 32-45,57-63
+doc/coverage-matrix.md
+  s_4d6d6ff91d55ed::t_40a3870db94bd4 84
+  s_4d6d6ff91d55ed::t_eceef4c8908e97 145
+parser/src/svg-bbox.ts
+  s_4d6d6ff91d55ed::t_2a2035c83135de 284
+  s_4d6d6ff91d55ed::t_108015c03932e5 298-312
+scripts/test-e2e.sh
+  s_4d6d6ff91d55ed::t_1643bdedb7c724 16,84-87
+  s_4d6d6ff91d55ed::t_5dfa86038f73c9 88
+parser/src/index.ts
+  s_4d6d6ff91d55ed::t_ce6684f352d06c 1711-1712,1724
+  s_4d6d6ff91d55ed::t_9edd29c446a8b4 1743,1759-1761
+  s_4d6d6ff91d55ed::t_4e5fde3fc55f9f 37-38,692-693
+  s_4d6d6ff91d55ed::t_0ce16d127c0d22 802
+  s_4d6d6ff91d55ed::t_10284b41b5e1bb 2166-2169
+  s_4d6d6ff91d55ed::t_fbe9b72cce7ab7 694,924-934,1021
+  s_4d6d6ff91d55ed::t_07e03e892264a2 725-733,766-767
+test-data/state-composite-edge.mermaid
+  s_4d6d6ff91d55ed::t_5bb5ee37676228 1-9
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/DrawioGenerator.java
+  s_4d6d6ff91d55ed::t_d0bbce60a05c39 158-164
+  s_4d6d6ff91d55ed::t_574278b5f88b4f 966
+  s_4d6d6ff91d55ed::t_b9b7b892e2d334 1018,1020,1027-1031
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "5e1e0c0f11400553f189901576a5be1ae52d3d57",
+  "prompts": {},
+  "sessions": {
+    "s_4d6d6ff91d55ed": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "804c4182-424e-455c-838c-6670cb033318",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
