@@ -219,7 +219,10 @@ export class DrawioPublisherService {
   }): Promise<JsonObject> {
     const dimensions = getPngDimensions(args.previewPath);
 
-    await this.client.upsertAttachment({
+    // The draw.io app renders the attachment version pinned by contentVer, so
+    // the macro must track the attachment version produced by this upload —
+    // otherwise republishing keeps showing the first version forever.
+    const diagramAttachment = await this.client.upsertAttachment({
       pageId: args.pageId,
       localPath: args.drawioPath,
       remoteFileName: args.diagramName,
@@ -255,6 +258,7 @@ export class DrawioPublisherService {
       width: dimensions.width,
       height: dimensions.height,
       baseUrl: this.client.getBaseUrl(),
+      contentVer: diagramAttachment.version?.number ?? 1,
     });
   }
 
@@ -321,7 +325,10 @@ export class DrawioPublisherService {
     const previewPath = args.previewPath ?? inferPreviewPath(args.drawioPath);
     const dimensions = getPngDimensions(previewPath);
 
-    await this.client.upsertAttachment({
+    // The draw.io app renders the attachment version pinned by contentVer, so
+    // the macro must track the new attachment version — otherwise the page
+    // keeps rendering the previously pinned version.
+    const diagramAttachment = await this.client.upsertAttachment({
       pageId: args.pageId,
       localPath: args.drawioPath,
       remoteFileName: resolvedDiagramName,
@@ -340,6 +347,7 @@ export class DrawioPublisherService {
     const rawBody = parseCustomContentRawBody(customContent);
     const currentRevision = typeof rawBody.revision === "number" ? rawBody.revision : 1;
 
+    const newRevision = currentRevision + 1;
     await this.client.updateCustomContent({
       id: customContent.id,
       type: DRAWIO_CUSTOM_CONTENT_TYPE,
@@ -348,21 +356,25 @@ export class DrawioPublisherService {
       bodyRaw: buildCustomContentRawBody({
         pageId: args.pageId,
         diagramName: resolvedDiagramName,
-        revision: currentRevision + 1,
+        revision: newRevision,
         drawioXml: readFileSync(args.drawioPath, "utf8"),
       }),
       versionNumber: customContent.version.number + 1,
     });
 
+    const newContentVer = diagramAttachment.version?.number ?? targetExtension.guestParams.contentVer;
     if (
       resolvedDiagramName !== targetExtension.diagramName ||
       dimensions.width !== targetExtension.guestParams.width ||
-      dimensions.height !== targetExtension.guestParams.height
+      dimensions.height !== targetExtension.guestParams.height ||
+      newContentVer !== targetExtension.guestParams.contentVer
     ) {
       updateDrawioExtensionMetadata(adf, targetExtension, {
         diagramName: resolvedDiagramName,
         width: dimensions.width,
         height: dimensions.height,
+        contentVer: newContentVer,
+        revision: newRevision,
       });
       await this.client.updatePageAdf(page, adf, "Update draw.io widget metadata", "current");
     }

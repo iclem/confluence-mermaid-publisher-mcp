@@ -232,6 +232,8 @@ export function buildDrawioExtensionNode(args: {
   width: number;
   height: number;
   baseUrl: string;
+  contentVer?: number;
+  revision?: number;
 }): JsonObject {
   const localId = randomUUID();
   const guestParams: DrawioGuestParams = {
@@ -241,8 +243,8 @@ export function buildDrawioExtensionNode(args: {
     custContentId: args.custContentId,
     diagramDisplayName: args.diagramName,
     lbox: true,
-    contentVer: 1,
-    revision: 1,
+    contentVer: args.contentVer ?? 1,
+    revision: args.revision ?? 1,
     baseUrl: args.baseUrl,
     diagramName: args.diagramName,
     pCenter: false,
@@ -339,7 +341,7 @@ export function insertDrawioExtensionAtAnchor(
 export function updateDrawioExtensionMetadata(
   adfDocument: JsonObject,
   extension: DrawioExtension,
-  args: { diagramName: string; width: number; height: number },
+  args: { diagramName: string; width: number; height: number; contentVer?: number; revision?: number },
 ): JsonObject {
   const attrs = extension.attrs;
   const parameters = extension.parameters;
@@ -348,6 +350,12 @@ export function updateDrawioExtensionMetadata(
   guestParams.diagramDisplayName = args.diagramName;
   guestParams.width = args.width;
   guestParams.height = args.height;
+  if (args.contentVer !== undefined) {
+    guestParams.contentVer = args.contentVer;
+  }
+  if (args.revision !== undefined) {
+    guestParams.revision = args.revision;
+  }
   parameters.guestParams = guestParams;
   attrs.parameters = parameters;
   return adfDocument;
