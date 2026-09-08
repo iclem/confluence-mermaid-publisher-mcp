@@ -1,0 +1,37 @@
+publisher/src/converter.ts
+  s_d6c1289407a35d::t_dfaf417c2c5154 2
+  s_d6c1289407a35d::t_c772c1449767c8 104-106
+parser/src/mermaid-render.ts
+  s_d6c1289407a35d::t_fa992d28595249 1-69
+parser/src/mermaid-geometry.ts
+  s_d6c1289407a35d::t_fa97aa86842a11 139-142,144-145
+parser/package.json
+  s_d6c1289407a35d::t_ca74f7499ab7f8 14
+publisher/src/service.ts
+  s_d6c1289407a35d::t_57a725a848214e 1,571-572,574-582
+parser/src/preview-cli.ts
+  s_d6c1289407a35d::t_3e4adf5693f10a 1-29
+publisher/src/service.test.ts
+  s_d6c1289407a35d::t_3ebb25ba79ac2e 2,39-43,1005,1008-1009,1076,1079-1080
+  s_d6c1289407a35d::t_3de5e8cf307820 3
+scripts/convert.sh
+  s_d6c1289407a35d::t_65c8a41c732e25 67-72
+parser/package-lock.json
+  s_d6c1289407a35d::t_67f0b85d9c27c4 12,781-1007
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "a2f855df9fcb854fbd736a3fd19f7c486452910f",
+  "prompts": {},
+  "sessions": {
+    "s_d6c1289407a35d": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "3cad191d-b3a8-47c8-b61e-b6e675462b91",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
