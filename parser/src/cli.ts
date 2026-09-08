@@ -17,7 +17,7 @@ async function main(): Promise<void> {
     ? readFileSync(process.argv[3], "utf8")
     : await readStdin();
 
-  const diagram = parseMermaid({ mermaid, sourceName });
+  const diagram = await parseMermaid({ mermaid, sourceName });
   process.stdout.write(`${serializeIntermediateDiagram(diagram)}\n`);
 }
 

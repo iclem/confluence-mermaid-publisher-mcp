@@ -13,8 +13,8 @@ function stripEdgePoints<T extends { points?: unknown }>(edge: T) {
 }
 
 describe("parseMermaid", () => {
-  it("parses supported flowchart syntax into the intermediate model", () => {
-    const diagram = parseMermaid({
+  it("parses supported flowchart syntax into the intermediate model", async () => {
+    const diagram = await parseMermaid({
       sourceName: "sample.mermaid",
       mermaid: `
         flowchart LR
@@ -47,8 +47,8 @@ describe("parseMermaid", () => {
     expect(diagram.subgraphs).toEqual([]);
   });
 
-  it("creates implicit rectangle nodes from bare identifiers", () => {
-    const diagram = parseMermaid({
+  it("creates implicit rectangle nodes from bare identifiers", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         graph TD
         Alpha --> Beta
@@ -61,8 +61,8 @@ describe("parseMermaid", () => {
     ]);
   });
 
-  it("preserves class-based node colors from classDef directives and suffixes", () => {
-    const diagram = parseMermaid({
+  it("preserves class-based node colors from classDef directives and suffixes", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         flowchart TD
         classDef danger fill:#ffdddd,stroke:#ff0000,color:#330000
@@ -94,8 +94,8 @@ describe("parseMermaid", () => {
     expect(diagram.warnings).toEqual([]);
   });
 
-  it("preserves rgb and rgba values in classDef directives", () => {
-    const diagram = parseMermaid({
+  it("preserves rgb and rgba values in classDef directives", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         flowchart TD
         classDef themed fill:rgb(230, 240, 255),stroke:rgba(25, 113, 194, 0.8),color:rgb(10, 20, 30)
@@ -123,8 +123,8 @@ describe("parseMermaid", () => {
     ]);
   });
 
-  it("applies class assignments declared separately from node definitions", () => {
-    const diagram = parseMermaid({
+  it("applies class assignments declared separately from node definitions", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         flowchart TD
         A[Start] --> B[Finish]
@@ -153,8 +153,8 @@ describe("parseMermaid", () => {
     ]);
   });
 
-  it("supports alt frames with else sections", () => {
-    const diagram = parseMermaid({
+  it("supports alt frames with else sections", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         sequenceDiagram
         A->>B: Try
@@ -186,21 +186,20 @@ describe("parseMermaid", () => {
     ]);
   });
 
-  it("rejects unsupported sequence constructs explicitly", () => {
-    expect(() =>
+  it("rejects invalid sequence syntax explicitly", () => {
+    return expect(
       parseMermaid({
         mermaid: `
           sequenceDiagram
-          box Group
-            A->>B: Message
-          end
+          A->>B: fine
+          this is not valid mermaid
         `,
       }),
-    ).toThrow(/unsupported_construct/);
+    ).rejects.toThrow(/parse_error/);
   });
 
-  it("supports the full sequence message arrow set", () => {
-    const diagram = parseMermaid({
+  it("supports the full sequence message arrow set", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         sequenceDiagram
         A->>B: filled
@@ -230,8 +229,8 @@ describe("parseMermaid", () => {
     ]);
   });
 
-  it("supports par, critical, and break frames with actors", () => {
-    const diagram = parseMermaid({
+  it("supports par, critical, and break frames with actors", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         sequenceDiagram
         actor U as User
@@ -272,8 +271,8 @@ describe("parseMermaid", () => {
     ]);
   });
 
-  it("supports semicolon-separated statements and chained edges", () => {
-    const diagram = parseMermaid({
+  it("supports semicolon-separated statements and chained edges", async () => {
+    const diagram = await parseMermaid({
       sourceName: "chain.mermaid",
       mermaid: `
         flowchart TD
@@ -295,8 +294,8 @@ describe("parseMermaid", () => {
     ]);
   });
 
-  it("supports branch targets with ampersands across chained edges", () => {
-    const diagram = parseMermaid({
+  it("supports branch targets with ampersands across chained edges", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         flowchart TD
         A[Start] --> B{Check} & C(Retry) --> D((Done))
@@ -317,8 +316,8 @@ describe("parseMermaid", () => {
     ]);
   });
 
-  it("supports subgraphs and quoted multiline labels", () => {
-    const diagram = parseMermaid({
+  it("supports subgraphs and quoted multiline labels", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         graph TB
           subgraph "Product Write Path"
@@ -345,8 +344,8 @@ write use case"]
     ]);
   });
 
-  it("supports alternate quoted edge-label syntax", () => {
-    const diagram = parseMermaid({
+  it("supports alternate quoted edge-label syntax", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         graph TD
         A["Shadow mode live
@@ -366,8 +365,8 @@ write use case"]
     ]);
   });
 
-  it("supports dotted directed edges", () => {
-    const diagram = parseMermaid({
+  it("supports dotted directed edges", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         graph TD
         A[Start] -.->|eventual| B[Later]
@@ -384,8 +383,8 @@ write use case"]
     ]);
   });
 
-  it("converts literal escaped newline sequences into multiline labels", () => {
-    const diagram = parseMermaid({
+  it("converts literal escaped newline sequences into multiline labels", async () => {
+    const diagram = await parseMermaid({
       mermaid: String.raw`
         graph TD
         A["Line 1\nLine 2"] --> B["Other\nNode"]
@@ -398,8 +397,8 @@ write use case"]
     ]);
   });
 
-  it("parses a narrow stateDiagram-v2 slice with notes", () => {
-    const diagram = parseMermaid({
+  it("parses a narrow stateDiagram-v2 slice with notes", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         stateDiagram-v2
         [*] --> LegacyOnly : start here
@@ -440,8 +439,8 @@ write use case"]
     expect(noteNode?.height).toBe(64);
   });
 
-  it("honors explicit state diagram direction declarations", () => {
-    const diagram = parseMermaid({
+  it("honors explicit state diagram direction declarations", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         stateDiagram-v2
         direction LR
@@ -453,8 +452,8 @@ write use case"]
     expect(diagram.direction).toBe("LR");
   });
 
-  it("parses a gantt slice with quarter headers and month-aligned task starts", () => {
-    const diagram = parseMermaid({
+  it("parses a gantt slice with quarter headers and month-aligned task starts", async () => {
+    const diagram = await parseMermaid({
       sourceName: "delivery-plan-gantt.mermaid",
       mermaid: `
         gantt
@@ -484,8 +483,8 @@ write use case"]
     expect(secondBar).toMatchObject({ x: 328, width: 104, height: 22, shape: "rounded-rectangle" });
   });
 
-  it("parses named yearly periods when gantt uses YYYY-QQ input", () => {
-    const diagram = parseMermaid({
+  it("parses named yearly periods when gantt uses YYYY-QQ input", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         gantt
         title Seasonal rollout
@@ -506,8 +505,8 @@ write use case"]
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d2")).toMatchObject({ x: 408, width: 104 });
   });
 
-  it("parses month-based gantt input", () => {
-    const diagram = parseMermaid({
+  it("parses month-based gantt input", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         gantt
         title Monthly rollout
@@ -529,8 +528,8 @@ write use case"]
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d2")).toMatchObject({ x: 528, width: 104 });
   });
 
-  it("parses day-based gantt input", () => {
-    const diagram = parseMermaid({
+  it("parses day-based gantt input", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         gantt
         title Daily rollout
@@ -553,8 +552,8 @@ write use case"]
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d2")).toMatchObject({ x: 648, width: 104 });
   });
 
-  it("accepts zero-day milestones and month durations in day-based gantt input", () => {
-    const diagram = parseMermaid({
+  it("accepts zero-day milestones and month durations in day-based gantt input", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         gantt
         title Daily rollout with milestone
@@ -576,8 +575,8 @@ write use case"]
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")!.width).toBeGreaterThan(10000);
   });
 
-  it("parses a supported xychart-beta bar chart into explicit layout nodes", () => {
-    const diagram = parseMermaid({
+  it("parses a supported xychart-beta bar chart into explicit layout nodes", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         xychart-beta
         title "Monthly Revenue"
@@ -625,8 +624,8 @@ write use case"]
     ]);
   });
 
-  it("parses a supported mixed xychart-beta into explicit bar and line primitives", () => {
-    const diagram = parseMermaid({
+  it("parses a supported mixed xychart-beta into explicit bar and line primitives", async () => {
+    const diagram = await parseMermaid({
       sourceName: "sales-trend.mermaid",
       mermaid: `
         xychart-beta
@@ -686,8 +685,8 @@ write use case"]
     });
   });
 
-  it("supports quoted x-axis category labels containing arrows", () => {
-    const diagram = parseMermaid({
+  it("supports quoted x-axis category labels containing arrows", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         xychart-beta
         x-axis ["A --> B", "B --> C"]
@@ -702,8 +701,8 @@ write use case"]
     ]);
   });
 
-  it("rejects unsupported xychart-beta header modifiers explicitly", () => {
-    expect(() =>
+  it("rejects unsupported xychart-beta header modifiers explicitly", async () => {
+    await expect(
       parseMermaid({
         mermaid: `
           xychart-beta horizontal
@@ -712,11 +711,11 @@ write use case"]
           bar [1, 2]
         `,
       }),
-    ).toThrow(/unsupported_construct/);
+    ).rejects.toThrow(/unsupported_construct/);
   });
 
-  it("rejects numeric x-axis ranges for xychart-beta explicitly", () => {
-    expect(() =>
+  it("rejects numeric x-axis ranges for xychart-beta explicitly", async () => {
+    await expect(
       parseMermaid({
         mermaid: `
           xychart-beta
@@ -725,11 +724,11 @@ write use case"]
           bar [10, 20, 30, 40]
         `,
       }),
-    ).toThrow(/unsupported_construct/);
+    ).rejects.toThrow(/unsupported_construct/);
   });
 
-  it("rejects malformed xychart-beta series lengths explicitly", () => {
-    expect(() =>
+  it("rejects malformed xychart-beta series lengths explicitly", async () => {
+    await expect(
       parseMermaid({
         mermaid: `
           xychart-beta
@@ -738,11 +737,11 @@ write use case"]
           bar [10, 20]
         `,
       }),
-    ).toThrow(/parse_error/);
+    ).rejects.toThrow(/parse_error/);
   });
 
-  it("parses grouped xychart-beta bar series into separate bar primitives", () => {
-    const diagram = parseMermaid({
+  it("parses grouped xychart-beta bar series into separate bar primitives", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         xychart-beta
         title "Judge Phase Impact"
@@ -766,8 +765,8 @@ write use case"]
     });
   });
 
-  it("parses line-only xychart-beta charts with multiple series", () => {
-    const diagram = parseMermaid({
+  it("parses line-only xychart-beta charts with multiple series", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         xychart-beta
         x-axis ["10K", "100K", "1M"]
@@ -789,8 +788,8 @@ write use case"]
     });
   });
 
-  it("rejects xychart-beta diagrams without any bar or line series explicitly", () => {
-    expect(() =>
+  it("rejects xychart-beta diagrams without any bar or line series explicitly", async () => {
+    await expect(
       parseMermaid({
         mermaid: `
           xychart-beta
@@ -798,11 +797,11 @@ write use case"]
           y-axis 0 --> 100
         `,
       }),
-    ).toThrow(/requires at least one bar or line series/);
+    ).rejects.toThrow(/requires at least one bar or line series/);
   });
 
-  it("parses sequence participants, messages, self-messages, and notes", () => {
-    const diagram = parseMermaid({
+  it("parses sequence participants, messages, self-messages, and notes", async () => {
+    const diagram = await parseMermaid({
       sourceName: "catalogue-publication-sequence.mermaid",
       mermaid: `
         sequenceDiagram
@@ -858,28 +857,21 @@ write use case"]
     expect(diagram.sequenceFrames).toEqual([]);
   });
 
-  it("keeps semicolons inside sequence note text", () => {
-    const diagram = parseMermaid({
-      mermaid: `
-        sequenceDiagram
-        participant MCI as Merchant Catalogue Intake
-        participant AC as api-catalogue
-        Note over MCI,AC: Ownership mode determines routing: legacy_batch → EP7 bridge still; api_canonical → this path
-      `,
-    });
-
-    expect(diagram.sequenceNotes).toEqual([
-      {
-        order: 0,
-        participantIds: ["MCI", "AC"],
-        label: "Ownership mode determines routing: legacy_batch → EP7 bridge still; api_canonical → this path",
-        placement: "over",
-      },
-    ]);
+  it("rejects semicolons inside sequence note text like stock mermaid", async () => {
+    await expect(
+      parseMermaid({
+        mermaid: `
+          sequenceDiagram
+          participant MCI as Merchant Catalogue Intake
+          participant AC as api-catalogue
+          Note over MCI,AC: Ownership mode determines routing: legacy_batch → EP7 bridge still; api_canonical → this path
+        `,
+      }),
+    ).rejects.toThrow(/parse_error/);
   });
 
-  it("parses explicit activation and deactivation bars", () => {
-    const diagram = parseMermaid({
+  it("parses explicit activation and deactivation bars", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         sequenceDiagram
         participant A as API
@@ -925,8 +917,8 @@ write use case"]
     ]);
   });
 
-  it("rejects deactivate without matching activate", () => {
-    expect(() =>
+  it("rejects deactivate without matching activate", async () => {
+    await expect(
       parseMermaid({
         mermaid: `
           sequenceDiagram
@@ -934,11 +926,11 @@ write use case"]
           deactivate A
         `,
       }),
-    ).toThrow(/deactivate without matching activate/);
+    ).rejects.toThrow(/deactivate without matching activate|inactivate an inactive/);
   });
 
-  it("parses opt and loop sequence control frames", () => {
-    const diagram = parseMermaid({
+  it("parses opt and loop sequence control frames", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         sequenceDiagram
         participant A as API
@@ -973,8 +965,8 @@ write use case"]
     ]);
   });
 
-  it("ignores sequence rect wrappers and keeps inner messages", () => {
-    const diagram = parseMermaid({
+  it("ignores sequence rect wrappers and keeps inner messages", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         sequenceDiagram
         participant A as API

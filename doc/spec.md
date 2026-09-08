@@ -14,7 +14,7 @@ For the current implementation status by Mermaid diagram family and by flowchart
 
 - Mermaid input as inline text or resource content
 - `flowchart` / `graph` diagrams
-- `sequenceDiagram` support for participants and actors, the full message arrow set, self-messages, notes, explicit activation bars, and `opt` / `loop` / `alt` / `par` / `critical` / `break` control frames
+- `sequenceDiagram` support parsed through Mermaid's own sequence parser: participants and actors, boxes, autonumbering, the full message arrow set, inline activation, self-messages, notes, and `opt` / `loop` / `alt` / `par` / `critical` / `break` control frames
 - initial `stateDiagram-v2` / `stateDiagram` support for transitions, start/end markers, and right-of notes
 - initial `gantt` support for quarter-based delivery-plan timelines (`dateFormat YYYY-QQ`, sections, and explicit task bars)
 - initial `xychart-beta` support for optional `title`, categorical `x-axis`, ranged `y-axis`, and one or more `bar` and/or `line` series
@@ -188,7 +188,7 @@ Use a containerized runtime combining:
 
 ### Version 2
 
-- richer sequence diagram support (participant boxes, autonumbering, create/destroy, and mermaid-computed layout)
+- richer sequence diagram support (mermaid-computed layout geometry, `rect` backgrounds, create/destroy markers)
 - Better styles and themes
 - Richer layout
 - Confluence-specific embedding improvements

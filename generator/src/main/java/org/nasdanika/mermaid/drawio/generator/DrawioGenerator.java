@@ -59,6 +59,8 @@ public class DrawioGenerator {
     private static final int SEQUENCE_FRAME_TAB_HEIGHT = 20;
     private static final int SEQUENCE_FRAME_BOTTOM_OFFSET = 36;
     private static final int SEQUENCE_FRAME_INNER_VERTICAL_OFFSET = 22;
+    private static final int SEQUENCE_BOX_MARGIN = 15;
+    private static final int SEQUENCE_NUMBER_BADGE_SIZE = 14;
 
     private record Bounds(int x, int y, int width, int height) {
     }
@@ -197,6 +199,9 @@ public class DrawioGenerator {
                 SEQUENCE_EVENT_START + Math.max(1, maxOrder + 1) * SEQUENCE_ROW_SPACING + SEQUENCE_BOTTOM_PADDING;
 
         Map<String, SequenceFrame> participantFrames = createSequenceParticipants(layer, participants, participantHeight);
+        for (IntermediateSequenceBox box : diagram.sequenceBoxes() == null ? List.<IntermediateSequenceBox>of() : diagram.sequenceBoxes()) {
+            createSequenceBox(layer, box, participantFrames);
+        }
         for (IntermediateSequenceFrame frame : frames) {
             createSequenceFrame(layer, frame, participantFrames);
         }
@@ -263,6 +268,43 @@ public class DrawioGenerator {
         }
 
         return frames;
+    }
+
+    private void createSequenceBox(
+            Layer<?> layer,
+            IntermediateSequenceBox box,
+            Map<String, SequenceFrame> participantFrames) {
+        if (box.participantIds() == null || box.participantIds().isEmpty()) {
+            return;
+        }
+
+        List<SequenceFrame> frames = box.participantIds().stream()
+                .map(participantFrames::get)
+                .filter(Objects::nonNull)
+                .toList();
+        if (frames.isEmpty()) {
+            return;
+        }
+
+        int minX = frames.stream().mapToInt(SequenceFrame::x).min().orElse(SEQUENCE_LEFT);
+        int maxX = frames.stream().mapToInt(frame -> frame.x() + frame.width()).max().orElse(minX);
+
+        Node boxNode = layer.createNode();
+        boxNode.setProperty("id", "sequence-box-" + box.participantIds().get(0));
+        boxNode.setLabel(box.label() == null || box.label().isBlank() ? null : formatLabel(box.label()));
+        NodeStyle style = boxNode.getStyle();
+        style.shape("rectangle");
+        style.verticalAlign("top");
+        if (box.fillColor() != null && !box.fillColor().isBlank()) {
+            style.backgroundColor(box.fillColor());
+        }
+        boxNode.style("whiteSpace", "wrap");
+        boxNode.style("spacingTop", "4");
+        boxNode.getGeometry().setBounds(
+                minX - SEQUENCE_BOX_MARGIN,
+                SEQUENCE_TOP - SEQUENCE_BOX_MARGIN,
+                (maxX - minX) + 2 * SEQUENCE_BOX_MARGIN,
+                SEQUENCE_HEADER_SIZE + 2 * SEQUENCE_BOX_MARGIN);
     }
 
     private void createSequenceFrame(
@@ -401,8 +443,20 @@ public class DrawioGenerator {
         int minX = frames.stream().mapToInt(SequenceFrame::x).min().orElse(SEQUENCE_LEFT);
         int maxX = frames.stream().mapToInt(frame -> frame.x() + frame.width()).max().orElse(minX);
         int noteY = computeSequenceEventY(note.order());
-        int noteX = minX - SEQUENCE_NOTE_MARGIN;
-        int noteWidth = (maxX - minX) + 2 * SEQUENCE_NOTE_MARGIN;
+
+        int noteX;
+        int noteWidth;
+        if (("leftOf".equals(note.placement()) || "rightOf".equals(note.placement()))
+                && frames.size() == 1) {
+            SequenceFrame anchor = frames.get(0);
+            noteWidth = Math.max(100, computeParticipantWidth(note.label()) - 20);
+            noteX = "leftOf".equals(note.placement())
+                    ? anchor.centerX() - SEQUENCE_NOTE_MARGIN - noteWidth
+                    : anchor.centerX() + SEQUENCE_NOTE_MARGIN;
+        } else {
+            noteX = minX - SEQUENCE_NOTE_MARGIN;
+            noteWidth = (maxX - minX) + 2 * SEQUENCE_NOTE_MARGIN;
+        }
 
         Node noteNode = layer.createNode();
         noteNode.setProperty("id", "sequence-note-" + note.order());
@@ -431,6 +485,13 @@ public class DrawioGenerator {
         int absoluteY = computeSequenceEventY(message.order());
         if (sourceFrame.index() == targetFrame.index()) {
             createSelfSequenceMessage(layer, sourceFrame, message, absoluteY, participantHeight);
+            if (message.number() != null) {
+                createSequenceNumberBadge(
+                        layer,
+                        message,
+                        sourceFrame.x() + sourceFrame.width() + SEQUENCE_SELF_LOOP_WIDTH,
+                        absoluteY);
+            }
             return;
         }
 
@@ -441,6 +502,38 @@ public class DrawioGenerator {
         connection.setLabel(message.label());
         configureSequenceMessageStyle(connection, message.kind());
         connection.getPoints().add((sourceFrame.centerX() + targetFrame.centerX()) / 2.0, absoluteY);
+        if (message.number() != null) {
+            createSequenceNumberBadge(
+                    layer,
+                    message,
+                    (sourceFrame.centerX() + targetFrame.centerX()) / 2,
+                    absoluteY);
+        }
+    }
+
+    private void createSequenceNumberBadge(
+            Layer<?> layer,
+            IntermediateSequenceMessage message,
+            int centerX,
+            int absoluteY) {
+        Node badge = layer.createNode();
+        badge.setProperty("id", "sequence-number-" + message.order());
+        badge.setLabel(Integer.toString(message.number()));
+        NodeStyle style = badge.getStyle();
+        style.shape("ellipse");
+        style.backgroundColor("#000000");
+        style.color("#000000");
+        style.fontColor("#FFFFFF");
+        style.align("center");
+        style.verticalAlign("middle");
+        badge.style("aspect", "fixed");
+        badge.style("whiteSpace", "wrap");
+        int half = SEQUENCE_NUMBER_BADGE_SIZE / 2;
+        badge.getGeometry().setBounds(
+                centerX - half,
+                absoluteY - SEQUENCE_NUMBER_BADGE_SIZE + 2,
+                SEQUENCE_NUMBER_BADGE_SIZE,
+                SEQUENCE_NUMBER_BADGE_SIZE);
     }
 
     private void createSelfSequenceMessage(

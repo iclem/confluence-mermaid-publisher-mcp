@@ -564,6 +564,45 @@ class DrawioGeneratorTest {
         assertEquals("Cached", divider.getLabel());
     }
 
+    @Test
+    void generatesSequenceBoxesNotesAndNumberBadges() throws Exception {
+        IntermediateDiagram diagram = new IntermediateDiagram(
+                "SequenceBoxes",
+                "sequence",
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(
+                        new IntermediateSequenceParticipant("A", "API"),
+                        new IntermediateSequenceParticipant("B", "Worker"),
+                        new IntermediateSequenceParticipant("C", "Audit")),
+                List.of(
+                        new IntermediateSequenceMessage(0, "A", "B", "One", "solid", 1),
+                        new IntermediateSequenceMessage(1, "B", "A", "Two", "dotted", 2)),
+                List.of(new IntermediateSequenceNote(2, List.of("C"), "Side note", "leftOf")),
+                List.of(),
+                List.of(),
+                List.of(new IntermediateSequenceBox("Backend", "rgb(230,240,255)", List.of("B", "C"))),
+                List.of());
+
+        String xml = new DrawioGenerator().generate(diagram);
+        assertTrue(xml.contains("sequence-box-B"));
+        assertTrue(xml.contains("Backend"));
+        assertTrue(xml.contains("rgb(230,240,255)"));
+        assertTrue(xml.contains("sequence-number-0"));
+        assertTrue(xml.contains("sequence-number-1"));
+
+        Document document = Document.load(xml, null);
+        Layer<?> layer = document.getPages().get(0).getModel().getRoot().getLayers().get(0);
+
+        Node note = findNode(layer, "sequence-note-2");
+        Node audit = findNode(layer, "C");
+        double noteRight = note.getGeometry().getX() + note.getGeometry().getWidth();
+        double auditCenter = audit.getGeometry().getX() + audit.getGeometry().getWidth() / 2;
+        assertTrue(noteRight < auditCenter);
+    }
+
     private Node findNode(Layer<?> layer, String id) {
         return layer.getElements().stream()
                 .filter(Node.class::isInstance)

@@ -35,7 +35,7 @@ Source of Mermaid diagram-type list:
 | Radar | `radar-beta` | `not-started` | No parser or mapping yet. |
 | Requirement diagram | `requirementDiagram` | `not-started` | No parser or mapping yet. |
 | Sankey | `sankey-beta` | `not-started` | No parser or mapping yet. |
-| Sequence diagram | `sequenceDiagram` | `partial` | Supports participants and actors, the full message arrow set, self-messages, `Note over`, explicit activation bars, and `opt` / `loop` / `alt` / `par` / `critical` / `break` control frames with section dividers; participant boxes, autonumbering, and create/destroy are still missing. |
+| Sequence diagram | `sequenceDiagram` | `partial` | Parsed through Mermaid's own sequence parser, so syntax support matches stock draw.io: participants, actors, boxes, autonumbering, the full message arrow set, inline `->>+` activation, activation bars, `Note over/left of/right of`, and `opt` / `loop` / `alt` / `par` / `critical` / `break` frames with section dividers. Layout still uses the converter's own grid (not Mermaid's measured geometry); `create` / `destroy` and `rect` are ignored with warnings. |
 | State diagram | `stateDiagram-v2`, `stateDiagram` | `partial` | Supports a narrow v1 slice: transitions, start/end markers, explicit direction (`TD`, `TB`, `LR`, `RL`), and right/left-of notes rendered through the flowchart generator path. |
 | Timeline | `timeline` | `not-started` | No parser or mapping yet. |
 | Tree view | `treeView-beta` | `not-started` | No parser or mapping yet. |
@@ -109,10 +109,12 @@ The current implementation is intentionally narrow. It is usable for simple proc
 | `par` / `and` frames | `par Task ... and ... end` | `supported` | Rendered as a `umlFrame` with dashed section dividers. |
 | `critical` / `option` frames | `critical ... option ... end` | `supported` | Rendered as a `umlFrame` with dashed section dividers. |
 | `break` frames | `break Abort ... end` | `supported` | Rendered as a `umlFrame` with a label tab. |
+| Participant boxes | `box rgb(...) Group ... end` | `supported` | Rendered as a labeled background box around the grouped participants, matching stock draw.io Mermaid import. |
+| Autonumbering | `autonumber` | `supported` | Rendered as numbered badges on messages; `autonumber off`, custom starts, and steps are honored. |
 | `rect` grouping wrappers | `rect rgb(...) ... end` | `partial` | Wrapper is ignored with a warning so inner sequence content can still convert. |
-| Participant boxes | `box Group ... end` | `not-started` | Explicitly rejected today. |
-| Autonumbering | `autonumber` | `not-started` | Explicitly rejected today. |
-| Create / destroy semantics | `create participant A` | `not-started` | Explicitly rejected today. |
+| Notes left/right of a participant | `Note left of A: text` | `supported` | Rendered beside the lifeline. |
+| Inline activation | `A->>+B: msg` | `supported` | Parsed through Mermaid's sequence DB, rendered as activation bars. |
+| Create / destroy semantics | `create participant A` | `partial` | Accepted (parsed by Mermaid); created participants render as regular participants, destroy markers are ignored with a warning. |
 
 ## State diagram feature coverage
 
