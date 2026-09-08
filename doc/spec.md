@@ -16,8 +16,8 @@ For the current implementation status by Mermaid diagram family and by flowchart
 - `flowchart` / `graph` diagrams
 - `sequenceDiagram` support parsed through Mermaid's own sequence parser: participants and actors, boxes, autonumbering, the full message arrow set, inline activation, self-messages, notes, and `opt` / `loop` / `alt` / `par` / `critical` / `break` control frames
 - initial `stateDiagram-v2` / `stateDiagram` support for transitions, start/end markers, and right-of notes
-- initial `gantt` support for quarter-based delivery-plan timelines (`dateFormat YYYY-QQ`, sections, and explicit task bars)
-- initial `xychart-beta` support for optional `title`, categorical `x-axis`, ranged `y-axis`, and one or more `bar` and/or `line` series
+- `gantt` support parsed by Mermaid's own gantt parser (any `dateFormat`, `after` references, durations, sections, task tags, milestones) with converter-owned month/day column layout
+- `xychart-beta` support parsed by Mermaid's own xychart parser for optional `title`, categorical `x-axis`, optional ranged `y-axis`, and one or more `bar` and/or `line` series, with converter-owned explicit layout
 - Conversion to a single `.drawio` document
 - One page per Mermaid diagram
 - One default layer per page

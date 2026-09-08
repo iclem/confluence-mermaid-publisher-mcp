@@ -24,7 +24,7 @@ Source of Mermaid diagram-type list:
 | C4 | `C4Context`, `C4Container`, `C4Component`, `C4Dynamic`, `C4Deployment` | `not-started` | No parser or mapping yet. |
 | Class diagram | `classDiagram` | `not-started` | Out of current v1 scope. |
 | Entity relationship diagram | `erDiagram` | `not-started` | Out of current v1 scope. |
-| Gantt | `gantt` | `partial` | Supports a narrow explicit-layout slice used by the delivery-plan sample: `title`, `dateFormat` (`YYYY-QQ`, `YYYY-MM`, `YYYY-MM-DD`), `axisFormat`, `section`, and task rows with explicit starts plus limited duration/reference metadata. |
+| Gantt | `gantt` | `partial` | Parsed with Mermaid's own gantt parser (full syntax coverage: any `dateFormat`, `after` references, durations, task tags, milestones), then laid out with the converter's explicit month/day column layout. |
 | Git graph | `gitGraph` | `not-started` | No parser or mapping yet. |
 | Ishikawa / Fishbone | `ishikawa-beta` | `not-started` | No parser or mapping yet. |
 | Kanban | `kanban` | `not-started` | No parser or mapping yet. |
@@ -43,7 +43,7 @@ Source of Mermaid diagram-type list:
 | User journey | `journey` | `not-started` | Out of current v1 scope. |
 | Venn | `venn` | `not-started` | No parser or mapping yet. |
 | Wardley map | `wardley` | `not-started` | No parser or mapping yet. |
-| XY chart | `xychart-beta` | `partial` | Supports a constrained explicit-layout subset: optional `title`, categorical `x-axis`, ranged `y-axis`, and one or more `bar` and/or `line` series; horizontal charts, numeric x-axis ranges, legends, and Mermaid theming remain unsupported. |
+| XY chart | `xychart-beta` | `partial` | Parsed with Mermaid's own xychart parser and laid out with the converter's explicit layout: optional `title`, categorical `x-axis`, optional ranged `y-axis` (auto-derived from data when omitted), and one or more `bar` and/or `line` series; horizontal charts, numeric x-axis ranges, legends, and Mermaid theming remain unsupported. |
 | ZenUML | `zenuml` | `not-planned` | Mermaid treats this as an integration surface rather than a core target for this converter. |
 
 ## Flowchart feature coverage
@@ -139,15 +139,15 @@ The current implementation is intentionally narrow. It is usable for simple proc
 | --- | --- | --- | --- |
 | Gantt header | `gantt` | `supported` | Dispatches to the gantt parser/generator path. |
 | Chart title | `title Delivery plan` | `supported` | Rendered as a top text node. |
-| Date formats | `dateFormat YYYY-QQ`, `YYYY-MM`, `YYYY-MM-DD` | `supported` | `YYYY-QQ` accepts quarter-like labels such as `Q1` or `S1`; the current delivery-plan sample also uses month-aligned starts under quarter headers. |
-| Axis format directive | `axisFormat %Y Q%q` | `partial` | Accepted and preserved as a warning today; explicit axis-format rendering is not implemented yet. |
+| Date formats | `dateFormat YYYY-MM-DD`, `YYYY-MM`, `YYYY-MM-DD HH:mm`, ... | `supported` | Parsed by Mermaid's gantt parser, so every Mermaid `dateFormat` is accepted. Charts whose format carries months but no day/time tokens render month columns; everything else renders day columns. |
+| Axis format directive | `axisFormat %Y-%m` | `partial` | Accepted and preserved as a warning today; explicit axis-format rendering is not implemented yet. |
 | Sections | `section api-catalogue` | `supported` | Rendered as grey band rows. |
-| Explicit task ids | `Task :task1, ...` | `supported` | Preserved for `after` / `until` references. |
-| Explicit start + duration | `Task :id, 2026-01, 2M` | `supported` | Supported for quarter/month/day timelines with limited unit sets. |
-| Explicit start + end | `Task :id, 2026-01-01, 2026-01-04` | `supported` | End dates are treated as inclusive Mermaid-style bounds. |
-| `after` references | `Task :id, after other, 1q` | `supported` | Uses the latest referenced task end as the next start. |
-| `until` references | `Task :id, 2026-01, until other` | `supported` | Stops at the referenced task start. |
-| Duration units | `1q`, `2M`, `3d`, `1w` | `partial` | `q` for quarter-style timelines, `M` for month and day timelines, and `d` / `w` for day timelines are supported; broader Mermaid duration coverage is still missing. |
+| Explicit task ids | `Task :task1, ...` | `supported` | Preserved for `after` references. |
+| Explicit start + duration | `Task :id, 2026-01, 2M` | `supported` | Resolved by Mermaid for any supported `dateFormat`. |
+| Explicit start + end | `Task :id, 2026-01-01, 2026-01-04` | `supported` | End dates are treated as exclusive Mermaid-style bounds. |
+| `after` references | `Task :id, after other, 1w` | `supported` | Resolved by Mermaid (uses the latest referenced task end). |
+| Tasks without ids or sections | `Task : 2026-01-01, 2d` | `supported` | Mermaid-generated ids; tasks before any `section` land in a default `Tasks` band. |
+| Duration units | `1h`, `3d`, `1w`, `2M` | `supported` | Resolved by Mermaid's gantt parser. |
 | Task tags | `crit`, `done`, `active`, `milestone` | `partial` | Tags drive bar colors and milestone shape, but Mermaid's richer gantt styling/config is still missing. |
 | Milestones | `milestone` task tag | `supported` | Rendered as ellipse markers. |
 | Excludes / weekends | `excludes weekends` | `not-started` | Calendar-aware exclusion logic is not implemented. |
@@ -161,7 +161,7 @@ The current implementation is intentionally narrow. It is usable for simple proc
 | XY chart header | `xychart-beta` | `supported` | Dispatches to the xychart parser path and emits explicit-layout nodes and edges. |
 | Chart title | `title Cost by phase` | `supported` | Rendered as a top text node. |
 | Categorical x-axis | `x-axis "Phase" [prep, judge, scale]` | `supported` | Optional quoted axis label plus categorical bands are supported. |
-| Ranged y-axis | `y-axis "Cost" 0 --> 100` | `supported` | Optional quoted axis label plus numeric `min --> max` range drive linear scaling and readable ticks. |
+| Ranged y-axis | `y-axis "Cost" 0 --> 100` | `supported` | Optional quoted axis label plus numeric `min --> max` range drive linear scaling and readable ticks; when omitted, the range is derived from the data. |
 | Bar series | `bar [10, 20, 30]` | `supported` | One or more bar series are rendered as grouped rounded-rectangle columns. |
 | Line series | `line [10, 20, 30]` | `supported` | One or more line series are rendered as point markers connected by plain edges. |
 | Mixed bar + line charts | repeated `bar` and `line` directives | `supported` | Mixed charts convert through the same explicit-layout synthesis path. |

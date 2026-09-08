@@ -83,7 +83,7 @@ grep -q "state-note-1" "${TMP_DIR}/state-rollout.drawio"
 "${ROOT_DIR}/scripts/convert.sh" "${GANTT_FIXTURE}" "${TMP_DIR}/delivery-plan-gantt.drawio" >/dev/null
 grep -q "EDA Migration" "${TMP_DIR}/delivery-plan-gantt.drawio"
 grep -q "gantt-task-bar-p1e1" "${TMP_DIR}/delivery-plan-gantt.drawio"
-grep -q "2026 Q1" "${TMP_DIR}/delivery-plan-gantt.drawio"
+grep -q "2026-01" "${TMP_DIR}/delivery-plan-gantt.drawio"
 
 "${ROOT_DIR}/scripts/convert.sh" "${XYCHART_COST_FIXTURE}" "${TMP_DIR}/cost-estimation-classify-embedding-p50.drawio" >/dev/null
 grep -q "Cost per 1,000 Products - Classify + Embedding, P50 (USD)" "${TMP_DIR}/cost-estimation-classify-embedding-p50.drawio"

@@ -483,57 +483,73 @@ write use case"]
     expect(diagram.direction).toBe("LR");
   });
 
-  it("parses a gantt slice with quarter headers and month-aligned task starts", async () => {
+  it("parses a gantt slice with month headers and month-aligned task starts", async () => {
     const diagram = await parseMermaid({
       sourceName: "delivery-plan-gantt.mermaid",
       mermaid: `
         gantt
         title EDA Migration - Multi-Team Swim Lanes
-        dateFormat YYYY-QQ
-        axisFormat %Y Q%q
+        dateFormat YYYY-MM
+        axisFormat %Y-%m
         section api-catalogue
-        EP1 Mutation Contract :p1e1, 2026-01, 1q
-        EP2 Transactional Outbox :p1e2, 2026-02, 1q
+        EP1 Mutation Contract :p1e1, 2026-01, 1M
+        EP2 Transactional Outbox :p1e2, 2026-02, 1M
       `,
     });
 
     expect(diagram.diagramType).toBe("gantt");
     expect(diagram.pageName).toBe("EDA Migration - Multi-Team Swim Lanes");
     expect(diagram.edges).toEqual([]);
-    expect(diagram.warnings).toContain('ignored_gantt_directive: "axisFormat %Y Q%q"');
+    expect(diagram.warnings).toContain('ignored_gantt_directive: "axisFormat %Y-%m"');
 
-    const quarterLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-quarter-"));
-    expect(quarterLabels.map(stripLayout)).toEqual([
-      { id: "gantt-quarter-0", label: "2026 Q1", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-1", label: "2026 Q2", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-period-"));
+    expect(periodLabels.map(stripLayout)).toEqual([
+      { id: "gantt-period-0", label: "2026-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-1", label: "2026-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
     ]);
 
     const firstBar = diagram.nodes.find((node) => node.id === "gantt-task-bar-p1e1");
     const secondBar = diagram.nodes.find((node) => node.id === "gantt-task-bar-p1e2");
     expect(firstBar).toMatchObject({ x: 288, width: 104, height: 22, shape: "rounded-rectangle" });
-    expect(secondBar).toMatchObject({ x: 328, width: 104, height: 22, shape: "rounded-rectangle" });
+    expect(secondBar).toMatchObject({ x: 408, width: 104, height: 22, shape: "rounded-rectangle" });
   });
 
-  it("parses named yearly periods when gantt uses YYYY-QQ input", async () => {
+  it("parses datetime gantt input with after references and generated task ids", async () => {
     const diagram = await parseMermaid({
       mermaid: `
         gantt
-        title Seasonal rollout
-        dateFormat YYYY-QQ
-        section Delivery
-        Discovery :d1, 2026-S1, 1q
-        Rollout :d2, 2026-S2, 1q
+        dateFormat YYYY-MM-DD HH:mm
+        section Build
+        Compile :c1, 2026-01-01 08:00, 4h
+        Test :after c1, 2h
+        Deploy :d2, 2026-01-02 00:00, 1d
       `,
     });
 
-    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-quarter-"));
-    expect(periodLabels.map(stripLayout)).toEqual([
-      { id: "gantt-quarter-0", label: "2026 S1", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-1", label: "2026 S2", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-    ]);
+    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-period-"));
+    expect(periodLabels.map((node) => node.label)).toEqual(["2026-01-01", "2026-01-02"]);
 
-    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")).toMatchObject({ x: 288, width: 104 });
+    expect(diagram.nodes.find((node) => node.id === "gantt-section-1")).toMatchObject({ label: "Build" });
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-c1")).toMatchObject({ x: 328, width: 24 });
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-task1")).toBeDefined();
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d2")).toMatchObject({ x: 408, width: 104 });
+  });
+
+  it("maps gantt task tags to bar colors", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        gantt
+        dateFormat YYYY-MM-DD
+        section Delivery
+        Done task :done, d1, 2026-01-01, 1d
+        Crit task :crit, c1, 2026-01-02, 1d
+        Active task :active, a1, 2026-01-03, 1d
+      `,
+    });
+
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")).toMatchObject({ fillColor: "#e0e0e0" });
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-c1")).toMatchObject({ fillColor: "#f8cecc" });
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-a1")).toMatchObject({ fillColor: "#d5e8d4" });
   });
 
   it("parses month-based gantt input", async () => {
@@ -548,11 +564,11 @@ write use case"]
       `,
     });
 
-    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-quarter-"));
+    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-period-"));
     expect(periodLabels.map(stripLayout)).toEqual([
-      { id: "gantt-quarter-0", label: "2026-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-1", label: "2026-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-2", label: "2026-03", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-0", label: "2026-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-1", label: "2026-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-2", label: "2026-03", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
     ]);
 
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")).toMatchObject({ x: 288, width: 224 });
@@ -571,12 +587,12 @@ write use case"]
       `,
     });
 
-    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-quarter-"));
+    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-period-"));
     expect(periodLabels.map(stripLayout)).toEqual([
-      { id: "gantt-quarter-0", label: "2026-01-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-1", label: "2026-01-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-2", label: "2026-01-03", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-3", label: "2026-01-04", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-0", label: "2026-01-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-1", label: "2026-01-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-2", label: "2026-01-03", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-3", label: "2026-01-04", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
     ]);
 
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")).toMatchObject({ x: 288, width: 344 });
@@ -829,6 +845,20 @@ write use case"]
         `,
       }),
     ).rejects.toThrow(/requires at least one bar or line series/);
+  });
+
+  it("derives the y-axis range from the data when no y-axis directive is present", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        xychart-beta
+        x-axis [Jan, Feb]
+        bar [2, 4]
+      `,
+    });
+
+    expect(diagram.diagramType).toBe("xychart");
+    expect(diagram.nodes.filter((node) => node.id.startsWith("xychart-bar-"))).toHaveLength(2);
+    expect(diagram.nodes.filter((node) => node.id.startsWith("xychart-y-tick-")).length).toBeGreaterThan(0);
   });
 
   it("parses sequence participants, messages, self-messages, and notes", async () => {
