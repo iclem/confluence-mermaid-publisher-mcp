@@ -800,4 +800,47 @@ class DrawioGeneratorTest {
         assertTrue(xml.contains("x=\"420.0\""), xml);
     }
 
+    @Test
+    void clampsEdgeTerminalConstraintsIntoNodeBounds() throws Exception {
+        // Dagre routes cylinder edges to a padded routing box far outside the
+        // drawn shape; the emitted exit/entry ratios must stay within the
+        // node's bbox band or draw.io projects the terminal past the node
+        // (triangle spike artifacts on published pages).
+        IntermediateDiagram diagram = new IntermediateDiagram(
+                "Clamped",
+                "flowchart",
+                "LR",
+                List.of(
+                        new IntermediateNode("A", "A", "cylinder", null, null, null, 100, 100, 200, 80),
+                        new IntermediateNode("B", "B", "rectangle", null, null, null, 500, 400, 150, 50)),
+                List.of(new IntermediateEdge(
+                        "A",
+                        "B",
+                        null,
+                        "directed",
+                        List.of(
+                                new IntermediatePoint(100, -300), // far above the source bbox
+                                new IntermediatePoint(350, 200),
+                                new IntermediatePoint(500, 425)))),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of());
+
+        String xml = new DrawioGenerator().generate(diagram);
+
+        assertTrue(xml.contains("exitX=0"), xml);
+        assertTrue(xml.contains("exitY=0"), xml);
+        // The polyline's terminal end is outside the source bbox (dagre padded
+        // routing box), so the edge must be curved — a straight terminal
+        // segment would be computed back toward the first waypoint and render
+        // as a triangle spike.
+        assertTrue(xml.contains("curved=1"), xml);
+        assertFalse(xml.contains("sourcePoint"), xml);
+        assertFalse(xml.contains("targetPoint"), xml);
+    }
+
 }

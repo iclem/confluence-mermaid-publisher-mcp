@@ -29,9 +29,10 @@ function assertFlowchartRoutesAnchorOnNodes(
     const target = byId.get(edge.targetId)!;
     const start = points[0];
     const end = points[points.length - 1];
-    // Polylines anchor on their endpoint nodes' bounding boxes. Cylinders are
-    // exempt: dagre routes to the (much larger) padded shape outline, not the
-    // visible box, by up to ~600px in the fixture diagram.
+    // Polylines anchor on their endpoint nodes' bounding boxes. Dagre routes
+    // cylinder edges to a padded outline that can sit well outside the
+    // visible box, so cylinder terminals are projected onto the bbox in the
+    // generator instead of asserted here.
     if (source.shape !== "cylinder") {
       expect(start.x).toBeGreaterThanOrEqual(source.x! - tolerance);
       expect(start.x).toBeLessThanOrEqual(source.x! + source.width! + tolerance);

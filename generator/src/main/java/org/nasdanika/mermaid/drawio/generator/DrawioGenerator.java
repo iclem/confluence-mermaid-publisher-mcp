@@ -986,27 +986,56 @@ public class DrawioGenerator {
 
         // Stock draw.io mermaid import style: perimeter-relative exit/entry
         // constraints plus interior waypoints only — never absolute
-        // source/target points. Absolute endpoints on shapes whose dagre
-        // routing box is larger than the drawn box (e.g. cylinders) would
-        // otherwise pull the rendered route into spikes.
+        // source/target points. Dagre routes to a padded routing box that can
+        // be much larger than the drawn shape (e.g. cylinders), so raw ratios
+        // far outside [0,1] would make draw.io project the terminal far past
+        // the node (triangle spikes); endpoints are clamped onto the actual
+        // node bbox perimeter band before computing ratios.
         IntermediatePoint sourcePoint = points.get(0);
         IntermediatePoint targetPoint = points.get(points.size() - 1);
         if (sourceBounds != null && sourceBounds.width() > 0 && sourceBounds.height() > 0) {
-            double exitX = (sourcePoint.x() - sourceBounds.x()) / (double) sourceBounds.width();
-            double exitY = (sourcePoint.y() - sourceBounds.y()) / (double) sourceBounds.height();
-            connection.style("exitX", twoDecimals(exitX));
-            connection.style("exitY", twoDecimals(exitY));
+            IntermediatePoint clamped = clampToBounds(sourcePoint, sourceBounds);
+            connection.style("exitX", twoDecimals((clamped.x() - sourceBounds.x()) / (double) sourceBounds.width()));
+            connection.style("exitY", twoDecimals((clamped.y() - sourceBounds.y()) / (double) sourceBounds.height()));
+            if (isCurvedEdge(points, sourceBounds, true)) {
+                connection.style("curved", "1");
+            }
         }
         if (targetBounds != null && targetBounds.width() > 0 && targetBounds.height() > 0) {
-            double entryX = (targetPoint.x() - targetBounds.x()) / (double) targetBounds.width();
-            double entryY = (targetPoint.y() - targetBounds.y()) / (double) targetBounds.height();
-            connection.style("entryX", twoDecimals(entryX));
-            connection.style("entryY", twoDecimals(entryY));
+            IntermediatePoint clamped = clampToBounds(targetPoint, targetBounds);
+            connection.style("entryX", twoDecimals((clamped.x() - targetBounds.x()) / (double) targetBounds.width()));
+            connection.style("entryY", twoDecimals((clamped.y() - targetBounds.y()) / (double) targetBounds.height()));
+            if (isCurvedEdge(points, targetBounds, false)) {
+                connection.style("curved", "1");
+            }
         }
         for (int i = 1; i < points.size() - 1; i++) {
             IntermediatePoint point = points.get(i);
             connection.getPoints().add(point.x(), point.y());
         }
+    }
+
+    private static IntermediatePoint clampToBounds(IntermediatePoint point, Bounds bounds) {
+        int x = Math.max(bounds.x(), Math.min(bounds.x() + bounds.width(), point.x()));
+        int y = Math.max(bounds.y(), Math.min(bounds.y() + bounds.height(), point.y()));
+        return new IntermediatePoint(x, y);
+    }
+
+    /**
+     * Dagre routes to a padded routing box that can sit far outside the drawn
+     * node (e.g. cylinders). When the extracted polyline's terminal end is
+     * outside the node's bbox, the clamped exit/entry constraint points back
+     * toward the route (draw.io computes the terminal segment toward the first
+     * waypoint), which renders as a sharp return leg — a triangle spike. A
+     * curved connector instead passes through the waypoints and lands on the
+     * perimeter anchor with a smooth tangent.
+     */
+    private static boolean isCurvedEdge(List<IntermediatePoint> points, Bounds bounds, boolean sourceEnd) {
+        IntermediatePoint terminal = sourceEnd ? points.get(0) : points.get(points.size() - 1);
+        return terminal.x() < bounds.x()
+                || terminal.x() > bounds.x() + bounds.width()
+                || terminal.y() < bounds.y()
+                || terminal.y() > bounds.y() + bounds.height();
     }
 
     private static String twoDecimals(double value) {
@@ -1021,6 +1050,8 @@ public class DrawioGenerator {
     private void applyConnectionStyle(Connection connection, String kind, boolean hasExplicitRoute) {
         ConnectionStyle style = connection.getStyle();
         if (hasExplicitRoute) {
+            // curved=1 (set by the route step when dagre's terminal anchor
+            // falls outside the node bbox) overrides the straight segments
             style.remove("edgeStyle");
             style.rounded(false);
         } else {
