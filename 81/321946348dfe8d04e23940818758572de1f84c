@@ -1,0 +1,35 @@
+parser/src/svg-bbox.ts
+  s_4d6d6ff91d55ed::t_fecd6de9e463a6 209-213,222-246,275-276
+test-data/target-architecture-flowchart.mermaid
+  s_4d6d6ff91d55ed::t_f16f0d9209adcb 1-149
+parser/src/mermaid-geometry.ts
+  s_4d6d6ff91d55ed::t_fe85b64479bc50 447-451,459-460
+parser/src/index.test.ts
+  s_4d6d6ff91d55ed::t_041943de61b013 202-204
+  s_4d6d6ff91d55ed::t_9b071c4fc41f0c 15-19,23-25
+  s_4d6d6ff91d55ed::t_c64210346454ac 32-46,205
+  s_4d6d6ff91d55ed::t_913445ea639bae 174-182,184-198
+  s_4d6d6ff91d55ed::t_35a471a5304ab5 129-132
+  s_4d6d6ff91d55ed::t_88f8a933586f68 20,22,26-31,47-49
+  s_4d6d6ff91d55ed::t_7ab06972b43e65 149-169,171-173,183,206-207
+  s_4d6d6ff91d55ed::t_21f4f7d99b214d 170
+  s_4d6d6ff91d55ed::t_9aac8cf2cdcd5b 21
+  s_4d6d6ff91d55ed::t_14dbca041e7765 199
+  s_4d6d6ff91d55ed::t_1e09c3076dcc87 200-201
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "81321946348dfe8d04e23940818758572de1f84c",
+  "prompts": {},
+  "sessions": {
+    "s_4d6d6ff91d55ed": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "804c4182-424e-455c-838c-6670cb033318",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
