@@ -1,0 +1,24 @@
+generator/src/test/java/org/nasdanika/mermaid/drawio/generator/DrawioGeneratorTest.java
+  s_4d6d6ff91d55ed::t_dcdb939945fade 804,806-808,822-824,837-845,848-849
+scripts/test-e2e.sh
+  s_4d6d6ff91d55ed::t_86dd04f9d3d13e 17,150
+  s_4d6d6ff91d55ed::t_ea922550fd6ade 110-149
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/DrawioGenerator.java
+  s_4d6d6ff91d55ed::t_b1cb6a8d74d113 987-997,1000-1003,1014,1027-1032,1034-1057
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "642fec38642e6d1d18124f00a5e9e9f7e1d48f1e",
+  "prompts": {},
+  "sessions": {
+    "s_4d6d6ff91d55ed": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "804c4182-424e-455c-838c-6670cb033318",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
