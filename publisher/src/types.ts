@@ -1,6 +1,6 @@
 export type JsonObject = Record<string, unknown>;
 
-export const EMBEDDING_MODES = ["macropack", "drawio"] as const;
+export const EMBEDDING_MODES = ["macropack", "drawio", "svg"] as const;
 
 export type EmbeddingMode = (typeof EMBEDDING_MODES)[number];
 
@@ -30,6 +30,7 @@ export interface ConfluenceAttachment {
   title: string;
   mediaType?: string;
   fileId?: string;
+  comment?: string;
   version?: {
     number?: number;
   };

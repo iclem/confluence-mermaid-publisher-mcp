@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ConfluenceClient } from "./confluence-client.js";
-import { getDefaultEmbeddingMode } from "./embedding-mode.js";
+import { getDefaultEmbeddingMode, parseEmbeddingMode } from "./embedding-mode.js";
 import { DrawioPublisherService } from "./service.js";
 
 interface ParsedArgs {
@@ -16,7 +16,8 @@ interface ParsedArgs {
 export const CLI_USAGE =
   "Usage: cli.js <inspect-page|update-widget|create-widget|create-page-from-markdown|update-page-from-markdown> " +
   "--base-url <https://site.atlassian.net> " +
-  "[--bearer-token <token> | --email <email> --api-token <token>] ...";
+  "[--bearer-token <token> | --email <email> --api-token <token>] " +
+  "[--embedding-mode <drawio|macropack|svg>] ...";
 
 function parseArgs(argv: string[]): ParsedArgs {
   const [command, ...rest] = argv;
@@ -63,7 +64,7 @@ export function createService(options: Map<string, string>): DrawioPublisherServ
       apiToken,
     }),
     undefined,
-    getDefaultEmbeddingMode(),
+    parseEmbeddingMode(options.get("embedding-mode")) ?? getDefaultEmbeddingMode(),
   );
 }
 
