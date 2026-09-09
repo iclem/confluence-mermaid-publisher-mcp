@@ -110,3 +110,54 @@ describe("ConfluenceClient helpers", () => {
     ).toBe(10);
   });
 });
+
+describe("page width HTTP contract", () => {
+  it("creates missing draft and published properties", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ results: [] }))
+      .mockResolvedValueOnce(Response.json({ id: "draft" }))
+      .mockResolvedValueOnce(Response.json({ results: [] }))
+      .mockResolvedValueOnce(Response.json({ id: "published" }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const client = new ConfluenceClient({ baseUrl: "https://example.atlassian.net/wiki", bearerToken: "test" });
+      await client.setPageWidth("123", "full-width");
+      for (const [offset, key] of [[0, "content-appearance-draft"], [2, "content-appearance-published"]] as const) {
+        expect(fetchMock.mock.calls[offset]![0]).toBe(`https://example.atlassian.net/wiki/api/v2/pages/123/properties?key=${key}`);
+        const [url, init] = fetchMock.mock.calls[offset + 1]! as [string, RequestInit];
+        expect(url).toBe("https://example.atlassian.net/wiki/api/v2/pages/123/properties");
+        expect(init.method).toBe("POST");
+        expect(JSON.parse(init.body as string)).toEqual({ key, value: "full-width" });
+      }
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it("updates a changed property with its next version and skips an unchanged one", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ results: [{ id: "d1", value: "full-width", version: { number: 7 } }] }))
+      .mockResolvedValueOnce(Response.json({ id: "d1" }))
+      .mockResolvedValueOnce(Response.json({ results: [{ id: "p1", value: "default", version: { number: 3 } }] }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const client = new ConfluenceClient({ baseUrl: "https://example.atlassian.net/wiki", bearerToken: "test" });
+      await client.setPageWidth("123", "default");
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      const [url, init] = fetchMock.mock.calls[1]! as [string, RequestInit];
+      expect(url).toBe("https://example.atlassian.net/wiki/api/v2/pages/123/properties/d1");
+      expect(init.method).toBe("PUT");
+      expect(JSON.parse(init.body as string)).toEqual({ key: "content-appearance-draft", value: "default", version: { number: 8 } });
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it("surfaces property conflicts without retrying mutations", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ results: [] }))
+      .mockResolvedValueOnce(new Response("conflict", { status: 409 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const client = new ConfluenceClient({ baseUrl: "https://example.atlassian.net/wiki", bearerToken: "test" });
+      await expect(client.setPageWidth("123", "full-width")).rejects.toThrow("409");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally { vi.unstubAllGlobals(); }
+  });
+});

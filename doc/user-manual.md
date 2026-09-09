@@ -373,6 +373,14 @@ Use only one selector per update request.
 
 When `embeddingMode` is omitted, the server uses its configured default and falls back to `drawio` when no server default is set. Pass `embeddingMode` when you explicitly want to override that default for a specific tool call, or when selecting by `index` on a page that contains multiple embedding modes.
 
+## Markdown formatting and width
+
+The content and file-based Markdown tools share Atlassian's official Markdown-to-ADF conversion. Inline links, strike, emphasis and code marks are preserved, including inside headings, lists, quotes and tables. Mermaid fences are transformed in their original containers; top-level source uses an expandable block, while nested source remains a code block to respect ADF container rules. Raw HTML is literal text; local images and relative document links are not automatically uploaded or mapped.
+
+Use `pageWidth: "full-width"` or `pageWidth: "default"` on any Markdown create/update call. `default` means the centered column. The environment override is `CONFLUENCE_DEFAULT_PAGE_WIDTH`; new pages use call → environment → `full-width`. Existing pages retain their width when neither override is set. For CLI publication, use `--page-width full-width` or `--page-width default`.
+
+Page width uses the REST v2 page-property API for both `content-appearance-draft` and `content-appearance-published`. If changing properties fails after publishing, the error identifies the already-published page; inspect it before retrying creation. This API requires page-property write permission in addition to publishing access.
+
 ## Example prompts for agents
 
 - "Publish `/absolute/path/to/your-project/docs/domain-context-map.md` as a sibling of page `123456` using `create_confluence_page_from_markdown_file`."

@@ -60,6 +60,12 @@ function getEmbeddedDiagramNames(result: { embeddedDiagrams: EmbeddedDiagram[] }
 }
 
 class FakeConfluenceClient {
+  readonly widthChanges: Array<{ pageId: string; width: string }> = [];
+
+  async setPageWidth(pageId: string, width: string): Promise<void> {
+    this.widthChanges.push({ pageId, width });
+  }
+
   readonly uploadedFiles: Array<{ path: string; body: string }> = [];
   readonly attachmentMutations: Array<{ pageId: string; remoteFileName?: string }> = [];
   readonly pageUpdateMessages: string[] = [];
@@ -1250,5 +1256,87 @@ describe("SVG publishing", () => {
     await expect(service.createDiagramFromMermaid({ pageId, mermaid: "flowchart LR\nA-->B", embeddingMode: "svg" })).rejects.toThrow("Upload failed");
     expect(existsSync(path)).toBe(false);
     expect(client.pageUpdateMessages).toEqual([]);
+  });
+});
+
+describe("Markdown conversion and page width", () => {
+  it.each([false, true])("preserves marks and nested Mermaid on create and update (file=%s)", async (fromFile) => {
+    const { client } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never, undefined, "macropack");
+    const markdown = '# [Title](https://example.com)\n\n- ~~old~~\n  - **nested**\n\n  ```mermaid\n  flowchart LR\n  A-->B\n  ```\n\n| Name |\n| --- |\n| [link](https://example.com) |';
+    const directory = mkdtempSync(join(tmpdir(), "markdown-marks-"));
+    const markdownFile = join(directory, "source.md");
+    writeFileSync(markdownFile, markdown);
+    try {
+      const created = fromFile
+        ? await service.createPageFromMarkdownFile({ title: "New", spaceId: "space", markdownFile })
+        : await service.createPageFromMarkdown({ title: "New", spaceId: "space", markdown });
+      expect(created).toMatchObject({ mermaidBlocks: 1, embeddedBlocks: 1, fallbackBlocks: 0 });
+      expect(client.widthChanges).toEqual([{ pageId: created.page.id, width: "full-width" }]);
+      const updated = fromFile
+        ? await service.updatePageFromMarkdownFile({ pageId: created.page.id, markdownFile, pageWidth: "default" })
+        : await service.updatePageFromMarkdown({ pageId: created.page.id, markdown, pageWidth: "default" });
+      expect(updated.embeddedBlocks).toBe(1);
+      expect(client.widthChanges.at(-1)).toEqual({ pageId: created.page.id, width: "default" });
+      const adf = getStoredPageAdf(client);
+      const serialized = JSON.stringify(adf);
+      expect(serialized).toContain('"type":"link"');
+      expect(serialized).toContain('"type":"strike"');
+      expect(serialized).toContain('"type":"strong"');
+      const list = (adf.content as JsonObject[]).find((node) => node.type === "bulletList")!;
+      expect(findMacroPackExtensions(list)).toHaveLength(1);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it.each([
+    [undefined, undefined, "full-width", undefined],
+    ["default", undefined, "default", "default"],
+    ["full-width", "default", "default", "default"],
+    ["default", "full-width", "full-width", "full-width"],
+  ] as const)("resolves configured=%s call=%s on create/update", async (configured, pageWidth, createdWidth, updatedWidth) => {
+    const { client } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never, undefined, "drawio", configured);
+    const created = await service.createPageFromMarkdown({ title: "Width", spaceId: "space", markdown: "Text", pageWidth });
+    expect(client.widthChanges).toEqual([{ pageId: created.page.id, width: createdWidth }]);
+    client.widthChanges.length = 0;
+    await service.updatePageFromMarkdown({ pageId: created.page.id, markdown: "Updated", pageWidth });
+    expect(client.widthChanges).toEqual(updatedWidth ? [{ pageId: created.page.id, width: updatedWidth }] : []);
+  });
+
+  it("reports that content is published if setting width fails", async () => {
+    const { client, pageId } = createExistingWidgetFixture();
+    vi.spyOn(client, "setPageWidth").mockRejectedValue(new Error("permission denied"));
+    const service = new DrawioPublisherService(client as never);
+    await expect(service.updatePageFromMarkdown({ pageId, markdown: "Updated", pageWidth: "full-width" }))
+      .rejects.toThrow(`Page ${pageId} content was published, but setting page width failed`);
+    expect(client.pageUpdateMessages).toHaveLength(1);
+  });
+
+  it("rejects invalid width before creating a page", async () => {
+    const { client } = createExistingWidgetFixture();
+    const create = vi.spyOn(client, "createPage");
+    const service = new DrawioPublisherService(client as never);
+    await expect(service.createPageFromMarkdown({ title: "Bad", spaceId: "space", markdown: "Text", pageWidth: "wide" as never }))
+      .rejects.toThrow("Unsupported page width");
+    expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe("nested Mermaid ADF compatibility", () => {
+  it("keeps SVG source and failed diagrams inside their original containers", async () => {
+    const { client, pageId } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never);
+    const markdown = '> ```mermaid\n> flowchart LR\n> A-->B\n> ```\n\n- Item\n\n  ```mermaid\n  invalid diagram\n  ```';
+    const result = await service.updatePageFromMarkdown({ pageId, markdown, embeddingMode: "svg" });
+    expect(result).toMatchObject({ mermaidBlocks: 2, embeddedBlocks: 1, fallbackBlocks: 1 });
+    const adf = getStoredPageAdf(client);
+    const quote = (adf.content as JsonObject[]).find((node) => node.type === "blockquote")!;
+    expect((quote.content as JsonObject[]).map((node) => node.type)).toEqual(["mediaSingle", "codeBlock"]);
+    expect(JSON.stringify(adf)).not.toContain('"type":"expand"');
+    expect(JSON.stringify((adf.content as JsonObject[]).find((node) => node.type === "bulletList"))).toContain("invalid diagram");
+    const svg = result.embeddedDiagrams.find((diagram) => diagram.embeddingMode === "svg")!;
+    await service.updateDiagramFromMermaid({ pageId, mermaid: "flowchart LR\nA-->Changed", diagram: { localId: svg.localId } });
+    const updatedQuote = (getStoredPageAdf(client).content as JsonObject[]).find((node) => node.type === "blockquote")!;
+    expect(JSON.stringify(updatedQuote)).toContain("A-->Changed");
   });
 });

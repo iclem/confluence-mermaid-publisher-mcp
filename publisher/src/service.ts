@@ -22,6 +22,7 @@ import {
   selectDrawioExtension,
   updateDrawioExtensionMetadata,
 } from "./drawio.js";
+import { DEFAULT_PAGE_WIDTH, parsePageWidth, type PageWidth } from "./page-width.js";
 import { DEFAULT_EMBEDDING_MODE } from "./embedding-mode.js";
 import { buildSvgMedia, findSvgDiagrams, renderAdaptiveSvg, selectSvgDiagram, svgFileName, SVG_ATTACHMENT_COMMENT } from "./svg.js";
 import {
@@ -31,15 +32,10 @@ import {
   updateMacroPackExtensionSource,
 } from "./macropack.js";
 import {
-  buildBlockquoteNode,
-  buildBulletListNode,
   buildCodeBlockNode,
   buildExpandNode,
-  buildHeadingNode,
-  buildOrderedListNode,
   buildParagraphNode,
-  buildTableNode,
-  parseMarkdown,
+  markdownToAdf,
 } from "./markdown.js";
 import type {
   ConfluenceAttachment,
@@ -121,6 +117,7 @@ export class DrawioPublisherService {
     private readonly client: ConfluenceClient,
     private readonly mermaidConverter: (mermaid: string, diagramName: string) => Promise<ConvertedArtifacts> = convertMermaidToArtifacts,
     private readonly defaultEmbeddingMode: EmbeddingMode = DEFAULT_EMBEDDING_MODE,
+    private readonly defaultPageWidth?: PageWidth,
   ) {}
 
   private resolveEmbeddingMode(override?: EmbeddingMode): EmbeddingMode {
@@ -565,19 +562,18 @@ export class DrawioPublisherService {
     sourceName?: string;
     spaceKey?: string;
     embeddingMode?: EmbeddingMode;
+    pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     const source = args.sourceName ?? "markdown.md";
     const page = args.page;
     const embeddingMode = this.resolveEmbeddingMode(args.embeddingMode);
-    const blocks = parseMarkdown(args.markdown);
+    const adfDocument = markdownToAdf(args.markdown);
     const existingSvgNames = embeddingMode === "svg"
       ? new Set(findSvgDiagrams(
         parseAtlasDocFormat(page.body?.atlas_doc_format?.value ?? { type: "doc", version: 1, content: [] }),
         await this.client.listPageAttachments(page.id),
       ).map((diagram) => diagram.diagramName))
       : new Set<string>();
-    const adfDocument: JsonObject = { type: "doc", version: 1, content: [] };
-    const content = adfDocument.content as unknown[];
     const baseDiagramName = page.title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
@@ -586,100 +582,83 @@ export class DrawioPublisherService {
     let embeddedBlocks = 0;
     let fallbackBlocks = 0;
 
-    for (const block of blocks) {
-      if (block.type === "heading") {
-        content.push(buildHeadingNode(block.level, block.text));
-        continue;
-      }
-      if (block.type === "paragraph") {
-        content.push(buildParagraphNode(block.text));
-        continue;
-      }
-      if (block.type === "blockquote") {
-        content.push(buildBlockquoteNode(block.text));
-        continue;
-      }
-      if (block.type === "bulletList") {
-        content.push(buildBulletListNode(block.items));
-        continue;
-      }
-      if (block.type === "orderedList") {
-        content.push(buildOrderedListNode(block.items, block.start));
-        continue;
-      }
-      if (block.type === "table") {
-        content.push(buildTableNode(block.header, block.rows));
-        continue;
-      }
-      if (block.type === "rule") {
-        content.push({ type: "rule" });
-        continue;
-      }
-      if (block.type === "code") {
-        content.push(buildCodeBlockNode(block.text, block.language));
-        continue;
-      }
-
-      mermaidBlocks += 1;
-      try {
-        if (embeddingMode === "svg") {
-          const filename = `${baseDiagramName}-${String(mermaidBlocks).padStart(2, "0")}.svg`;
-          if (!existingSvgNames.has(filename) && (await this.client.listPageAttachments(page.id, filename)).length) {
-            throw new Error(`Attachment ${filename} already exists and is not a managed Mermaid SVG`);
-          }
-          content.push(await this.createSvgImage(page.id, block.text, filename));
-          content.push(buildExpandNode("Original Mermaid source", [buildCodeBlockNode(block.text, "mermaid")]));
-          embeddedBlocks += 1;
+    const replaceMermaid = async (nodes: JsonObject[], topLevel = false): Promise<JsonObject[]> => {
+      const content: JsonObject[] = [];
+      for (const node of nodes) {
+        const attrs = node.attrs as JsonObject | undefined;
+        if (node.type !== "codeBlock" || attrs?.language !== "mermaid") {
+          if (Array.isArray(node.content)) node.content = await replaceMermaid(node.content as JsonObject[]);
+          content.push(node);
           continue;
         }
-        if (embeddingMode === "macropack") {
-          content.push(buildMacroPackExtensionNode({
-            pageId: page.id,
-            spaceId: page.spaceId,
-            spaceKey: args.spaceKey,
-            mermaid: block.text,
-          }));
-          embeddedBlocks += 1;
-          continue;
-        }
-
-        const draftName = `${baseDiagramName}-${String(mermaidBlocks).padStart(2, "0")}.drawio`;
-        const artifacts = await this.mermaidConverter(block.text, draftName);
+        const block = { text: (node.content as JsonObject[] | undefined)?.map((child) => child.text ?? "").join("") ?? "" };
+        mermaidBlocks += 1;
         try {
-          // Include a content hash in the diagram name: the draw.io app caches
-          // rendered content per page+name, so unchanged diagrams keep their
-          // name (and caches) while edited diagrams get fresh names that every
-          // cache layer picks up.
-          const contentHash = createHash("sha1")
-            .update(readFileSync(artifacts.drawioPath))
-            .digest("hex")
-            .slice(0, 8);
-          const diagramName = draftName.replace(/\.drawio$/, `-${contentHash}.drawio`);
-          const extensionNode = await this.createExtensionForArtifacts({
-            page,
-            pageId: page.id,
-            drawioPath: artifacts.drawioPath,
-            previewPath: artifacts.previewPath,
-            diagramName,
-            spaceKey: args.spaceKey,
-          });
-          content.push(extensionNode);
-          content.push(buildExpandNode("Original Mermaid source", [buildCodeBlockNode(block.text, "mermaid")]));
-          embeddedBlocks += 1;
-        } finally {
-          await artifacts.cleanup();
+          if (embeddingMode === "svg") {
+            const filename = `${baseDiagramName}-${String(mermaidBlocks).padStart(2, "0")}.svg`;
+            if (!existingSvgNames.has(filename) && (await this.client.listPageAttachments(page.id, filename)).length) {
+              throw new Error(`Attachment ${filename} already exists and is not a managed Mermaid SVG`);
+            }
+            content.push(await this.createSvgImage(page.id, block.text, filename));
+            // Expand nodes are only valid at document level; nested source stays a code block.
+            const sourceBlock = buildCodeBlockNode(block.text, "mermaid");
+            content.push(topLevel ? buildExpandNode("Original Mermaid source", [sourceBlock]) : sourceBlock);
+            embeddedBlocks += 1;
+            continue;
+          }
+          if (embeddingMode === "macropack") {
+            content.push(buildMacroPackExtensionNode({
+              pageId: page.id,
+              spaceId: page.spaceId,
+              spaceKey: args.spaceKey,
+              mermaid: block.text,
+            }));
+            embeddedBlocks += 1;
+            continue;
+          }
+
+          const draftName = `${baseDiagramName}-${String(mermaidBlocks).padStart(2, "0")}.drawio`;
+          const artifacts = await this.mermaidConverter(block.text, draftName);
+          try {
+            // Include a content hash in the diagram name: the draw.io app caches
+            // rendered content per page+name, so unchanged diagrams keep their
+            // name (and caches) while edited diagrams get fresh names that every
+            // cache layer picks up.
+            const contentHash = createHash("sha1")
+              .update(readFileSync(artifacts.drawioPath))
+              .digest("hex")
+              .slice(0, 8);
+            const diagramName = draftName.replace(/\.drawio$/, `-${contentHash}.drawio`);
+            const extensionNode = await this.createExtensionForArtifacts({
+              page,
+              pageId: page.id,
+              drawioPath: artifacts.drawioPath,
+              previewPath: artifacts.previewPath,
+              diagramName,
+              spaceKey: args.spaceKey,
+            });
+            content.push(extensionNode);
+            // Expand nodes are only valid at document level; nested source stays a code block.
+            const sourceBlock = buildCodeBlockNode(block.text, "mermaid");
+            content.push(topLevel ? buildExpandNode("Original Mermaid source", [sourceBlock]) : sourceBlock);
+            embeddedBlocks += 1;
+          } finally {
+            await artifacts.cleanup();
+          }
+        } catch (error) {
+          fallbackBlocks += 1;
+          const message = error instanceof Error ? error.message : String(error);
+          content.push(
+            buildParagraphNode(
+              `Mermaid block ${mermaidBlocks} could not be converted automatically: ${message}`,
+            ),
+          );
+          content.push(buildCodeBlockNode(block.text, "mermaid"));
         }
-      } catch (error) {
-        fallbackBlocks += 1;
-        const message = error instanceof Error ? error.message : String(error);
-        content.push(
-          buildParagraphNode(
-            `Mermaid block ${mermaidBlocks} could not be converted automatically: ${message}`,
-          ),
-        );
-        content.push(buildCodeBlockNode(block.text, "mermaid"));
       }
-    }
+      return content;
+    };
+    adfDocument.content = await replaceMermaid(adfDocument.content as JsonObject[], true);
 
     const latestPage = await this.client.getPage(page.id, "atlas_doc_format", false);
     const updatedPage = await this.client.updatePageAdf(
@@ -688,6 +667,13 @@ export class DrawioPublisherService {
       `Publish ${source}`,
       "current",
     );
+    if (args.pageWidth) {
+      try {
+        await this.client.setPageWidth(page.id, args.pageWidth);
+      } catch (error) {
+        throw new Error(`Page ${page.id} content was published, but setting page width failed`, { cause: error });
+      }
+    }
     const inspect = await this.inspectPage(page.id);
 
     return {
@@ -710,8 +696,10 @@ export class DrawioPublisherService {
     siblingPageId?: string;
     spaceKey?: string;
     embeddingMode?: EmbeddingMode;
+    pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     const source = args.sourceName ?? "markdown.md";
+    const pageWidth = parsePageWidth(args.pageWidth) ?? this.defaultPageWidth ?? DEFAULT_PAGE_WIDTH;
     const siblingPage =
       args.siblingPageId ? await this.client.getPage(args.siblingPageId, "atlas_doc_format", false) : undefined;
     const spaceId = args.spaceId ?? siblingPage?.spaceId;
@@ -732,6 +720,7 @@ export class DrawioPublisherService {
       sourceName: source,
       spaceKey: args.spaceKey,
       embeddingMode: args.embeddingMode,
+      pageWidth,
     });
   }
 
@@ -744,6 +733,7 @@ export class DrawioPublisherService {
     siblingPageId?: string;
     spaceKey?: string;
     embeddingMode?: EmbeddingMode;
+    pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     const markdownFile = resolve(args.markdownFile);
     const markdown = await readFile(markdownFile, "utf8");
@@ -756,6 +746,7 @@ export class DrawioPublisherService {
       siblingPageId: args.siblingPageId,
       spaceKey: args.spaceKey,
       embeddingMode: args.embeddingMode,
+      pageWidth: args.pageWidth,
     });
   }
 
@@ -765,7 +756,9 @@ export class DrawioPublisherService {
     sourceName?: string;
     spaceKey?: string;
     embeddingMode?: EmbeddingMode;
+    pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
+    const pageWidth = parsePageWidth(args.pageWidth) ?? this.defaultPageWidth;
     const page = await this.client.getPage(args.pageId, "atlas_doc_format", false);
     return this.publishMarkdownToPage({
       page,
@@ -773,6 +766,7 @@ export class DrawioPublisherService {
       sourceName: args.sourceName,
       spaceKey: args.spaceKey,
       embeddingMode: args.embeddingMode,
+      pageWidth,
     });
   }
 
@@ -782,6 +776,7 @@ export class DrawioPublisherService {
     sourceName?: string;
     spaceKey?: string;
     embeddingMode?: EmbeddingMode;
+    pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     const markdownFile = resolve(args.markdownFile);
     const markdown = await readFile(markdownFile, "utf8");
@@ -791,6 +786,7 @@ export class DrawioPublisherService {
       sourceName: args.sourceName ?? basename(markdownFile),
       spaceKey: args.spaceKey,
       embeddingMode: args.embeddingMode,
+      pageWidth: args.pageWidth,
     });
   }
 }

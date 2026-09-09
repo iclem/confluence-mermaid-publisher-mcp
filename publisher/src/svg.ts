@@ -112,7 +112,7 @@ export function findSvgDiagrams(adf: JsonObject, attachments: ConfluenceAttachme
         const expandAttrs = nextSibling?.attrs as JsonObject | undefined;
         const sourceBlock = nextSibling?.type === "expand" && expandAttrs?.title === "Original Mermaid source" && Array.isArray(nextSibling.content)
           ? (nextSibling.content as JsonObject[]).find((item) => item.type === "codeBlock" && (item.attrs as JsonObject | undefined)?.language === "mermaid")
-          : undefined;
+          : nextSibling?.type === "codeBlock" && expandAttrs?.language === "mermaid" ? nextSibling : undefined;
         results.push({ node, attachment, localId: attachment.id, diagramName: attachment.title,
           sourceBlock,
           width: typeof attrs.width === "number" ? attrs.width : undefined,

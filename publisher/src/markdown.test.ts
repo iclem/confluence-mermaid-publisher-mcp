@@ -1,131 +1,40 @@
 import { describe, expect, it } from "vitest";
+import { markdownToAdf } from "./markdown.js";
+import type { JsonObject } from "./types.js";
 
-import {
-  buildBlockquoteNode,
-  buildBulletListNode,
-  buildCodeBlockNode,
-  buildExpandNode,
-  buildHeadingNode,
-  buildOrderedListNode,
-  buildParagraphNode,
-  buildTableNode,
-  parseMarkdown,
-} from "./markdown.js";
+function flatten(node: JsonObject): JsonObject[] {
+  return [node, ...(node.content as JsonObject[] ?? []).flatMap(flatten)];
+}
 
-describe("markdown publication helpers", () => {
-  it("parses markdown into headings, paragraphs, quotes, lists, tables, rules, code, and mermaid blocks", () => {
-    const blocks = parseMarkdown(`# Title
+describe("official Markdown to ADF conversion", () => {
+  it("preserves inline marks and link destinations across containers", () => {
+    const inline = '[**link**](https://example.com/a_(b)) ~~obsolete~~ *italic* `code`';
+    const nodes = flatten(markdownToAdf(`# ${inline}\n\n${inline}\n\n> ${inline}\n\n- ${inline}\n\n| Content |\n| --- |\n| ${inline} |`));
+    expect(nodes.filter((node) => node.text === "link")).toHaveLength(5);
+    for (const node of nodes.filter((node) => node.text === "link")) {
+      expect(node.marks).toEqual(expect.arrayContaining([{ type: "strong" }, { type: "link", attrs: { href: "https://example.com/a_(b)" } }]));
+    }
+    for (const [text, type] of [["obsolete", "strike"], ["italic", "em"], ["code", "code"]]) {
+      const matching = nodes.filter((node) => node.text === text);
+      expect(matching).toHaveLength(5);
+      for (const node of matching) expect(node.marks).toContainEqual({ type });
+    }
+  });
 
-Intro paragraph.
-
-> Quoted
-> text
-
-- First
-- Second
-
-1. Start
-   with details
-2. Continue
-
-| Team | Work stream |
-| --- | --- |
-| api-catalogue | EP1 |
-| lengow-core | EP3 |
-
----
-
-\`\`\`mermaid
-flowchart TD
-A --> B
-\`\`\`
-
-\`\`\`ts
-const value = 1;
-\`\`\`
-`);
-
-    expect(blocks).toEqual([
-      { type: "heading", level: 1, text: "Title" },
-      { type: "paragraph", text: "Intro paragraph." },
-      { type: "blockquote", text: "Quoted text" },
-      { type: "bulletList", items: ["First", "Second"] },
-      { type: "orderedList", items: ["Start with details", "Continue"], start: 1 },
-      { type: "table", header: ["Team", "Work stream"], rows: [["api-catalogue", "EP1"], ["lengow-core", "EP3"]] },
-      { type: "rule" },
-      { type: "mermaid", text: "flowchart TD\nA --> B" },
-      { type: "code", language: "ts", text: "const value = 1;" },
+  it("preserves nested lists, references, code fences and literal code content", () => {
+    const adf = markdownToAdf('- Parent\n  - [child][ref]\n\n[ref]: https://example.com\n\n~~~mermaid\nflowchart LR\nA-->B\n~~~\n\n```text\n~~literal~~ [link](url)\n```');
+    const nodes = flatten(adf);
+    expect(nodes.filter((node) => node.type === "bulletList")).toHaveLength(2);
+    expect(nodes.find((node) => node.text === "child")?.marks).toContainEqual({ type: "link", attrs: { href: "https://example.com" } });
+    expect(nodes.filter((node) => node.type === "codeBlock")).toEqual([
+      { type: "codeBlock", attrs: { language: "mermaid" }, content: [{ type: "text", text: "flowchart LR\nA-->B" }] },
+      { type: "codeBlock", attrs: { language: "text" }, content: [{ type: "text", text: "~~literal~~ [link](url)" }] },
     ]);
   });
 
-  it("builds ADF nodes for the supported markdown block types", () => {
-    expect(buildHeadingNode(2, "**Title**")).toEqual({
-      type: "heading",
-      attrs: { level: 2 },
-      content: [{ type: "text", text: "Title" }],
-    });
-    expect(buildParagraphNode("Hello `world`")).toEqual({
-      type: "paragraph",
-      content: [{ type: "text", text: "Hello world" }],
-    });
-    expect(buildBlockquoteNode("Quoted `text`")).toEqual({
-      type: "blockquote",
-      content: [{ type: "paragraph", content: [{ type: "text", text: "Quoted text" }] }],
-    });
-    expect(buildExpandNode("Original Mermaid source", [buildCodeBlockNode("flowchart TD", "mermaid")])).toEqual({
-      type: "expand",
-      attrs: { title: "Original Mermaid source" },
-      content: [
-        {
-          type: "codeBlock",
-          attrs: { language: "mermaid" },
-          content: [{ type: "text", text: "flowchart TD" }],
-        },
-      ],
-    });
-    expect(buildBulletListNode(["One", "Two"])).toEqual({
-      type: "bulletList",
-      content: [
-        { type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: "One" }] }] },
-        { type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: "Two" }] }] },
-      ],
-    });
-    expect(buildOrderedListNode(["One", "Two"], 3)).toEqual({
-      type: "orderedList",
-      attrs: { order: 3 },
-      content: [
-        { type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: "One" }] }] },
-        { type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: "Two" }] }] },
-      ],
-    });
-    expect(buildTableNode(["Team", "Work stream"], [["api-catalogue", "EP1"]])).toEqual({
-      type: "table",
-      attrs: {
-        isNumberColumnEnabled: false,
-        layout: "align-start",
-        displayMode: "default",
-      },
-      content: [
-        {
-          type: "tableRow",
-          content: [
-            { type: "tableHeader", attrs: {}, content: [{ type: "paragraph", content: [{ type: "text", text: "Team" }] }] },
-            { type: "tableHeader", attrs: {}, content: [{ type: "paragraph", content: [{ type: "text", text: "Work stream" }] }] },
-          ],
-        },
-        {
-          type: "tableRow",
-          content: [
-            { type: "tableCell", attrs: {}, content: [{ type: "paragraph", content: [{ type: "text", text: "api-catalogue" }] }] },
-            { type: "tableCell", attrs: {}, content: [{ type: "paragraph", content: [{ type: "text", text: "EP1" }] }] },
-          ],
-        },
-      ],
-    });
-    expect(buildCodeBlockNode("flowchart TD", "mermaid")).toEqual({
-      type: "codeBlock",
-      attrs: { language: "mermaid" },
-      content: [{ type: "text", text: "flowchart TD" }],
-    });
+  it("does not create active links for unsafe URI schemes or interpret HTML", () => {
+    const nodes = flatten(markdownToAdf('[bad](javascript:alert%281%29)\n\n<script>alert(1)</script>'));
+    expect(nodes.flatMap((node) => node.marks as JsonObject[] ?? []).filter((mark) => mark.type === "link")).toEqual([]);
+    expect(nodes.some((node) => node.type === "text" && String(node.text).includes("<script>"))).toBe(true);
   });
 });

@@ -1,3 +1,4 @@
+import { getConfiguredPageWidth, PAGE_WIDTHS } from "./page-width.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
@@ -59,6 +60,7 @@ export function createPublisherService(): DrawioPublisherService {
     }),
     undefined,
     defaultEmbeddingMode,
+    getConfiguredPageWidth(),
   );
 }
 
@@ -83,6 +85,7 @@ export function createMcpServer(): McpServer {
   const embeddingModeSchema = z.enum(EMBEDDING_MODES).optional().describe(
     `Optional Mermaid embedding mode override. ${embeddingModeGuidance}`,
   );
+  const pageWidthSchema = z.enum(PAGE_WIDTHS).optional().describe("Page width: full-width or default (centered column). Overrides CONFLUENCE_DEFAULT_PAGE_WIDTH. New pages default to full-width; updates preserve width when neither is set.");
   const defaultEmbeddingModeToolGuidance =
     "Omit embeddingMode to use the server default. Only set it when the user explicitly requests a non-default mode.";
 
@@ -149,8 +152,9 @@ export function createMcpServer(): McpServer {
       siblingPageId: z.string().optional().describe("Optional existing page ID whose parent should be reused for the new sibling page."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
       embeddingMode: embeddingModeSchema,
+      pageWidth: pageWidthSchema,
     },
-    async ({ title, markdown, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode }) => {
+    async ({ title, markdown, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode, pageWidth }) => {
       const service = createPublisherService();
       return textResult(
         await service.createPageFromMarkdown({
@@ -162,6 +166,7 @@ export function createMcpServer(): McpServer {
           siblingPageId,
           spaceKey,
           embeddingMode,
+          pageWidth,
         }),
       );
     },
@@ -179,8 +184,9 @@ export function createMcpServer(): McpServer {
       siblingPageId: z.string().optional().describe("Optional existing page ID whose parent should be reused for the new sibling page."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
       embeddingMode: embeddingModeSchema,
+      pageWidth: pageWidthSchema,
     },
-    async ({ title, markdownFile, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode }) => {
+    async ({ title, markdownFile, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode, pageWidth }) => {
       const service = createPublisherService();
       return textResult(await withMarkdownFileHint(
         markdownFile,
@@ -193,6 +199,7 @@ export function createMcpServer(): McpServer {
           siblingPageId,
           spaceKey,
           embeddingMode,
+          pageWidth,
         }),
       ));
     },
@@ -207,8 +214,9 @@ export function createMcpServer(): McpServer {
       sourceName: z.string().optional().describe("Optional source file name used in publication metadata."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
       embeddingMode: embeddingModeSchema,
+      pageWidth: pageWidthSchema,
     },
-    async ({ pageId, markdown, sourceName, spaceKey, embeddingMode }) => {
+    async ({ pageId, markdown, sourceName, spaceKey, embeddingMode, pageWidth }) => {
       const service = createPublisherService();
       return textResult(
         await service.updatePageFromMarkdown({
@@ -217,6 +225,7 @@ export function createMcpServer(): McpServer {
           sourceName,
           spaceKey,
           embeddingMode,
+          pageWidth,
         }),
       );
     },
@@ -231,8 +240,9 @@ export function createMcpServer(): McpServer {
       sourceName: z.string().optional().describe("Optional source file name used in publication metadata."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
       embeddingMode: embeddingModeSchema,
+      pageWidth: pageWidthSchema,
     },
-    async ({ pageId, markdownFile, sourceName, spaceKey, embeddingMode }) => {
+    async ({ pageId, markdownFile, sourceName, spaceKey, embeddingMode, pageWidth }) => {
       const service = createPublisherService();
       return textResult(await withMarkdownFileHint(
         markdownFile,
@@ -242,6 +252,7 @@ export function createMcpServer(): McpServer {
           sourceName,
           spaceKey,
           embeddingMode,
+          pageWidth,
         }),
       ));
     },

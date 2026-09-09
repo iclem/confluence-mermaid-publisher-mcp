@@ -12,6 +12,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@atlaskit/editor-json-transformer": "9.8.0",
+    "@atlaskit/editor-markdown-transformer": "6.3.0",
     "@modelcontextprotocol/sdk": "^1.17.5",
     "@xmldom/xmldom": "0.9.12",
     "agentic-mermaid": "0.4.1",
