@@ -1,0 +1,114 @@
+publisher/src/mcp-app.ts
+  s_937f088dcdfe88::t_9ef8a2b34b57ac 84,109,268,270
+  s_b062a00f41a5ae::t_d8131f2b9dc981 1,63,157,169,189,202,219,228,245,255
+  s_b062a00f41a5ae::t_e133033718d330 88,155,187,217,243
+publisher/package.json
+  s_937f088dcdfe88::t_60790a7e0638bd 18
+  s_937f088dcdfe88::t_bddf583f49bafe 19
+  s_b062a00f41a5ae::t_fa6c8009dcd710 15-16
+doc/quick-start.md
+  s_b062a00f41a5ae::t_6e872b04d133b6 7,112,152
+README.md
+  s_937f088dcdfe88::t_bfba9284dacca7 42-60
+  s_937f088dcdfe88::t_bdf91961680f48 3,13,18,106
+  s_937f088dcdfe88::t_efd2ef3ddc51ef 41,61
+  s_b062a00f41a5ae::t_2cdaac3cf8deb1 23-40
+publisher/src/fixtures/svg-gallery.json
+  s_937f088dcdfe88::t_bfb6a0ce271e8b 1-26
+publisher/src/embedding-mode.ts
+  s_937f088dcdfe88::t_498e67b4fc66f1 3
+build/docker-compose/docker-compose-local.yml
+  s_937f088dcdfe88::t_0eae6f98b5dc07 67-72
+  s_b062a00f41a5ae::t_d8131f2b9dc981 10,31,54
+doc/development.md
+  s_b062a00f41a5ae::t_6e872b04d133b6 328
+publisher/src/svg.test.ts
+  s_937f088dcdfe88::t_7083a695467fff 1-38,40,43-50
+  s_937f088dcdfe88::t_fc07239100d482 39,41-42
+publisher/src/svg.ts
+  s_937f088dcdfe88::t_77d50c428cee1c 1-7,9-18,20-54,56-98,100-104,106-110,116,118-121,123-135
+  s_937f088dcdfe88::t_bd87f25a53e241 19,55
+  s_937f088dcdfe88::t_ca6547478b8ef2 99,105,112-114,117,122
+  s_937f088dcdfe88::t_fc07239100d482 8,111
+  s_b062a00f41a5ae::t_83e189652b8611 115
+publisher/src/service.test.ts
+  s_937f088dcdfe88::t_ad8c9d787ffdd2 2,6,69,219,227,232
+  s_937f088dcdfe88::t_ed34eb9be20025 775
+  s_937f088dcdfe88::t_5c0aaf15a6012b 905
+  s_937f088dcdfe88::t_f59cc885308bcb 1201-1260
+  s_937f088dcdfe88::t_fc07239100d482 216,223,233
+  s_b062a00f41a5ae::t_9cafda3de80f4d 1261-1263,1265-1323
+  s_b062a00f41a5ae::t_5a5e7a68f75731 1324-1336,1341-1342
+  s_b062a00f41a5ae::t_83e189652b8611 1264,1337-1340
+  s_b062a00f41a5ae::t_3047e79e1efae6 63-68
+publisher/src/cli.ts
+  s_937f088dcdfe88::t_ed34eb9be20025 9,20,68
+  s_b062a00f41a5ae::t_d8131f2b9dc981 2,21,69,133,154
+publisher/src/types.ts
+  s_937f088dcdfe88::t_fc07239100d482 33
+  s_937f088dcdfe88::t_498e67b4fc66f1 3
+Makefile
+  s_937f088dcdfe88::t_0f4f40c43e0b54 37
+publisher/src/service.ts
+  s_937f088dcdfe88::t_fc07239100d482 27,231
+  s_937f088dcdfe88::t_fd49ab93a04097 3-5,73,87-90,94,127,135-136,145,150-153,160,163,165,167,178,183-184,194,196,217,223-230,232-241,469-483,521-529,531-533
+  s_937f088dcdfe88::t_ca6547478b8ef2 530,571-576
+  s_b062a00f41a5ae::t_694ce176873a0b 25,38,120,565,570,586-591,594,659-660,670-676,699,702,723,736,749,759,761,769,779,789
+  s_b062a00f41a5ae::t_e133033718d330 585,603-605,641-643,661
+  s_b062a00f41a5ae::t_3047e79e1efae6 595,597-602,606-640,644-656
+publisher/src/mcp-app.test.ts
+  s_937f088dcdfe88::t_9ef8a2b34b57ac 40,47,81
+  s_b062a00f41a5ae::t_d8e6dbc6a65c45 1-4,95-122
+  s_b062a00f41a5ae::t_b9c004f4f2470c 73-77
+  s_b062a00f41a5ae::t_bf9fec2eb37220 123-124
+doc/user-manual.md
+  s_b062a00f41a5ae::t_6e872b04d133b6 22
+  s_937f088dcdfe88::t_bdf91961680f48 7,14,23,340,374
+  s_b062a00f41a5ae::t_e453366a38bc87 376-383
+publisher/src/confluence-client.ts
+  s_937f088dcdfe88::t_498e67b4fc66f1 318-320,326,337,345
+  s_b062a00f41a5ae::t_694ce176873a0b 12-19,146-162
+  s_b062a00f41a5ae::t_8eef835f818a9d 163-164
+publisher/src/confluence-client.test.ts
+  s_937f088dcdfe88::t_251be62b03a6b3 1-4,6-34
+  s_b062a00f41a5ae::t_287d0b39d6f216 113-163
+publisher/package-lock.json
+  s_937f088dcdfe88::t_941131510ec7c4 14-15,750-976,1514-1522,1536-1568,1865-1870,1880-1891,3563-3577
+  s_b062a00f41a5ae::t_bc489838d45f4c 11-12,24-239,741-749,1327-1341,1367-1388,1602-1607,1618-1623,1648-1653,1800-1808,1996-2001,2379-2421,2439-2486,2496-2501,2511-2516,2630-2635,2739-2843,2857-2865,2905-2917,2972-2977,3000-3008,3304-3309,3326-3338,3519-3524
+docker-compose.yml
+  s_b062a00f41a5ae::t_d8131f2b9dc981 10,31
+scripts/confluence-drawio-mcp.sh
+  s_b062a00f41a5ae::t_d8131f2b9dc981 33
+publisher/src/markdown.test.ts
+  s_b062a00f41a5ae::t_d2b1788c95999d 2-22,24-31,35-38
+publisher/src/markdown.ts
+  s_b062a00f41a5ae::t_694ce176873a0b 1-2,4,6-8,11,13,17,23-24
+publisher/src/page-width.test.ts
+  s_b062a00f41a5ae::t_6277d1eddf6645 1-15
+publisher/src/page-width.ts
+  s_b062a00f41a5ae::t_694ce176873a0b 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "140f84d82c80764b5c8b323ef635766d8c9f8ec7",
+  "prompts": {},
+  "sessions": {
+    "s_937f088dcdfe88": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08743-19e8-7432-bd96-83b22468111b",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    },
+    "s_b062a00f41a5ae": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087ac-d65b-76c0-85b2-24862953e163",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
