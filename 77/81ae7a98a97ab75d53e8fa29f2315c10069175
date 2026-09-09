@@ -1,0 +1,29 @@
+generator/src/test/java/org/nasdanika/mermaid/drawio/generator/DrawioGeneratorTest.java
+  s_4d6d6ff91d55ed::t_d1552731448ecd 837-841
+  s_4d6d6ff91d55ed::t_989904cd3a43ad 803-836,842-843
+  s_4d6d6ff91d55ed::t_f8e86a3580d7c6 844-845
+parser/src/index.test.ts
+  s_4d6d6ff91d55ed::t_6e73ad50bbc8cd 32-35
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/DrawioGenerator.java
+  s_4d6d6ff91d55ed::t_0df1cdb751b20b 989-993,997-999,1005-1007,1018-1021
+  s_4d6d6ff91d55ed::t_f8e96de4f82d1b 1022,1024-1040
+  s_4d6d6ff91d55ed::t_83b9fb11b67839 1053-1054
+  s_4d6d6ff91d55ed::t_898908a2387c45 1000-1002,1008-1010
+  s_4d6d6ff91d55ed::t_4c12138549048c 1023
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "7781ae7a98a97ab75d53e8fa29f2315c10069175",
+  "prompts": {},
+  "sessions": {
+    "s_4d6d6ff91d55ed": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "804c4182-424e-455c-838c-6670cb033318",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
