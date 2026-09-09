@@ -1,6 +1,7 @@
 package org.nasdanika.mermaid.drawio.generator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -751,6 +752,52 @@ class DrawioGeneratorTest {
 
         assertTrue(xml.contains("startArrow=classic"));
         assertTrue(xml.contains("strokeWidth=2"));
+    }
+
+    @Test
+    void routesExplicitEdgesWithPerimeterConstraintsNotAbsoluteEndpoints() throws Exception {
+        // Stock draw.io mermaid import style: exit/entry are relative to the
+        // terminal node's bounds, waypoints cover only interior points. With
+        // absolute source/target points, dagre's padded routing box (e.g.
+        // cylinders) would pull the rendered route away from the visible node.
+        IntermediateDiagram diagram = new IntermediateDiagram(
+                "Routing",
+                "flowchart",
+                "LR",
+                List.of(
+                        new IntermediateNode("A", "A", "cylinder", null, null, null, 100, 100, 200, 80),
+                        new IntermediateNode("B", "B", "rectangle", null, null, null, 500, 400, 150, 50)),
+                List.of(new IntermediateEdge(
+                        "A",
+                        "B",
+                        null,
+                        "directed",
+                        List.of(
+                                new IntermediatePoint(300, 140),
+                                new IntermediatePoint(350, 200),
+                                new IntermediatePoint(420, 320),
+                                new IntermediatePoint(500, 425)))),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of());
+
+        String xml = new DrawioGenerator().generate(diagram);
+
+        // Endpoints become perimeter-relative constraints: (300-100)/200=1,
+        // (140-100)/80=0.5 for exit; (500-500)/150=0, (425-400)/50=0.5 for entry
+        assertTrue(xml.contains("exitX=1"), xml);
+        assertTrue(xml.contains("exitY=0.5"), xml);
+        assertTrue(xml.contains("entryX=0"), xml);
+        assertTrue(xml.contains("entryY=0.5"), xml);
+        assertFalse(xml.contains("sourcePoint"), xml);
+        assertFalse(xml.contains("targetPoint"), xml);
+        // Interior waypoints are kept
+        assertTrue(xml.contains("x=\"350.0\""), xml);
+        assertTrue(xml.contains("x=\"420.0\""), xml);
     }
 
 }

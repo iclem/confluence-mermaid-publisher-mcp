@@ -170,7 +170,13 @@ public class DrawioGenerator {
             if (edge.label() != null && !edge.label().isBlank()) {
                 connection.setLabel(edge.label());
             }
-            applyFlowchartEdgeRoute(connection, edge);
+            // Container geometry is nested (relative to parent bounds); edges
+            // are created on the root layer, so resolve to absolute bounds.
+            applyFlowchartEdgeRoute(
+                    connection,
+                    edge,
+                    absoluteNodeBounds(edge.sourceId(), layoutGrid, subgraphById, subgraphBounds),
+                    absoluteNodeBounds(edge.targetId(), layoutGrid, subgraphById, subgraphBounds));
             applyConnectionStyle(connection, edge.kind(), edge.points() != null && !edge.points().isEmpty());
         }
 
@@ -912,7 +918,56 @@ public class DrawioGenerator {
                 .replace("\n", "<br/>");
     }
 
-    private void applyFlowchartEdgeRoute(Connection connection, IntermediateEdge edge) {
+    /**
+     * Resolves the absolute (root-layer) bounds of a node id, walking up its
+     * subgraph container chain — container bounds are stored nested
+     * (parent-relative) while edge points are absolute.
+     */
+    private Bounds absoluteNodeBounds(
+            String nodeId,
+            LayoutGrid layoutGrid,
+            Map<String, IntermediateSubgraph> subgraphById,
+            Map<String, Bounds> subgraphBounds) {
+        if (nodeId == null) {
+            return null;
+        }
+        Bounds bounds = layoutGrid.nodeBounds().get(nodeId);
+        if (bounds == null) {
+            return null;
+        }
+        int x = bounds.x();
+        int y = bounds.y();
+        String parentId = null;
+        for (IntermediateSubgraph subgraph : subgraphById.values()) {
+            if (subgraph.nodeIds() != null && subgraph.nodeIds().contains(nodeId)) {
+                parentId = subgraph.parentId();
+                IntermediateSubgraph container = subgraph;
+                Bounds containerBounds = subgraphBounds.get(container.id());
+                if (containerBounds != null) {
+                    x += containerBounds.x();
+                    y += containerBounds.y();
+                }
+                while (parentId != null) {
+                    Bounds parentBounds = subgraphBounds.get(parentId);
+                    if (parentBounds == null) {
+                        break;
+                    }
+                    x += parentBounds.x();
+                    y += parentBounds.y();
+                    IntermediateSubgraph parent = subgraphById.get(parentId);
+                    parentId = parent == null ? null : parent.parentId();
+                }
+                break;
+            }
+        }
+        return new Bounds(x, y, bounds.width(), bounds.height());
+    }
+
+    private void applyFlowchartEdgeRoute(
+            Connection connection,
+            IntermediateEdge edge,
+            Bounds sourceBounds,
+            Bounds targetBounds) {
         if (edge.points() == null || edge.points().isEmpty()) {
             return;
         }
@@ -929,14 +984,38 @@ public class DrawioGenerator {
             return;
         }
 
+        // Stock draw.io mermaid import style: perimeter-relative exit/entry
+        // constraints plus interior waypoints only — never absolute
+        // source/target points. Absolute endpoints on shapes whose dagre
+        // routing box is larger than the drawn box (e.g. cylinders) would
+        // otherwise pull the rendered route into spikes.
         IntermediatePoint sourcePoint = points.get(0);
         IntermediatePoint targetPoint = points.get(points.size() - 1);
-        connection.setSourcePoint(sourcePoint.x(), sourcePoint.y());
-        connection.setTargetPoint(targetPoint.x(), targetPoint.y());
+        if (sourceBounds != null && sourceBounds.width() > 0 && sourceBounds.height() > 0) {
+            double exitX = (sourcePoint.x() - sourceBounds.x()) / (double) sourceBounds.width();
+            double exitY = (sourcePoint.y() - sourceBounds.y()) / (double) sourceBounds.height();
+            connection.style("exitX", twoDecimals(exitX));
+            connection.style("exitY", twoDecimals(exitY));
+        }
+        if (targetBounds != null && targetBounds.width() > 0 && targetBounds.height() > 0) {
+            double entryX = (targetPoint.x() - targetBounds.x()) / (double) targetBounds.width();
+            double entryY = (targetPoint.y() - targetBounds.y()) / (double) targetBounds.height();
+            connection.style("entryX", twoDecimals(entryX));
+            connection.style("entryY", twoDecimals(entryY));
+        }
         for (int i = 1; i < points.size() - 1; i++) {
             IntermediatePoint point = points.get(i);
             connection.getPoints().add(point.x(), point.y());
         }
+    }
+
+    private static String twoDecimals(double value) {
+        double clamped = Math.max(-1, Math.min(2, value));
+        double rounded = Math.round(clamped * 100) / 100.0;
+        if (rounded == Math.floor(rounded)) {
+            return Integer.toString((int) rounded);
+        }
+        return Double.toString(rounded);
     }
 
     private void applyConnectionStyle(Connection connection, String kind, boolean hasExplicitRoute) {
