@@ -1,0 +1,64 @@
+docker-compose.yml
+  s_b062a00f41a5ae::t_d8131f2b9dc981 10,31
+publisher/src/svg.ts
+  s_b062a00f41a5ae::t_83e189652b8611 115
+publisher/src/service.test.ts
+  s_b062a00f41a5ae::t_9cafda3de80f4d 1261-1263,1265-1323
+  s_b062a00f41a5ae::t_5a5e7a68f75731 1324-1336,1341-1342
+  s_b062a00f41a5ae::t_83e189652b8611 1264,1337-1340
+  s_b062a00f41a5ae::t_3047e79e1efae6 63-68
+publisher/src/mcp-app.test.ts
+  s_b062a00f41a5ae::t_d8e6dbc6a65c45 1-4,95-122
+  s_b062a00f41a5ae::t_b9c004f4f2470c 73-77
+  s_b062a00f41a5ae::t_bf9fec2eb37220 123-124
+scripts/confluence-drawio-mcp.sh
+  s_b062a00f41a5ae::t_d8131f2b9dc981 33
+publisher/src/markdown.test.ts
+  s_b062a00f41a5ae::t_d2b1788c95999d 2-22,24-31,35-38
+publisher/src/markdown.ts
+  s_b062a00f41a5ae::t_694ce176873a0b 1-2,4,6-8,11,13,17,23-24
+publisher/src/mcp-app.ts
+  s_b062a00f41a5ae::t_d8131f2b9dc981 1,63,157,169,189,202,219,228,245,255
+  s_b062a00f41a5ae::t_e133033718d330 88,155,187,217,243
+publisher/src/confluence-client.test.ts
+  s_b062a00f41a5ae::t_287d0b39d6f216 113-163
+publisher/src/page-width.test.ts
+  s_b062a00f41a5ae::t_6277d1eddf6645 1-15
+build/docker-compose/docker-compose-local.yml
+  s_b062a00f41a5ae::t_d8131f2b9dc981 10,31,54
+publisher/src/confluence-client.ts
+  s_b062a00f41a5ae::t_694ce176873a0b 12-19,146-162
+  s_b062a00f41a5ae::t_8eef835f818a9d 163-164
+publisher/src/page-width.ts
+  s_b062a00f41a5ae::t_694ce176873a0b 1-16
+publisher/src/service.ts
+  s_b062a00f41a5ae::t_694ce176873a0b 25,38,120,565,570,586-591,594,659-660,670-676,699,702,723,736,749,759,761,769,779,789
+  s_b062a00f41a5ae::t_e133033718d330 585,603-605,641-643,661
+  s_b062a00f41a5ae::t_3047e79e1efae6 595,597-602,606-640,644-656
+publisher/src/cli.ts
+  s_b062a00f41a5ae::t_d8131f2b9dc981 2,21,69,133,154
+README.md
+  s_b062a00f41a5ae::t_2cdaac3cf8deb1 23-40
+doc/user-manual.md
+  s_b062a00f41a5ae::t_e453366a38bc87 376-383
+publisher/package-lock.json
+  s_b062a00f41a5ae::t_bc489838d45f4c 11-12,24-239,741-749,1327-1341,1367-1388,1602-1607,1618-1623,1648-1653,1800-1808,1996-2001,2379-2421,2439-2486,2496-2501,2511-2516,2630-2635,2739-2843,2857-2865,2905-2917,2972-2977,3000-3008,3304-3309,3326-3338,3519-3524
+publisher/package.json
+  s_b062a00f41a5ae::t_fa6c8009dcd710 15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "04381352289d7a7ab53a7c2ab541ee59d4867960",
+  "prompts": {},
+  "sessions": {
+    "s_b062a00f41a5ae": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087ac-d65b-76c0-85b2-24862953e163",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
