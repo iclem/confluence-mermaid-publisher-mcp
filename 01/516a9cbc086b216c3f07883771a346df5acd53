@@ -1,0 +1,27 @@
+generator/src/test/java/org/nasdanika/mermaid/drawio/generator/DrawioGeneratorTest.java
+  s_4d6d6ff91d55ed::t_f852f74a5d4ebc 785
+  s_4d6d6ff91d55ed::t_fa2617447644b4 4
+  s_4d6d6ff91d55ed::t_8dd85b74c31577 757-784,786-802
+generator/src/main/java/org/nasdanika/mermaid/drawio/generator/DrawioGenerator.java
+  s_4d6d6ff91d55ed::t_29e310ae687751 178-179
+  s_4d6d6ff91d55ed::t_1d01b3a4c0ed8a 921-965,1019
+  s_4d6d6ff91d55ed::t_0b5b1f6fd74aa2 173-177
+  s_4d6d6ff91d55ed::t_c378d2c210e22d 966-970,987-991,994-1005,1012-1018
+  s_4d6d6ff91d55ed::t_833c47a0e01949 1020
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "01516a9cbc086b216c3f07883771a346df5acd53",
+  "prompts": {},
+  "sessions": {
+    "s_4d6d6ff91d55ed": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "804c4182-424e-455c-838c-6670cb033318",
+        "model": "unknown"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
