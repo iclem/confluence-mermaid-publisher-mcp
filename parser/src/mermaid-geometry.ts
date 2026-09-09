@@ -444,7 +444,11 @@ async function renderGraphGeometry(
     }
   }
 
-  // Normalize so no coordinate is smaller than the margin
+  // Normalize the same way mermaid does in setupGraphViewbox: the rendered
+  // viewBox starts at (contentMin - padding) on both axes — never at (0,0) —
+  // so a diagram whose content dips below the origin (e.g. long edge routes
+  // above the topmost node) keeps coordinates consistent between nodes and
+  // edge polylines.
   const allBoxes: SvgBBox[] = rawNodes.map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height }));
   for (const edge of rawEdges) {
     for (const point of edge.points) {
@@ -452,8 +456,8 @@ async function renderGraphGeometry(
     }
   }
   const bounds = unionBBoxes(allBoxes);
-  const offsetX = bounds ? Math.min(0, bounds.x - FLOWCHART_RENDER_MARGIN) : 0;
-  const offsetY = bounds ? Math.min(0, bounds.y - FLOWCHART_RENDER_MARGIN) : 0;
+  const offsetX = bounds ? bounds.x - FLOWCHART_RENDER_MARGIN : 0;
+  const offsetY = bounds ? bounds.y - FLOWCHART_RENDER_MARGIN : 0;
 
   return {
     nodes: rawNodes.map((node) => ({ ...node, x: node.x - offsetX, y: node.y - offsetY })),

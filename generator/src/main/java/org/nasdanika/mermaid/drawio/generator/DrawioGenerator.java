@@ -170,7 +170,13 @@ public class DrawioGenerator {
             if (edge.label() != null && !edge.label().isBlank()) {
                 connection.setLabel(edge.label());
             }
-            applyFlowchartEdgeRoute(connection, edge);
+            // Container geometry is nested (relative to parent bounds); edges
+            // are created on the root layer, so resolve to absolute bounds.
+            applyFlowchartEdgeRoute(
+                    connection,
+                    edge,
+                    absoluteNodeBounds(edge.sourceId(), layoutGrid, subgraphById, subgraphBounds),
+                    absoluteNodeBounds(edge.targetId(), layoutGrid, subgraphById, subgraphBounds));
             applyConnectionStyle(connection, edge.kind(), edge.points() != null && !edge.points().isEmpty());
         }
 
@@ -912,7 +918,56 @@ public class DrawioGenerator {
                 .replace("\n", "<br/>");
     }
 
-    private void applyFlowchartEdgeRoute(Connection connection, IntermediateEdge edge) {
+    /**
+     * Resolves the absolute (root-layer) bounds of a node id, walking up its
+     * subgraph container chain — container bounds are stored nested
+     * (parent-relative) while edge points are absolute.
+     */
+    private Bounds absoluteNodeBounds(
+            String nodeId,
+            LayoutGrid layoutGrid,
+            Map<String, IntermediateSubgraph> subgraphById,
+            Map<String, Bounds> subgraphBounds) {
+        if (nodeId == null) {
+            return null;
+        }
+        Bounds bounds = layoutGrid.nodeBounds().get(nodeId);
+        if (bounds == null) {
+            return null;
+        }
+        int x = bounds.x();
+        int y = bounds.y();
+        String parentId = null;
+        for (IntermediateSubgraph subgraph : subgraphById.values()) {
+            if (subgraph.nodeIds() != null && subgraph.nodeIds().contains(nodeId)) {
+                parentId = subgraph.parentId();
+                IntermediateSubgraph container = subgraph;
+                Bounds containerBounds = subgraphBounds.get(container.id());
+                if (containerBounds != null) {
+                    x += containerBounds.x();
+                    y += containerBounds.y();
+                }
+                while (parentId != null) {
+                    Bounds parentBounds = subgraphBounds.get(parentId);
+                    if (parentBounds == null) {
+                        break;
+                    }
+                    x += parentBounds.x();
+                    y += parentBounds.y();
+                    IntermediateSubgraph parent = subgraphById.get(parentId);
+                    parentId = parent == null ? null : parent.parentId();
+                }
+                break;
+            }
+        }
+        return new Bounds(x, y, bounds.width(), bounds.height());
+    }
+
+    private void applyFlowchartEdgeRoute(
+            Connection connection,
+            IntermediateEdge edge,
+            Bounds sourceBounds,
+            Bounds targetBounds) {
         if (edge.points() == null || edge.points().isEmpty()) {
             return;
         }
@@ -929,19 +984,93 @@ public class DrawioGenerator {
             return;
         }
 
-        IntermediatePoint sourcePoint = points.get(0);
-        IntermediatePoint targetPoint = points.get(points.size() - 1);
-        connection.setSourcePoint(sourcePoint.x(), sourcePoint.y());
-        connection.setTargetPoint(targetPoint.x(), targetPoint.y());
-        for (int i = 1; i < points.size() - 1; i++) {
+        // Dagre routes to a padded routing box that can sit far outside the
+        // drawn shape (e.g. cylinders): the extracted polyline then starts
+        // hundreds of pixels away from the node and walks toward it. Emitted
+        // as-is, draw.io draws the exit/entry anchor to the far first/last
+        // waypoint and back — a sharp triangle spike. Trim the phantom lead-in
+        // (and lead-out) where the polyline monotonically approaches the
+        // visible node bbox, so the first/last retained point sits at the
+        // perimeter.
+        int startIndex = trimPhantomLead(points, sourceBounds, true);
+        int endIndex = trimPhantomLead(points, targetBounds, false);
+
+        // Stock draw.io mermaid import style: perimeter-relative exit/entry
+        // constraints plus interior waypoints only — never absolute
+        // source/target points; ratios are clamped into the [0,1] band as a
+        // safety net.
+        IntermediatePoint sourcePoint = points.get(startIndex);
+        IntermediatePoint targetPoint = points.get(endIndex);
+        if (sourceBounds != null && sourceBounds.width() > 0 && sourceBounds.height() > 0) {
+            IntermediatePoint clamped = clampToBounds(sourcePoint, sourceBounds);
+            connection.style("exitX", twoDecimals((clamped.x() - sourceBounds.x()) / (double) sourceBounds.width()));
+            connection.style("exitY", twoDecimals((clamped.y() - sourceBounds.y()) / (double) sourceBounds.height()));
+        }
+        if (targetBounds != null && targetBounds.width() > 0 && targetBounds.height() > 0) {
+            IntermediatePoint clamped = clampToBounds(targetPoint, targetBounds);
+            connection.style("entryX", twoDecimals((clamped.x() - targetBounds.x()) / (double) targetBounds.width()));
+            connection.style("entryY", twoDecimals((clamped.y() - targetBounds.y()) / (double) targetBounds.height()));
+        }
+        for (int i = startIndex + 1; i < endIndex; i++) {
             IntermediatePoint point = points.get(i);
             connection.getPoints().add(point.x(), point.y());
         }
     }
 
+    private static IntermediatePoint clampToBounds(IntermediatePoint point, Bounds bounds) {
+        int x = Math.max(bounds.x(), Math.min(bounds.x() + bounds.width(), point.x()));
+        int y = Math.max(bounds.y(), Math.min(bounds.y() + bounds.height(), point.y()));
+        return new IntermediatePoint(x, y);
+    }
+
+    /**
+     * Drops the phantom lead-in of a polyline whose first points walk toward
+     * the terminal node's visible bbox from dagre's padded routing box: while
+     * the next point is strictly closer to the bbox than the current one, the
+     * current point cannot be the visible route's start. Returns the index of
+     * the first retained point (source end) or the last retained point (target
+     * end).
+     */
+    private static int trimPhantomLead(List<IntermediatePoint> points, Bounds bounds, boolean sourceEnd) {
+        if (bounds == null) {
+            return sourceEnd ? 0 : points.size() - 1;
+        }
+        if (sourceEnd) {
+            int index = 0;
+            while (index + 1 < points.size()
+                    && distanceToBounds(points.get(index + 1), bounds) < distanceToBounds(points.get(index), bounds) - 0.5) {
+                index += 1;
+            }
+            return index;
+        }
+        int index = points.size() - 1;
+        while (index - 1 >= 0
+                && distanceToBounds(points.get(index - 1), bounds) < distanceToBounds(points.get(index), bounds) - 0.5) {
+            index -= 1;
+        }
+        return index;
+    }
+
+    private static double distanceToBounds(IntermediatePoint point, Bounds bounds) {
+        int dx = Math.max(bounds.x() - point.x(), Math.max(0, point.x() - (bounds.x() + bounds.width())));
+        int dy = Math.max(bounds.y() - point.y(), Math.max(0, point.y() - (bounds.y() + bounds.height())));
+        return Math.hypot(dx, dy);
+    }
+
+    private static String twoDecimals(double value) {
+        double clamped = Math.max(-1, Math.min(2, value));
+        double rounded = Math.round(clamped * 100) / 100.0;
+        if (rounded == Math.floor(rounded)) {
+            return Integer.toString((int) rounded);
+        }
+        return Double.toString(rounded);
+    }
+
     private void applyConnectionStyle(Connection connection, String kind, boolean hasExplicitRoute) {
         ConnectionStyle style = connection.getStyle();
         if (hasExplicitRoute) {
+            // curved=1 (set by the route step when dagre's terminal anchor
+            // falls outside the node bbox) overrides the straight segments
             style.remove("edgeStyle");
             style.rounded(false);
         } else {

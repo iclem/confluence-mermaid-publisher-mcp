@@ -206,15 +206,42 @@ export function pathBBox(d: string): SvgBBox | undefined {
   return unionBBoxes(boxes);
 }
 
-/** Samples a path into a polyline; cubic segments are approximated with a
- * fixed number of steps. Nearly-collinear points are dropped. */
-export function samplePath(d: string, curveSteps = 4, collinearTolerance = 1.5): SvgPoint[] {
+/** Samples a path into a polyline. Cubic segments are flattened adaptively
+ * (subdivided until the approximation is within a pixel of the curve), so
+ * long smooth mermaid routes keep their shape instead of collapsing to a few
+ * control points; nearly-collinear points are dropped afterwards. */
+export function samplePath(d: string, collinearTolerance = 1.5): SvgPoint[] {
   const points: SvgPoint[] = [];
   let current: SvgPoint | undefined;
   let start: SvgPoint | undefined;
 
   const push = (point: SvgPoint): void => {
     points.push({ x: Math.round(point.x * 100) / 100, y: Math.round(point.y * 100) / 100 });
+  };
+
+  const flattenCubic = (p0: SvgPoint, c1: SvgPoint, c2: SvgPoint, p1: SvgPoint, depth: number): void => {
+    // Distance from control points to the p0-p1 chord bounds the flatten error
+    const chordX = p1.x - p0.x;
+    const chordY = p1.y - p0.y;
+    const chordLength = Math.hypot(chordX, chordY);
+    const deviation = (point: SvgPoint): number =>
+      chordLength === 0
+        ? Math.hypot(point.x - p0.x, point.y - p0.y)
+        : Math.abs((point.x - p0.x) * chordY - (point.y - p0.y) * chordX) / chordLength;
+    if (depth >= 10 || Math.max(deviation(c1), deviation(c2)) <= 1) {
+      push(p1);
+      return;
+    }
+    // de Casteljau split at t=0.5
+    const mid = (a: SvgPoint, b: SvgPoint): SvgPoint => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    const m1 = mid(p0, c1);
+    const m2 = mid(c1, c2);
+    const m3 = mid(c2, p1);
+    const m12 = mid(m1, m2);
+    const m23 = mid(m2, m3);
+    const center = mid(m12, m23);
+    flattenCubic(p0, m1, m12, center, depth + 1);
+    flattenCubic(center, m23, m3, p1, depth + 1);
   };
 
   for (const segment of parsePath(d)) {
@@ -245,16 +272,8 @@ export function samplePath(d: string, curveSteps = 4, collinearTolerance = 1.5):
       current = segment.to;
       continue;
     }
-    const { c1, c2, to } = segment;
-    for (let step = 1; step <= curveSteps; step += 1) {
-      const t = step / curveSteps;
-      const mt = 1 - t;
-      push({
-        x: mt * mt * mt * current.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * to.x,
-        y: mt * mt * mt * current.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * to.y,
-      });
-    }
-    current = to;
+    flattenCubic(current, segment.c1, segment.c2, segment.to, 0);
+    current = segment.to;
   }
 
   // Drop nearly-collinear interior points
