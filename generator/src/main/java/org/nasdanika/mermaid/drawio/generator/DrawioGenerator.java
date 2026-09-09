@@ -984,32 +984,34 @@ public class DrawioGenerator {
             return;
         }
 
+        // Dagre routes to a padded routing box that can sit far outside the
+        // drawn shape (e.g. cylinders): the extracted polyline then starts
+        // hundreds of pixels away from the node and walks toward it. Emitted
+        // as-is, draw.io draws the exit/entry anchor to the far first/last
+        // waypoint and back — a sharp triangle spike. Trim the phantom lead-in
+        // (and lead-out) where the polyline monotonically approaches the
+        // visible node bbox, so the first/last retained point sits at the
+        // perimeter.
+        int startIndex = trimPhantomLead(points, sourceBounds, true);
+        int endIndex = trimPhantomLead(points, targetBounds, false);
+
         // Stock draw.io mermaid import style: perimeter-relative exit/entry
         // constraints plus interior waypoints only — never absolute
-        // source/target points. Dagre routes to a padded routing box that can
-        // be much larger than the drawn shape (e.g. cylinders), so raw ratios
-        // far outside [0,1] would make draw.io project the terminal far past
-        // the node (triangle spikes); endpoints are clamped onto the actual
-        // node bbox perimeter band before computing ratios.
-        IntermediatePoint sourcePoint = points.get(0);
-        IntermediatePoint targetPoint = points.get(points.size() - 1);
+        // source/target points; ratios are clamped into the [0,1] band as a
+        // safety net.
+        IntermediatePoint sourcePoint = points.get(startIndex);
+        IntermediatePoint targetPoint = points.get(endIndex);
         if (sourceBounds != null && sourceBounds.width() > 0 && sourceBounds.height() > 0) {
             IntermediatePoint clamped = clampToBounds(sourcePoint, sourceBounds);
             connection.style("exitX", twoDecimals((clamped.x() - sourceBounds.x()) / (double) sourceBounds.width()));
             connection.style("exitY", twoDecimals((clamped.y() - sourceBounds.y()) / (double) sourceBounds.height()));
-            if (isCurvedEdge(points, sourceBounds, true)) {
-                connection.style("curved", "1");
-            }
         }
         if (targetBounds != null && targetBounds.width() > 0 && targetBounds.height() > 0) {
             IntermediatePoint clamped = clampToBounds(targetPoint, targetBounds);
             connection.style("entryX", twoDecimals((clamped.x() - targetBounds.x()) / (double) targetBounds.width()));
             connection.style("entryY", twoDecimals((clamped.y() - targetBounds.y()) / (double) targetBounds.height()));
-            if (isCurvedEdge(points, targetBounds, false)) {
-                connection.style("curved", "1");
-            }
         }
-        for (int i = 1; i < points.size() - 1; i++) {
+        for (int i = startIndex + 1; i < endIndex; i++) {
             IntermediatePoint point = points.get(i);
             connection.getPoints().add(point.x(), point.y());
         }
@@ -1022,20 +1024,37 @@ public class DrawioGenerator {
     }
 
     /**
-     * Dagre routes to a padded routing box that can sit far outside the drawn
-     * node (e.g. cylinders). When the extracted polyline's terminal end is
-     * outside the node's bbox, the clamped exit/entry constraint points back
-     * toward the route (draw.io computes the terminal segment toward the first
-     * waypoint), which renders as a sharp return leg — a triangle spike. A
-     * curved connector instead passes through the waypoints and lands on the
-     * perimeter anchor with a smooth tangent.
+     * Drops the phantom lead-in of a polyline whose first points walk toward
+     * the terminal node's visible bbox from dagre's padded routing box: while
+     * the next point is strictly closer to the bbox than the current one, the
+     * current point cannot be the visible route's start. Returns the index of
+     * the first retained point (source end) or the last retained point (target
+     * end).
      */
-    private static boolean isCurvedEdge(List<IntermediatePoint> points, Bounds bounds, boolean sourceEnd) {
-        IntermediatePoint terminal = sourceEnd ? points.get(0) : points.get(points.size() - 1);
-        return terminal.x() < bounds.x()
-                || terminal.x() > bounds.x() + bounds.width()
-                || terminal.y() < bounds.y()
-                || terminal.y() > bounds.y() + bounds.height();
+    private static int trimPhantomLead(List<IntermediatePoint> points, Bounds bounds, boolean sourceEnd) {
+        if (bounds == null) {
+            return sourceEnd ? 0 : points.size() - 1;
+        }
+        if (sourceEnd) {
+            int index = 0;
+            while (index + 1 < points.size()
+                    && distanceToBounds(points.get(index + 1), bounds) < distanceToBounds(points.get(index), bounds) - 0.5) {
+                index += 1;
+            }
+            return index;
+        }
+        int index = points.size() - 1;
+        while (index - 1 >= 0
+                && distanceToBounds(points.get(index - 1), bounds) < distanceToBounds(points.get(index), bounds) - 0.5) {
+            index -= 1;
+        }
+        return index;
+    }
+
+    private static double distanceToBounds(IntermediatePoint point, Bounds bounds) {
+        int dx = Math.max(bounds.x() - point.x(), Math.max(0, point.x() - (bounds.x() + bounds.width())));
+        int dy = Math.max(bounds.y() - point.y(), Math.max(0, point.y() - (bounds.y() + bounds.height())));
+        return Math.hypot(dx, dy);
     }
 
     private static String twoDecimals(double value) {

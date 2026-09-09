@@ -801,11 +801,11 @@ class DrawioGeneratorTest {
     }
 
     @Test
-    void clampsEdgeTerminalConstraintsIntoNodeBounds() throws Exception {
+    void trimsPhantomLeadInFromPaddedRoutingBox() throws Exception {
         // Dagre routes cylinder edges to a padded routing box far outside the
-        // drawn shape; the emitted exit/entry ratios must stay within the
-        // node's bbox band or draw.io projects the terminal past the node
-        // (triangle spike artifacts on published pages).
+        // drawn shape: the polyline walks toward the node from hundreds of
+        // pixels away. Those lead-in points must be dropped or draw.io draws
+        // the exit anchor out to the first waypoint and back (triangle spike).
         IntermediateDiagram diagram = new IntermediateDiagram(
                 "Clamped",
                 "flowchart",
@@ -819,7 +819,9 @@ class DrawioGeneratorTest {
                         null,
                         "directed",
                         List.of(
-                                new IntermediatePoint(100, -300), // far above the source bbox
+                                new IntermediatePoint(150, -300), // phantom: far above, distance grows
+                                new IntermediatePoint(150, -100),
+                                new IntermediatePoint(150, 140), // at the bbox band
                                 new IntermediatePoint(350, 200),
                                 new IntermediatePoint(500, 425)))),
                 List.of(),
@@ -832,15 +834,19 @@ class DrawioGeneratorTest {
 
         String xml = new DrawioGenerator().generate(diagram);
 
-        assertTrue(xml.contains("exitX=0"), xml);
-        assertTrue(xml.contains("exitY=0"), xml);
-        // The polyline's terminal end is outside the source bbox (dagre padded
-        // routing box), so the edge must be curved — a straight terminal
-        // segment would be computed back toward the first waypoint and render
-        // as a triangle spike.
-        assertTrue(xml.contains("curved=1"), xml);
+        // exit anchor from the first retained point (150,140): x ratio 0.25,
+        // y ratio 0.5 — clamped into the [0,1] band
+        assertTrue(xml.contains("exitX=0.25"), xml);
+        assertTrue(xml.contains("exitY=0.5"), xml);
+        // phantom lead-in waypoints are dropped
+        assertFalse(xml.contains("y=\"-300.0\""), xml);
+        assertFalse(xml.contains("y=\"-100.0\""), xml);
+        // interior route is kept
+        assertTrue(xml.contains("x=\"350.0\""), xml);
         assertFalse(xml.contains("sourcePoint"), xml);
         assertFalse(xml.contains("targetPoint"), xml);
+        // trimming makes the curved-fallback unnecessary for this route
+        assertFalse(xml.contains("curved=1"), xml);
     }
 
 }
