@@ -1,0 +1,80 @@
+publisher/src/mcp-app.ts
+  s_937f088dcdfe88::t_9ef8a2b34b57ac 82,106,257,259
+publisher/package.json
+  s_937f088dcdfe88::t_60790a7e0638bd 16
+  s_937f088dcdfe88::t_bddf583f49bafe 17
+doc/quick-start.md
+  s_b062a00f41a5ae::t_6e872b04d133b6 7,112,152
+README.md
+  s_937f088dcdfe88::t_bfba9284dacca7 24-42
+  s_937f088dcdfe88::t_bdf91961680f48 3,13,18,88
+  s_937f088dcdfe88::t_efd2ef3ddc51ef 23,43
+publisher/src/fixtures/svg-gallery.json
+  s_937f088dcdfe88::t_bfb6a0ce271e8b 1-26
+publisher/src/embedding-mode.ts
+  s_937f088dcdfe88::t_498e67b4fc66f1 3
+build/docker-compose/docker-compose-local.yml
+  s_937f088dcdfe88::t_0eae6f98b5dc07 64-69
+doc/development.md
+  s_b062a00f41a5ae::t_6e872b04d133b6 328
+publisher/src/svg.test.ts
+  s_937f088dcdfe88::t_7083a695467fff 1-38,40,43-50
+  s_937f088dcdfe88::t_fc07239100d482 39,41-42
+publisher/src/svg.ts
+  s_937f088dcdfe88::t_77d50c428cee1c 1-7,9-18,20-54,56-98,100-104,106-110,116,118-121,123-135
+  s_937f088dcdfe88::t_bd87f25a53e241 19,55
+  s_937f088dcdfe88::t_ca6547478b8ef2 99,105,112-115,117,122
+  s_937f088dcdfe88::t_fc07239100d482 8,111
+publisher/src/service.test.ts
+  s_937f088dcdfe88::t_ad8c9d787ffdd2 2,6,63,213,221,226
+  s_937f088dcdfe88::t_ed34eb9be20025 769
+  s_937f088dcdfe88::t_5c0aaf15a6012b 899
+  s_937f088dcdfe88::t_f59cc885308bcb 1195-1254
+  s_937f088dcdfe88::t_fc07239100d482 210,217,227
+publisher/src/cli.ts
+  s_937f088dcdfe88::t_ed34eb9be20025 8,19-20,67
+publisher/src/types.ts
+  s_937f088dcdfe88::t_fc07239100d482 33
+  s_937f088dcdfe88::t_498e67b4fc66f1 3
+Makefile
+  s_937f088dcdfe88::t_0f4f40c43e0b54 37
+publisher/src/service.ts
+  s_937f088dcdfe88::t_fc07239100d482 26,234
+  s_937f088dcdfe88::t_fd49ab93a04097 3-5,77,91-94,98,130,138-139,148,153-156,163,166,168,170,181,186-187,197,199,220,226-233,235-244,472-486,524-532,534-536,625-626,630-634
+  s_937f088dcdfe88::t_ca6547478b8ef2 533,573-578,627-629
+publisher/src/mcp-app.test.ts
+  s_937f088dcdfe88::t_9ef8a2b34b57ac 37,44,73
+doc/user-manual.md
+  s_b062a00f41a5ae::t_6e872b04d133b6 22
+  s_937f088dcdfe88::t_bdf91961680f48 7,14,23,340,374
+publisher/src/confluence-client.ts
+  s_937f088dcdfe88::t_498e67b4fc66f1 291-293,299,310,318
+publisher/src/confluence-client.test.ts
+  s_937f088dcdfe88::t_251be62b03a6b3 1-4,6-34
+publisher/package-lock.json
+  s_937f088dcdfe88::t_941131510ec7c4 12-13,523-749,1250-1258,1272-1304,1574-1579,1589-1600,2990-3004
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1fb70e509666c1c19cc1eb9d1d177593e0417b4e",
+  "prompts": {},
+  "sessions": {
+    "s_937f088dcdfe88": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08743-19e8-7432-bd96-83b22468111b",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    },
+    "s_b062a00f41a5ae": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a087ac-d65b-76c0-85b2-24862953e163",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
