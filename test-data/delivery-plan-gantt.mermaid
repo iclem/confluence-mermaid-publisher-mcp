@@ -1,34 +1,34 @@
 gantt
     title EDA Migration — Multi-Team Swim Lanes
-    dateFormat  YYYY-QQ
-    axisFormat  %Y Q%q
+    dateFormat  YYYY-MM
+    axisFormat  %Y-%m
 
     section api-catalogue
-    EP1 Mutation Contract            :p1e1, 2026-01, 1q
-    EP2 Transactional Outbox         :p1e2, 2026-01, 1q
+    EP1 Mutation Contract            :p1e1, 2026-01, 3M
+    EP2 Transactional Outbox         :p1e2, 2026-01, 3M
 
     section lengow-core
-    EP3 Post-Write Plan/Apply        :p1e3, 2026-01, 2q
-    EP4 Shadow Consumer & Parity     :p1e4, 2026-02, 1q
-    EP5 Capability Cutover           :p1e5, 2026-02, 2q
-    EP6 Feed Regen Parity            :p1e6, 2026-02, 2q
-    EP7 Catalogue Import Bridge      :p1e7, 2026-03, 1q
-    EP8 Legacy Seam Removal          :p1e8, 2026-03, 1q
-    Phase 4a CatalogueDefinitionChanged :p4a, 2027-02, 1q
+    EP3 Post-Write Plan/Apply        :p1e3, 2026-01, 6M
+    EP4 Shadow Consumer & Parity     :p1e4, 2026-02, 3M
+    EP5 Capability Cutover           :p1e5, 2026-02, 6M
+    EP6 Feed Regen Parity            :p1e6, 2026-02, 6M
+    EP7 Catalogue Import Bridge      :p1e7, 2026-03, 3M
+    EP8 Legacy Seam Removal          :p1e8, 2026-03, 3M
+    Phase 4a CatalogueDefinitionChanged :p4a, 2027-02, 3M
 
     section lengow-publishing
-    Phase A Feed Rule Parity         :pa, 2026-01, 2q
-    Phase B Parity Measurement       :pb, 2026-03, 1q
-    Phase C Unified Snapshot + FeedProductPrepared :pc, 2027-01, 2q
-    Phase D Dual-Write Resolution    :pd, 2027-02, 1q
-    Phase 4b FeedDefinitionChanged   :p4b, 2027-03, 1q
+    Phase A Feed Rule Parity         :pa, 2026-01, 6M
+    Phase B Parity Measurement       :pb, 2026-03, 3M
+    Phase C Unified Snapshot + FeedProductPrepared :pc, 2027-01, 6M
+    Phase D Dual-Write Resolution    :pd, 2027-02, 3M
+    Phase 4b FeedDefinitionChanged   :p4b, 2027-03, 3M
 
     section Product Preparation (new)
-    Phase 2 Preparation Service      :p2, 2026-04, 2q
+    Phase 2 Preparation Service      :p2, 2026-04, 6M
 
     section publishing-balancer
-    Sole Ingress Enforcement         :pbal, 2027-02, 1q
+    Sole Ingress Enforcement         :pbal, 2027-02, 3M
 
     section Channel Delivery (pymarketplaces)
-    Phase 5a NetAmplify Serving      :p5a, 2027-04, 2q
-    Phase 5b Non-Mirakl Connectors   :p5b, 2027-04, 2q
+    Phase 5a NetAmplify Serving      :p5a, 2027-04, 6M
+    Phase 5b Non-Mirakl Connectors   :p5b, 2027-04, 6M

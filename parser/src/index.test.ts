@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseMermaid } from "./index.js";
+import { computeFlowchartLayout, parseMermaid } from "./index.js";
 
 function stripLayout<T extends { x?: number; y?: number; width?: number; height?: number }>(node: T) {
   const { x: _x, y: _y, width: _width, height: _height, ...rest } = node;
@@ -94,33 +94,130 @@ describe("parseMermaid", () => {
     expect(diagram.warnings).toEqual([]);
   });
 
-  it("preserves rgb and rgba values in classDef directives", async () => {
+  it("rejects classDef declarations that mermaid itself cannot parse (rgb functions)", async () => {
+    // Mermaid's own parser (used by stock draw.io) rejects rgb()/rgba() values
+    // in classDef declarations; we inherit that behavior for parity.
+    await expect(
+      parseMermaid({
+        mermaid: `
+          flowchart TD
+          classDef themed fill:rgb(230, 240, 255),stroke:rgba(25, 113, 194, 0.8),color:rgb(10, 20, 30)
+          A[Start]:::themed --> B[Finish]:::themed
+        `,
+      }),
+    ).rejects.toThrow(/parse_error/);
+  });
+
+  it("supports the full flowchart node shape set", async () => {
     const diagram = await parseMermaid({
       mermaid: `
         flowchart TD
-        classDef themed fill:rgb(230, 240, 255),stroke:rgba(25, 113, 194, 0.8),color:rgb(10, 20, 30)
-        A[Start]:::themed --> B[Finish]:::themed
+        A[square] --> B(round) --> C([stadium]) --> D[[subroutine]] --> E[(cylinder)]
+        E --> F((circle)) --> G(((double))) --> H{diamond} --> I{{hexagon}} --> J>odd]
+        J --> K[/para/] --> L[\\para-alt\\] --> M[/trap\\] --> N[\\trap-alt/]
+        N --> O@{ shape: circ }
       `,
     });
 
     expect(diagram.nodes.map(stripLayout)).toEqual([
-      {
-        id: "A",
-        label: "Start",
-        shape: "rectangle",
-        fillColor: "rgb(230, 240, 255)",
-        strokeColor: "rgba(25, 113, 194, 0.8)",
-        fontColor: "rgb(10, 20, 30)",
-      },
-      {
-        id: "B",
-        label: "Finish",
-        shape: "rectangle",
-        fillColor: "rgb(230, 240, 255)",
-        strokeColor: "rgba(25, 113, 194, 0.8)",
-        fontColor: "rgb(10, 20, 30)",
-      },
+      { id: "A", label: "square", shape: "rectangle" },
+      { id: "B", label: "round", shape: "rounded-rectangle" },
+      { id: "C", label: "stadium", shape: "stadium" },
+      { id: "D", label: "subroutine", shape: "subroutine" },
+      { id: "E", label: "cylinder", shape: "cylinder" },
+      { id: "F", label: "circle", shape: "ellipse" },
+      { id: "G", label: "double", shape: "double-circle" },
+      { id: "H", label: "diamond", shape: "rhombus" },
+      { id: "I", label: "hexagon", shape: "hexagon" },
+      { id: "J", label: "odd", shape: "odd" },
+      { id: "K", label: "para", shape: "parallelogram" },
+      { id: "L", label: "para-alt", shape: "parallelogram-alt" },
+      { id: "M", label: "trap", shape: "trapezoid" },
+      { id: "N", label: "trap-alt", shape: "trapezoid-alt" },
+      { id: "O", label: "O", shape: "ellipse" },
     ]);
+  });
+
+  it("supports thick, open, invisible, and bidirectional flowchart edges", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart TD
+        A ==> B
+        B --- C
+        C -.- D
+        D ~~~ E
+        E <--> F
+        G --o H
+      `,
+    });
+
+    expect(diagram.edges.map(stripEdgePoints)).toEqual([
+      { sourceId: "A", targetId: "B", label: undefined, kind: "thick-directed" },
+      { sourceId: "B", targetId: "C", label: undefined, kind: "plain" },
+      { sourceId: "C", targetId: "D", label: undefined, kind: "dashed-plain" },
+      { sourceId: "D", targetId: "E", label: undefined, kind: "invisible" },
+      { sourceId: "E", targetId: "F", label: undefined, kind: "bidirectional-directed" },
+      { sourceId: "G", targetId: "H", label: undefined, kind: "directed" },
+    ]);
+    expect(diagram.warnings.some((warning) => warning.startsWith("unsupported_arrow_variant:"))).toBe(true);
+  });
+
+  it("supports nested subgraphs with explicit and generated ids", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart TD
+        subgraph outer [Outer]
+          subgraph inner [Inner]
+            A[X]
+          end
+          B[Y]
+        end
+        A --> B
+      `,
+    });
+
+    expect(diagram.subgraphs).toEqual([
+      { id: "inner", label: "Inner", nodeIds: ["A"], parentId: "outer" },
+      { id: "outer", label: "Outer", nodeIds: ["B"], parentId: undefined },
+    ]);
+  });
+
+  it("extracts mermaid render geometry for flowchart diagrams", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart LR
+        A[Start] --> B{Decision}
+        B -->|yes| C[Done]
+        B -->|no| D[Retry]
+      `,
+    });
+
+    const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+    const a = byId.get("A")!;
+    const b = byId.get("B")!;
+    const c = byId.get("C")!;
+    const d = byId.get("D")!;
+    // LR layout: A left of B, B left of C/D; C and D stacked vertically
+    expect(a.x! + a.width!).toBeLessThanOrEqual(b.x! + 1);
+    expect(b.x! + b.width!).toBeLessThanOrEqual(c.x! + 1);
+    expect(c.y).not.toBe(d.y);
+    for (const node of diagram.nodes) {
+      expect(node.width).toBeGreaterThan(0);
+      expect(node.height).toBeGreaterThan(0);
+    }
+    // Edge routes follow the rendered splines
+    for (const edge of diagram.edges) {
+      expect(edge.points?.length ?? 0).toBeGreaterThan(1);
+    }
+    const ab = diagram.edges[0];
+    expect(ab.points![0].x).toBeLessThan(ab.points![ab.points!.length - 1].x);
   });
 
   it("applies class assignments declared separately from node definitions", async () => {
@@ -466,8 +563,12 @@ write use case"]
     ]);
 
     const noteNode = diagram.nodes.find((node) => node.id === "state-note-1");
-    expect(noteNode?.width).toBe(295);
-    expect(noteNode?.height).toBe(64);
+    // Real text measurement sizes the two-line note; font metrics vary a bit
+    // across platforms, so assert a plausible band instead of exact pixels.
+    expect(noteNode?.width!).toBeGreaterThan(150);
+    expect(noteNode?.width!).toBeLessThan(400);
+    expect(noteNode?.height!).toBeGreaterThan(40);
+    expect(noteNode?.height!).toBeLessThan(120);
   });
 
   it("honors explicit state diagram direction declarations", async () => {
@@ -483,57 +584,407 @@ write use case"]
     expect(diagram.direction).toBe("LR");
   });
 
-  it("parses a gantt slice with quarter headers and month-aligned task starts", async () => {
+  it("parses composite states into subgraphs with nested transitions", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        [*] --> Running
+        state Running {
+          [*] --> Warm
+          Warm --> Hot : heat
+        }
+        Running --> [*]
+      `,
+    });
+
+    expect(diagram.subgraphs).toEqual([
+      { id: "Running", label: "Running", nodeIds: ["Running_start", "Warm", "Hot"], parentId: undefined },
+    ]);
+    const nodeIds = diagram.nodes.map((node) => node.id);
+    expect(nodeIds).toContain("Running_start");
+    expect(nodeIds).toContain("Warm");
+    expect(nodeIds).toContain("Hot");
+    expect(diagram.edges.map(stripEdgePoints)).toEqual([
+      { sourceId: "__state_start__", targetId: "Running", label: undefined, kind: "directed" },
+      { sourceId: "Running_start", targetId: "Warm", label: undefined, kind: "directed" },
+      { sourceId: "Warm", targetId: "Hot", label: "heat", kind: "directed" },
+      { sourceId: "Running", targetId: "__state_end__", label: undefined, kind: "directed" },
+    ]);
+    const nestedStart = diagram.nodes.find((node) => node.id === "Running_start");
+    expect(nestedStart).toMatchObject({ shape: "ellipse", label: "" });
+  });
+
+  it("parses fork, join, and choice pseudostates", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        state f <<fork>>
+        state j <<join>>
+        state c <<choice>>
+        [*] --> f
+        f --> a
+        f --> b
+        a --> j
+        b --> j
+        j --> c
+        c --> [*]
+      `,
+    });
+
+    expect(diagram.nodes.find((node) => node.id === "f")).toMatchObject({ shape: "rectangle", fillColor: "#333333" });
+    expect(diagram.nodes.find((node) => node.id === "j")).toMatchObject({ shape: "rectangle", fillColor: "#333333" });
+    expect(diagram.nodes.find((node) => node.id === "c")).toMatchObject({ shape: "rhombus", fillColor: "#333333" });
+    expect(diagram.edges).toHaveLength(7);
+  });
+
+  it("uses state descriptions as labels", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        Slow : A named state
+        [*] --> Slow
+      `,
+    });
+
+    expect(diagram.nodes.find((node) => node.id === "Slow")).toMatchObject({ label: "A named state" });
+  });
+
+  it("extracts mermaid render geometry for state diagrams", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        direction LR
+        [*] --> Idle : boot
+        Idle --> Running : start
+        Running --> [*]
+      `,
+    });
+
+    const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+    const start = byId.get("__state_start__")!;
+    const idle = byId.get("Idle")!;
+    const running = byId.get("Running")!;
+    // LR layout: start left of Idle, Idle left of Running
+    expect(start.x! + start.width!).toBeLessThanOrEqual(idle.x! + 1);
+    expect(idle.x! + idle.width!).toBeLessThanOrEqual(running.x! + 1);
+    for (const edge of diagram.edges) {
+      expect(edge.points?.length ?? 0).toBeGreaterThan(1);
+    }
+  });
+
+  it("parses composite states with internal start/end transitions and fork/join (gallery repro)", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        [*] --> Draft
+        Draft --> Review: submit
+        state Review {
+            [*] --> Screening
+            Screening --> Detailed: pass
+            Screening --> [*]: reject
+        }
+        Review --> Approved: sign off
+        state check <<choice>>
+        Approved --> check
+        check --> Live: metrics ok
+        state Live {
+            state forkState <<fork>>
+            [*] --> forkState
+            forkState --> Serving
+            forkState --> Caching
+            state joinState <<join>>
+            Serving --> joinState
+            Caching --> joinState
+            joinState --> [*]
+        }
+        Live --> [*]: sunset
+        note right of Review : SLA is 2 days
+        classDef hot fill:#f8cecc,stroke:#b85450
+        class Live hot
+      `,
+    });
+
+    expect(diagram.diagramType).toBe("state");
+    expect(diagram.subgraphs.map((subgraph) => subgraph.id).sort()).toEqual(["Live", "Review"]);
+    const review = diagram.subgraphs.find((subgraph) => subgraph.id === "Review")!;
+    expect(review.nodeIds.sort()).toEqual(["Detailed", "Review_end", "Review_start", "Screening"]);
+    expect(diagram.nodes.find((node) => node.id === "check")).toMatchObject({ shape: "rhombus" });
+    expect(diagram.nodes.find((node) => node.id === "forkState")).toMatchObject({ shape: "rectangle" });
+    expect(diagram.nodes.find((node) => node.id === "joinState")).toMatchObject({ shape: "rectangle" });
+    expect(diagram.nodes.find((node) => node.id === "state-note-1")).toMatchObject({ label: "SLA is 2 days" });
+    // Every node is positioned (render geometry or dagre fallback)
+    for (const node of diagram.nodes) {
+      expect(node.x).toBeTypeOf("number");
+      expect(node.y).toBeTypeOf("number");
+    }
+  });
+
+  it("computes fallback layouts for graphs with edges incident to subgraph clusters", () => {
+    // dagre cannot rank edges touching compound (cluster) nodes; the fallback
+    // must skip them instead of crashing ("Cannot set properties of undefined")
+    const layouts = computeFlowchartLayout(
+      [
+        { id: "A", label: "A", shape: "rounded-rectangle" },
+        { id: "Inner", label: "Inner", shape: "rounded-rectangle" },
+        { id: "B", label: "B", shape: "rounded-rectangle" },
+      ],
+      [
+        { sourceId: "A", targetId: "Cluster", kind: "directed" },
+        { sourceId: "Cluster", targetId: "B", kind: "directed" },
+        { sourceId: "A", targetId: "Inner", kind: "directed" },
+      ],
+      [{ id: "Cluster", label: "Cluster", nodeIds: ["Inner"] }],
+      "TD",
+    );
+
+    expect(layouts.nodeLayouts.get("Inner")).toBeDefined();
+    expect(layouts.edgeLayouts.get(0)).toBeUndefined();
+    expect(layouts.edgeLayouts.get(2)).toBeDefined();
+  });
+
+  it("keeps state edge geometry aligned when notes sit between transitions", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        [*] --> A
+        note right of A : a note between transitions
+        A --> B : first
+        B --> C : second
+      `,
+    });
+
+    // The note edge must not shift the polyline of the transitions after it:
+    // every transition's route starts at its own source state's level.
+    const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+    const transitions = diagram.edges.filter((edge) => edge.kind === "directed");
+    expect(transitions.map((edge) => [edge.sourceId, edge.targetId])).toEqual([
+      ["__state_start__", "A"],
+      ["A", "B"],
+      ["B", "C"],
+    ]);
+    for (const edge of transitions) {
+      const source = byId.get(edge.sourceId)!;
+      const target = byId.get(edge.targetId)!;
+      const points = edge.points!;
+      expect(points.length).toBeGreaterThan(1);
+      expect(points[0].y).toBeGreaterThanOrEqual(source.y! + source.height! / 2 - 1);
+      expect(points[0].y).toBeLessThanOrEqual(source.y! + source.height! + 1);
+      const last = points[points.length - 1];
+      expect(last.y).toBeGreaterThanOrEqual(target.y! - 1);
+      expect(last.y).toBeLessThanOrEqual(target.y! + target.height! / 2 + 1);
+    }
+  });
+
+  it("positions composite state contents with ancestor transforms applied", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        [*] --> Draft
+        Draft --> Review
+        state Review {
+          [*] --> Screening
+        }
+        Review --> Live
+        state Live {
+          [*] --> Serving
+        }
+      `,
+    });
+
+    const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+    const draft = byId.get("Draft")!;
+    const screening = byId.get("Screening")!;
+    // Screening is nested inside Review, rendered below Draft: without the
+    // ancestor translate offsets its coordinates would sit near the origin.
+    expect(screening.y!).toBeGreaterThan(draft.y! + draft.height!);
+    // Serving sits in the second composite below Review: only correct when
+    // the ancestor cluster translates are accumulated for both.
+    expect(byId.get("Serving")!.y!).toBeGreaterThan(screening.y!);
+    // Labels are measured (markdown state labels render as foreignObjects
+    // unless htmlLabels are forced off, producing degenerate 16x16 boxes)
+    expect(draft.width!).toBeGreaterThan(30);
+  });
+
+  it("excludes subgraph-endpoint edges and auto-created vertices from flowcharts", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart TD
+        subgraph sg [Group]
+          A --> B
+        end
+        sg --> C
+      `,
+    });
+
+    // No duplicate/phantom node for the subgraph id
+    expect(diagram.nodes.filter((node) => node.id === "sg")).toEqual([]);
+    expect(diagram.edges.map(stripEdgePoints)).toEqual([
+      { sourceId: "A", targetId: "B", label: undefined, kind: "directed" },
+    ]);
+    expect(diagram.warnings.some((warning) => warning.startsWith("unsupported_subgraph_edge:"))).toBe(true);
+    // Geometry extraction still succeeded for the remaining nodes
+    for (const node of diagram.nodes) {
+      expect(node.x).toBeTypeOf("number");
+      expect(node.y).toBeTypeOf("number");
+    }
+  });
+
+  it("keeps the start arrowhead on thick bidirectional edges", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart TD
+        A <==> B
+      `,
+    });
+
+    expect(diagram.edges.map(stripEdgePoints)).toEqual([
+      { sourceId: "A", targetId: "B", label: undefined, kind: "bidirectional-thick-directed" },
+    ]);
+  });
+
+  it("skips frontmatter before diagram header detection", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `---
+title: My Diagram
+config:
+  theme: base
+---
+flowchart LR
+  A --> B
+`,
+    });
+
+    expect(diagram.diagramType).toBe("flowchart");
+    expect(diagram.direction).toBe("LR");
+    expect(diagram.nodes.map(stripLayout)).toEqual([
+      { id: "A", label: "A", shape: "rectangle" },
+      { id: "B", label: "B", shape: "rectangle" },
+    ]);
+  });
+
+  it("skips frontmatter for non-flowchart diagram types too", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `---
+title: Plan
+---
+gantt
+  dateFormat YYYY-MM-DD
+  section S
+  A :a, 2026-01-01, 2d
+`,
+    });
+
+    expect(diagram.diagramType).toBe("gantt");
+  });
+
+  it("rejects gantt quarter date formats explicitly", async () => {
+    await expect(
+      parseMermaid({
+        mermaid: `
+          gantt
+          dateFormat YYYY-QQ
+          section S
+          A :a, 2026-01, 3M
+        `,
+      }),
+    ).rejects.toThrow(/unsupported_construct: gantt dateFormat "YYYY-QQ" uses quarter tokens/);
+  });
+
+  it("parses a gantt slice with month headers and month-aligned task starts", async () => {
     const diagram = await parseMermaid({
       sourceName: "delivery-plan-gantt.mermaid",
       mermaid: `
         gantt
         title EDA Migration - Multi-Team Swim Lanes
-        dateFormat YYYY-QQ
-        axisFormat %Y Q%q
+        dateFormat YYYY-MM
+        axisFormat %Y-%m
         section api-catalogue
-        EP1 Mutation Contract :p1e1, 2026-01, 1q
-        EP2 Transactional Outbox :p1e2, 2026-02, 1q
+        EP1 Mutation Contract :p1e1, 2026-01, 1M
+        EP2 Transactional Outbox :p1e2, 2026-02, 1M
       `,
     });
 
     expect(diagram.diagramType).toBe("gantt");
     expect(diagram.pageName).toBe("EDA Migration - Multi-Team Swim Lanes");
     expect(diagram.edges).toEqual([]);
-    expect(diagram.warnings).toContain('ignored_gantt_directive: "axisFormat %Y Q%q"');
+    expect(diagram.warnings).toContain('ignored_gantt_directive: "axisFormat %Y-%m"');
 
-    const quarterLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-quarter-"));
-    expect(quarterLabels.map(stripLayout)).toEqual([
-      { id: "gantt-quarter-0", label: "2026 Q1", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-1", label: "2026 Q2", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-period-"));
+    expect(periodLabels.map(stripLayout)).toEqual([
+      { id: "gantt-period-0", label: "2026-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-1", label: "2026-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
     ]);
 
     const firstBar = diagram.nodes.find((node) => node.id === "gantt-task-bar-p1e1");
     const secondBar = diagram.nodes.find((node) => node.id === "gantt-task-bar-p1e2");
     expect(firstBar).toMatchObject({ x: 288, width: 104, height: 22, shape: "rounded-rectangle" });
-    expect(secondBar).toMatchObject({ x: 328, width: 104, height: 22, shape: "rounded-rectangle" });
+    expect(secondBar).toMatchObject({ x: 408, width: 104, height: 22, shape: "rounded-rectangle" });
   });
 
-  it("parses named yearly periods when gantt uses YYYY-QQ input", async () => {
+  it("parses datetime gantt input with after references and generated task ids", async () => {
     const diagram = await parseMermaid({
       mermaid: `
         gantt
-        title Seasonal rollout
-        dateFormat YYYY-QQ
-        section Delivery
-        Discovery :d1, 2026-S1, 1q
-        Rollout :d2, 2026-S2, 1q
+        dateFormat YYYY-MM-DD HH:mm
+        section Build
+        Compile :c1, 2026-01-01 08:00, 4h
+        Test :after c1, 2h
+        Deploy :d2, 2026-01-02 00:00, 1d
       `,
     });
 
-    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-quarter-"));
-    expect(periodLabels.map(stripLayout)).toEqual([
-      { id: "gantt-quarter-0", label: "2026 S1", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-1", label: "2026 S2", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-    ]);
+    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-period-"));
+    expect(periodLabels.map((node) => node.label)).toEqual(["2026-01-01", "2026-01-02"]);
 
-    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")).toMatchObject({ x: 288, width: 104 });
+    expect(diagram.nodes.find((node) => node.id === "gantt-section-1")).toMatchObject({ label: "Build" });
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-c1")).toMatchObject({ x: 328, width: 24 });
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-task1")).toBeDefined();
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d2")).toMatchObject({ x: 408, width: 104 });
+  });
+
+  it("maps gantt task tags to bar colors", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        gantt
+        dateFormat YYYY-MM-DD
+        section Delivery
+        Done task :done, d1, 2026-01-01, 1d
+        Crit task :crit, c1, 2026-01-02, 1d
+        Active task :active, a1, 2026-01-03, 1d
+      `,
+    });
+
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")).toMatchObject({ fillColor: "#e0e0e0" });
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-c1")).toMatchObject({ fillColor: "#f8cecc" });
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-a1")).toMatchObject({ fillColor: "#d5e8d4" });
   });
 
   it("parses month-based gantt input", async () => {
@@ -548,11 +999,11 @@ write use case"]
       `,
     });
 
-    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-quarter-"));
+    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-period-"));
     expect(periodLabels.map(stripLayout)).toEqual([
-      { id: "gantt-quarter-0", label: "2026-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-1", label: "2026-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-2", label: "2026-03", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-0", label: "2026-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-1", label: "2026-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-2", label: "2026-03", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
     ]);
 
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")).toMatchObject({ x: 288, width: 224 });
@@ -571,12 +1022,12 @@ write use case"]
       `,
     });
 
-    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-quarter-"));
+    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-period-"));
     expect(periodLabels.map(stripLayout)).toEqual([
-      { id: "gantt-quarter-0", label: "2026-01-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-1", label: "2026-01-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-2", label: "2026-01-03", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-3", label: "2026-01-04", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-0", label: "2026-01-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-1", label: "2026-01-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-2", label: "2026-01-03", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-3", label: "2026-01-04", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
     ]);
 
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")).toMatchObject({ x: 288, width: 344 });
@@ -829,6 +1280,20 @@ write use case"]
         `,
       }),
     ).rejects.toThrow(/requires at least one bar or line series/);
+  });
+
+  it("derives the y-axis range from the data when no y-axis directive is present", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        xychart-beta
+        x-axis [Jan, Feb]
+        bar [2, 4]
+      `,
+    });
+
+    expect(diagram.diagramType).toBe("xychart");
+    expect(diagram.nodes.filter((node) => node.id.startsWith("xychart-bar-"))).toHaveLength(2);
+    expect(diagram.nodes.filter((node) => node.id.startsWith("xychart-y-tick-")).length).toBeGreaterThan(0);
   });
 
   it("parses sequence participants, messages, self-messages, and notes", async () => {

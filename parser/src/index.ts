@@ -13,9 +13,29 @@ export type NodeShape =
   | "rectangle"
   | "rounded-rectangle"
   | "rhombus"
-  | "ellipse";
+  | "ellipse"
+  | "stadium"
+  | "cylinder"
+  | "hexagon"
+  | "parallelogram"
+  | "parallelogram-alt"
+  | "trapezoid"
+  | "trapezoid-alt"
+  | "subroutine"
+  | "double-circle"
+  | "odd";
 
-export type EdgeKind = "directed" | "dashed-directed" | "plain";
+export type EdgeKind =
+  | "directed"
+  | "dashed-directed"
+  | "plain"
+  | "dashed-plain"
+  | "thick-directed"
+  | "thick-plain"
+  | "invisible"
+  | "bidirectional-directed"
+  | "bidirectional-dashed-directed"
+  | "bidirectional-thick-directed";
 export type SequenceMessageKind =
   | "solid"
   | "dotted"
@@ -135,26 +155,7 @@ export interface IntermediateDiagram {
 }
 
 const SUPPORTED_DIRECTIONS = new Set<LayoutDirection>(["TD", "TB", "LR", "RL"]);
-const IGNORED_FLOWCHART_PREFIXES = ["style ", "linkStyle", "click ", "%%{"];
-const EDGE_SEGMENT_PATTERN =
-  /(-\.->|-->|---)(?:\|([\s\S]*?)\|)?|--\s*"([\s\S]*?)"\s*-->/g;
-const NODE_PATTERN =
-  /^(?<id>[A-Za-z_][A-Za-z0-9_-]*)(?:(?<terminal>\(\((?<terminalLabel>[\s\S]+)\)\))|(?<rounded>\((?<roundedLabel>[\s\S]+)\))|(?<decision>\{(?<decisionLabel>[\s\S]+)\})|(?<process>\[(?<processLabel>[\s\S]+)\]))?$/;
-const STATE_TRANSITION_PATTERN =
-  /^(?<source>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)\s*-->\s*(?<target>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)(?:\s*:\s*(?<label>[\s\S]+))?$/;
 const STATE_NOTE_START_PATTERN = /^note\s+(?:left|right)\s+of\s+(?<target>\[\*\]|[A-Za-z_][A-Za-z0-9_-]*)$/i;
-const GANTT_TITLE_PATTERN = /^title\s+(?<title>[\s\S]+)$/i;
-const GANTT_DATE_FORMAT_PATTERN = /^dateFormat\s+(?<format>[\s\S]+)$/i;
-const GANTT_AXIS_FORMAT_PATTERN = /^axisFormat\s+(?<format>[\s\S]+)$/i;
-const GANTT_SECTION_PATTERN = /^section\s+(?<label>[\s\S]+)$/i;
-const GANTT_PERIOD_PATTERN = /^(?<year>\d{4})-(?<prefix>[A-Za-z]+)(?<slot>\d+)$/;
-const GANTT_MONTH_PATTERN = /^(?<year>\d{4})-(?<month>0[1-9]|1[0-2])$/;
-const GANTT_DAY_PATTERN = /^(?<year>\d{4})-(?<month>0[1-9]|1[0-2])-(?<day>0[1-9]|[12]\d|3[01])$/;
-const GANTT_DURATION_PATTERN = /^(?<value>\d+(?:\.\d+)?)(?<unit>q|M|d|w)$/i;
-const GANTT_REFERENCE_PATTERN = /^after\s+(?<ids>[A-Za-z0-9_\-\s]+)$/i;
-const GANTT_UNTIL_PATTERN = /^until\s+(?<id>[A-Za-z0-9_-]+)$/i;
-const GANTT_TAGS = new Set(["active", "done", "crit", "milestone"]);
-const GANTT_SUPPORTED_DATE_FORMATS = new Set(["YYYY-QQ", "YYYY-MM", "YYYY-MM-DD"]);
 
 const GANTT_LABEL_COLUMN_WIDTH = 280;
 const GANTT_TIMELINE_COLUMN_WIDTH = 120;
@@ -246,25 +247,7 @@ interface ParsedXychart {
   lineSeries: number[][];
 }
 
-interface GanttTimelineConfig {
-  dateFormat: string;
-  parseStart(rawValue: string): number | undefined;
-  parseEnd(rawValue: string): number | undefined;
-  parseDuration(rawValue: string, startPosition: number): number | undefined;
-  formatLabel(index: number): string;
-}
 
-interface ParsedEdgeSegment {
-  source: ParsedNodeToken;
-  target: ParsedNodeToken;
-  label?: string;
-  kind: EdgeKind;
-}
-
-interface SubgraphParseResult {
-  id: string;
-  label: string;
-}
 
 interface MermaidClassStyle {
   fillColor?: string;
@@ -272,10 +255,6 @@ interface MermaidClassStyle {
   fontColor?: string;
 }
 
-interface ParsedNodeToken {
-  node: IntermediateNode;
-  classNames: string[];
-}
 
 interface NodeLayout {
   x: number;
@@ -343,37 +322,6 @@ function advanceScanState(state: ScanState, char: string): ScanState {
   return nextState;
 }
 
-function splitTopLevel(input: string, separator: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let state = createScanState();
-
-  for (const char of input) {
-    if (char === separator && isTopLevel(state)) {
-      result.push(current.trim());
-      current = "";
-      continue;
-    }
-    current += char;
-    state = advanceScanState(state, char);
-  }
-
-  result.push(current.trim());
-  return result;
-}
-
-function containsTopLevelToken(input: string, token: string): boolean {
-  let state = createScanState();
-
-  for (let index = 0; index < input.length; index += 1) {
-    if (isTopLevel(state) && input.startsWith(token, index)) {
-      return true;
-    }
-    state = advanceScanState(state, input[index]);
-  }
-
-  return false;
-}
 
 function normalizeLines(mermaid: string, splitSemicolons = false): string[] {
   const statements: string[] = [];
@@ -444,15 +392,6 @@ function parseHeader(line: string): ParsedHeader {
   throw new Error(`unsupported_dialect: unsupported header "${line}"`);
 }
 
-function maybeIgnoreFlowchartLine(line: string, warnings: string[]): boolean {
-  for (const prefix of IGNORED_FLOWCHART_PREFIXES) {
-    if (line.startsWith(prefix)) {
-      warnings.push(`ignored_flowchart_directive: "${line}"`);
-      return true;
-    }
-  }
-  return false;
-}
 
 function normalizeLabel(rawLabel: string): string {
   const trimmed = rawLabel.trim();
@@ -470,105 +409,6 @@ function normalizeLabel(rawLabel: string): string {
   return unescaped;
 }
 
-function stripNodeClassSuffixes(value: string): string {
-  return value.replace(/:::[A-Za-z_][A-Za-z0-9_-]*/g, "");
-}
-
-function extractNodeClassNames(value: string): string[] {
-  return Array.from(value.matchAll(/:::([A-Za-z_][A-Za-z0-9_-]*)/g), (match) => match[1]);
-}
-
-function parseClassStyle(line: string): { className: string; style: MermaidClassStyle } | undefined {
-  const match = /^classDef\s+([A-Za-z_][A-Za-z0-9_-]*)\s+(.+)$/.exec(line);
-  if (!match) {
-    return undefined;
-  }
-
-  const style: MermaidClassStyle = {};
-  for (const declaration of splitStyleDeclarations(match[2])) {
-    const separatorIndex = declaration.indexOf(":");
-    if (separatorIndex === -1) {
-      continue;
-    }
-    const rawKey = declaration.slice(0, separatorIndex);
-    const rawValue = declaration.slice(separatorIndex + 1);
-    if (!rawKey || !rawValue) {
-      continue;
-    }
-    const key = rawKey.trim();
-    const value = rawValue.trim();
-    if (key === "fill") {
-      style.fillColor = value;
-    } else if (key === "stroke") {
-      style.strokeColor = value;
-    } else if (key === "color") {
-      style.fontColor = value;
-    }
-  }
-
-  return { className: match[1], style };
-}
-
-function splitStyleDeclarations(rawStyle: string): string[] {
-  const declarations: string[] = [];
-  let current = "";
-  let parenthesesDepth = 0;
-
-  for (const character of rawStyle) {
-    if (character === "(") {
-      parenthesesDepth += 1;
-      current += character;
-      continue;
-    }
-
-    if (character === ")") {
-      parenthesesDepth = Math.max(0, parenthesesDepth - 1);
-      current += character;
-      continue;
-    }
-
-    if (character === "," && parenthesesDepth === 0) {
-      if (current.trim()) {
-        declarations.push(current.trim());
-      }
-      current = "";
-      continue;
-    }
-
-    current += character;
-  }
-
-  if (current.trim()) {
-    declarations.push(current.trim());
-  }
-
-  return declarations;
-}
-
-function parseClassAssignment(line: string): { nodeIds: string[]; classNames: string[] } | undefined {
-  const match = /^class\s+([A-Za-z0-9_,-\s]+)\s+([A-Za-z0-9_:\-\s]+)$/.exec(line);
-  if (!match) {
-    return undefined;
-  }
-
-  return {
-    nodeIds: match[1].split(",").map((entry) => entry.trim()).filter(Boolean),
-    classNames: match[2].split(/[,\s]+/).map((entry) => entry.trim()).filter(Boolean),
-  };
-}
-
-function mergeClassNames(target: Map<string, string[]>, nodeId: string, classNames: string[]): void {
-  if (classNames.length === 0) {
-    return;
-  }
-  const existing = target.get(nodeId) ?? [];
-  for (const className of classNames) {
-    if (!existing.includes(className)) {
-      existing.push(className);
-    }
-  }
-  target.set(nodeId, existing);
-}
 
 function applyClassStyles(node: IntermediateNode, classNames: string[], classStyles: Map<string, MermaidClassStyle>): IntermediateNode {
   if (classNames.length === 0) {
@@ -586,94 +426,6 @@ function applyClassStyles(node: IntermediateNode, classNames: string[], classSty
     nextNode.fontColor ??= style.fontColor;
   }
   return nextNode;
-}
-
-function parseNodeToken(token: string): ParsedNodeToken {
-  const classNames = extractNodeClassNames(token);
-  const bareToken = stripNodeClassSuffixes(token).trim();
-  const match = bareToken.match(NODE_PATTERN);
-  if (!match?.groups) {
-    throw new Error(`parse_error: cannot parse node token "${token}"`);
-  }
-
-  const id = match.groups.id;
-  if (match.groups.terminal) {
-    return {
-      node: {
-        id,
-        label: normalizeLabel(match.groups.terminalLabel),
-        shape: "ellipse",
-      },
-      classNames,
-    };
-  }
-  if (match.groups.rounded) {
-    return {
-      node: {
-        id,
-        label: normalizeLabel(match.groups.roundedLabel),
-        shape: "rounded-rectangle",
-      },
-      classNames,
-    };
-  }
-  if (match.groups.decision) {
-    return {
-      node: {
-        id,
-        label: normalizeLabel(match.groups.decisionLabel),
-        shape: "rhombus",
-      },
-      classNames,
-    };
-  }
-  if (match.groups.process) {
-    return {
-      node: {
-        id,
-        label: normalizeLabel(match.groups.processLabel),
-        shape: "rectangle",
-      },
-      classNames,
-    };
-  }
-
-  return {
-    node: { id, label: id, shape: "rectangle" },
-    classNames,
-  };
-}
-
-function parseNodeGroup(token: string): ParsedNodeToken[] {
-  const groupTokens = splitTopLevel(token, "&").map((nodeToken) => nodeToken.trim());
-  if (groupTokens.some((nodeToken) => nodeToken.length === 0)) {
-    throw new Error(`parse_error: malformed node group "${token}"`);
-  }
-
-  return groupTokens.map(parseNodeToken);
-}
-
-function mergeNode(existing: IntermediateNode | undefined, incoming: IntermediateNode): IntermediateNode {
-  if (!existing) {
-    return incoming;
-  }
-
-  const existingSpecificity =
-    (existing.label !== existing.id ? 1 : 0) +
-    (existing.shape !== "rectangle" ? 1 : 0) +
-    (existing.fillColor ? 1 : 0) +
-    (existing.strokeColor ? 1 : 0) +
-    (existing.fontColor ? 1 : 0) +
-    (existing.x !== undefined ? 1 : 0);
-  const incomingSpecificity =
-    (incoming.label !== incoming.id ? 1 : 0) +
-    (incoming.shape !== "rectangle" ? 1 : 0) +
-    (incoming.fillColor ? 1 : 0) +
-    (incoming.strokeColor ? 1 : 0) +
-    (incoming.fontColor ? 1 : 0) +
-    (incoming.x !== undefined ? 1 : 0);
-
-  return incomingSpecificity >= existingSpecificity ? incoming : existing;
 }
 
 function estimateNodeDimensions(node: IntermediateNode): { width: number; height: number } {
@@ -694,7 +446,7 @@ function estimateNodeDimensions(node: IntermediateNode): { width: number; height
   return { width, height };
 }
 
-function computeFlowchartLayout(
+export function computeFlowchartLayout(
   nodes: IntermediateNode[],
   edges: IntermediateEdge[],
   subgraphs: IntermediateSubgraph[],
@@ -738,7 +490,13 @@ function computeFlowchartLayout(
     }
   }
 
+  const clusterIds = new Set(subgraphs.map((subgraph) => subgraph.id));
   for (const [index, edge] of edges.entries()) {
+    // dagre cannot rank edges incident to cluster (compound) nodes — they are
+    // left without waypoints and the generator orthogonal-routes them
+    if (clusterIds.has(edge.sourceId) || clusterIds.has(edge.targetId)) {
+      continue;
+    }
     if (graph.hasNode(edge.sourceId) && graph.hasNode(edge.targetId)) {
       graph.setEdge(
         edge.sourceId,
@@ -791,182 +549,308 @@ function computeFlowchartLayout(
   return { nodeLayouts, edgeLayouts };
 }
 
-function parseEdgeSegments(line: string): ParsedEdgeSegment[] {
-  const matches = Array.from(line.matchAll(EDGE_SEGMENT_PATTERN));
-  if (matches.length === 0) {
-    return [];
-  }
+interface FlowchartVertexData {
+  id: string;
+  domId?: string;
+  text?: string;
+  type?: string;
+  classes?: string[];
+  styles?: string[];
+  link?: string;
+}
 
-  const nodes: string[] = [];
-  let cursor = 0;
-  for (const match of matches) {
-    const index = match.index ?? -1;
-    if (index < cursor) {
-      throw new Error(`parse_error: malformed edge expression "${line}"`);
+interface FlowchartEdgeData {
+  id: string;
+  start: string;
+  end: string;
+  type: string;
+  stroke: string;
+  text?: string;
+}
+
+interface FlowchartSubgraphData {
+  id: string;
+  title?: string;
+  nodes: string[];
+}
+
+interface FlowchartClassData {
+  styles?: string[];
+  textStyles?: string[];
+}
+
+interface FlowchartDb {
+  getVertices(): Map<string, FlowchartVertexData>;
+  getEdges(): FlowchartEdgeData[];
+  getSubGraphs(): FlowchartSubgraphData[];
+  getClasses(): Map<string, FlowchartClassData>;
+  getDirection(): string | undefined;
+}
+
+const FLOWCHART_SHAPE_MAP: Record<string, NodeShape> = {
+  square: "rectangle",
+  rect: "rectangle",
+  process: "rectangle",
+  proc: "rectangle",
+  "fr-rect": "rectangle",
+  "sq": "rectangle",
+  round: "rounded-rectangle",
+  rounded: "rounded-rectangle",
+  stadium: "stadium",
+  pill: "stadium",
+  term: "stadium",
+  terminator: "stadium",
+  subroutine: "subroutine",
+  subproc: "subroutine",
+  "fr-cyl": "cylinder",
+  cylinder: "cylinder",
+  cyl: "cylinder",
+  db: "cylinder",
+  circle: "ellipse",
+  circ: "ellipse",
+  doublecircle: "double-circle",
+  "dbl-circ": "double-circle",
+  diamond: "rhombus",
+  diam: "rhombus",
+  decision: "rhombus",
+  hexagon: "hexagon",
+  hex: "hexagon",
+  odd: "odd",
+  lean_right: "parallelogram",
+  "lean-r": "parallelogram",
+  parallelogram: "parallelogram",
+  para: "parallelogram",
+  lean_left: "parallelogram-alt",
+  "lean-l": "parallelogram-alt",
+  trapezoid: "trapezoid",
+  "trap-b": "trapezoid",
+  inv_trapezoid: "trapezoid-alt",
+  "trap-t": "trapezoid-alt",
+};
+
+function mapFlowchartShape(type: string | undefined, nodeId: string, warnings: string[]): NodeShape {
+  if (!type) {
+    return "rectangle";
+  }
+  const shape = FLOWCHART_SHAPE_MAP[type];
+  if (shape) {
+    return shape;
+  }
+  warnings.push(`unsupported_shape: node "${nodeId}" uses shape "${type}" rendered as rectangle`);
+  return "rectangle";
+}
+
+function parseFlowchartStyles(declarations: string[]): MermaidClassStyle {
+  const style: MermaidClassStyle = {};
+  for (const declaration of declarations) {
+    const separatorIndex = declaration.indexOf(":");
+    if (separatorIndex === -1) {
+      continue;
     }
-    nodes.push(line.slice(cursor, index).trim());
-    cursor = index + match[0].length;
+    const key = declaration.slice(0, separatorIndex).trim().toLowerCase();
+    const value = declaration.slice(separatorIndex + 1).trim();
+    if (key === "fill") {
+      style.fillColor = value;
+    } else if (key === "stroke") {
+      style.strokeColor = value;
+    } else if (key === "color") {
+      style.fontColor = value;
+    }
   }
-  nodes.push(line.slice(cursor).trim());
+  return style;
+}
 
-  if (nodes.some((token) => token.length === 0)) {
-    throw new Error(`parse_error: malformed edge expression "${line}"`);
+function normalizeFlowchartLabel(text: string): string {
+  // Mermaid's flowchart lexer stores entity codes in the same placeholder
+  // encoding as the sequence lexer, so reuse that decoder before normalizing.
+  return normalizeLabel(decodeSequenceEntities(text));
+}
+
+function mapFlowchartEdgeKind(edge: FlowchartEdgeData, warnings: string[]): EdgeKind {
+  if (edge.stroke === "invisible") {
+    return "invisible";
+  }
+  const bidirectional = edge.type.startsWith("double_arrow");
+  const arrowType = bidirectional ? edge.type.slice("double_".length) : edge.type;
+  if (arrowType === "arrow_circle" || arrowType === "arrow_cross") {
+    warnings.push(
+      `unsupported_arrow_variant: ${arrowType === "arrow_circle" ? "circle" : "cross"} arrowhead on edge "${edge.id}" rendered as a block arrow`,
+    );
+  }
+  const dotted = edge.stroke === "dotted";
+  const thick = edge.stroke === "thick";
+  if (arrowType === "arrow_open") {
+    return thick ? "thick-plain" : dotted ? "dashed-plain" : "plain";
+  }
+  const directed: EdgeKind = thick ? "thick-directed" : dotted ? "dashed-directed" : "directed";
+  if (bidirectional && directed === "directed") {
+    return "bidirectional-directed";
+  }
+  if (bidirectional && directed === "dashed-directed") {
+    return "bidirectional-dashed-directed";
+  }
+  if (bidirectional && directed === "thick-directed") {
+    return "bidirectional-thick-directed";
+  }
+  return directed;
+}
+
+async function parseFlowchart(
+  request: MermaidParseRequest,
+  direction: LayoutDirection,
+): Promise<IntermediateDiagram> {
+  const { mermaid } = await import("./mermaid-env.js");
+  const warnings: string[] = [];
+
+  let db: FlowchartDb;
+  try {
+    await mermaid.parse(request.mermaid);
+    db = (await mermaid.mermaidAPI.getDiagramFromText(request.mermaid)).db as FlowchartDb;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`parse_error: ${message.split("\n")[0]}`);
   }
 
-  const nodeGroups = nodes.map(parseNodeGroup);
+  const classStyles = new Map<string, MermaidClassStyle>();
+  for (const [className, classDef] of db.getClasses()) {
+    if (className === "default") {
+      continue;
+    }
+    classStyles.set(
+      className,
+      parseFlowchartStyles([...(classDef.styles ?? []), ...(classDef.textStyles ?? [])]),
+    );
+  }
 
-  return matches.flatMap((match, index) => {
-    const sources = nodeGroups[index];
-    const targets = nodeGroups[index + 1];
-    const label = normalizeLabel(match[2] ?? match[3] ?? "").trim() || undefined;
-    const kind = match[1] === "---" ? "plain" : match[1] === "-.->" ? "dashed-directed" : "directed";
+  const dbSubgraphs = db.getSubGraphs();
+  const subgraphDbIds = new Set(dbSubgraphs.map((subgraph) => subgraph.id));
 
-    return sources.flatMap((source) =>
-      targets.map((target) => ({
-        source,
-        target,
-        label,
-        kind,
-      })),
+  // flowDb auto-creates a vertex when an edge references a subgraph id;
+  // exclude those stand-ins from the node list (the subgraph container owns
+  // the id) and skip the attached edges below.
+  const vertices = Array.from(db.getVertices().values()).filter(
+    (vertex) => !subgraphDbIds.has(vertex.id),
+  );
+  const vertexIds = new Set(vertices.map((vertex) => vertex.id));
+
+  const nodes: IntermediateNode[] = vertices.map((vertex) => {
+    let node: IntermediateNode = {
+      id: vertex.id,
+      label: normalizeFlowchartLabel(vertex.text ?? vertex.id),
+      shape: mapFlowchartShape(vertex.type, vertex.id, warnings),
+    };
+    node = applyClassStyles(
+      node,
+      (vertex.classes ?? []).filter((className) => className !== "clickable"),
+      classStyles,
+    );
+    const inlineStyle = parseFlowchartStyles(vertex.styles ?? []);
+    if (inlineStyle.fillColor !== undefined) {
+      node = { ...node, fillColor: inlineStyle.fillColor };
+    }
+    if (inlineStyle.strokeColor !== undefined) {
+      node = { ...node, strokeColor: inlineStyle.strokeColor };
+    }
+    if (inlineStyle.fontColor !== undefined) {
+      node = { ...node, fontColor: inlineStyle.fontColor };
+    }
+    if (vertex.link) {
+      warnings.push(`ignored_flowchart_directive: "click ${vertex.id}" link is not rendered`);
+    }
+    return node;
+  });
+
+  const edges: IntermediateEdge[] = [];
+  const edgeGeometryKeys: string[] = [];
+  for (const dbEdge of db.getEdges()) {
+    if (subgraphDbIds.has(dbEdge.start) || subgraphDbIds.has(dbEdge.end) ||
+        !vertexIds.has(dbEdge.start) || !vertexIds.has(dbEdge.end)) {
+      warnings.push(
+        `unsupported_subgraph_edge: edge "${dbEdge.id}" attached to a subgraph endpoint is not rendered`,
+      );
+      continue;
+    }
+    edges.push({
+      sourceId: dbEdge.start,
+      targetId: dbEdge.end,
+      label: normalizeFlowchartLabel(dbEdge.text ?? "").trim() || undefined,
+      kind: mapFlowchartEdgeKind(dbEdge, warnings),
+    });
+    edgeGeometryKeys.push(dbEdge.id);
+  }
+
+  const subgraphIdByDbId = new Map<string, string>();
+  dbSubgraphs.forEach((subgraph, index) => {
+    subgraphIdByDbId.set(
+      subgraph.id,
+      /^subGraph\d+$/.test(subgraph.id) ? `subgraph-${index + 1}` : subgraph.id,
     );
   });
-}
+  const subgraphs: IntermediateSubgraph[] = dbSubgraphs.map((subgraph) => {
+    const id = subgraphIdByDbId.get(subgraph.id)!;
+    const parent = dbSubgraphs.find(
+      (candidate) => candidate.id !== subgraph.id && candidate.nodes.includes(subgraph.id),
+    );
+    return {
+      id,
+      label: subgraph.title?.trim() || id,
+      nodeIds: subgraph.nodes.filter((nodeId) => vertexIds.has(nodeId)),
+      parentId: parent ? subgraphIdByDbId.get(parent.id) : undefined,
+    };
+  });
 
-function parseSubgraphStart(line: string, sequence: number): SubgraphParseResult {
-  const body = line.slice("subgraph".length).trim();
-  if (body.length === 0) {
-    throw new Error(`parse_error: malformed subgraph declaration "${line}"`);
+  for (const line of normalizeLines(request.mermaid, true)) {
+    if (line.startsWith("linkStyle")) {
+      warnings.push(`ignored_flowchart_directive: "${line}"`);
+    }
   }
 
-  return {
-    id: `subgraph-${sequence}`,
-    label: normalizeLabel(body),
-  };
-}
-
-function parseFlowchart(
-  request: MermaidParseRequest,
-  lines: string[],
-  direction: LayoutDirection,
-): IntermediateDiagram {
-  const nodeMap = new Map<string, IntermediateNode>();
-  const classStyles = new Map<string, MermaidClassStyle>();
-  const nodeClassNames = new Map<string, string[]>();
-  const edges: IntermediateEdge[] = [];
-  const subgraphs = new Map<
-    string,
-    { id: string; label: string; nodeIds: Set<string>; parentId?: string }
-  >();
-  const subgraphStack: string[] = [];
-  const warnings: string[] = [];
-  let subgraphSequence = 0;
-
-  function attachNodeToCurrentSubgraph(nodeId: string): void {
-    const currentSubgraphId = subgraphStack[subgraphStack.length - 1];
-    if (!currentSubgraphId) {
-      return;
+  let nodeLayouts: Map<string, NodeLayout>;
+  const edgeLayouts = new Map<number, IntermediatePoint[]>();
+  let geometry: import("./mermaid-geometry.js").FlowchartGeometry | undefined;
+  try {
+    const { renderFlowchartGeometry } = await import("./mermaid-geometry.js");
+    geometry = await renderFlowchartGeometry(request.mermaid, {
+      vertices: vertices.map((vertex) => ({ id: vertex.id, domId: vertex.domId })),
+      edgeIds: edgeGeometryKeys,
+    });
+    if (geometry === undefined) {
+      warnings.push("flowchart_geometry_unavailable: canvas text measurement is unavailable on this platform");
     }
-    subgraphs.get(currentSubgraphId)?.nodeIds.add(nodeId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warnings.push(`flowchart_geometry_unavailable: ${message.split("\n")[0]}`);
   }
 
-  for (const line of lines.slice(1)) {
-    const parsedClassStyle = parseClassStyle(line);
-    if (parsedClassStyle) {
-      classStyles.set(parsedClassStyle.className, parsedClassStyle.style);
-      continue;
-    }
-
-    const parsedClassAssignment = parseClassAssignment(line);
-    if (parsedClassAssignment) {
-      for (const nodeId of parsedClassAssignment.nodeIds) {
-        mergeClassNames(nodeClassNames, nodeId, parsedClassAssignment.classNames);
+  if (geometry) {
+    nodeLayouts = new Map(
+      geometry.nodes.map((node) => [node.id, { x: node.x, y: node.y, width: node.width, height: node.height }]),
+    );
+    const pointsByEdgeId = new Map(geometry.edges.map((edge) => [edge.id, edge.points]));
+    edgeGeometryKeys.forEach((key, index) => {
+      const points = pointsByEdgeId.get(key);
+      if (points) {
+        edgeLayouts.set(index, points);
       }
-      continue;
+    });
+  } else {
+    const layouts = computeFlowchartLayout(nodes, edges, subgraphs, direction);
+    nodeLayouts = layouts.nodeLayouts;
+    for (const [index, points] of layouts.edgeLayouts) {
+      edgeLayouts.set(index, points);
     }
-
-    if (maybeIgnoreFlowchartLine(line, warnings)) {
-      continue;
-    }
-
-    const normalizedLine = line;
-
-    if (normalizedLine === "end") {
-      if (subgraphStack.length === 0) {
-        throw new Error('parse_error: unexpected "end" without matching subgraph');
-      }
-      subgraphStack.pop();
-      continue;
-    }
-
-    if (normalizedLine.startsWith("subgraph ")) {
-      subgraphSequence += 1;
-      const subgraph = parseSubgraphStart(normalizedLine, subgraphSequence);
-      subgraphs.set(subgraph.id, {
-        id: subgraph.id,
-        label: subgraph.label,
-        nodeIds: new Set<string>(),
-        parentId: subgraphStack[subgraphStack.length - 1],
-      });
-      subgraphStack.push(subgraph.id);
-      continue;
-    }
-
-    const edgeSegments = parseEdgeSegments(normalizedLine);
-    if (edgeSegments.length > 0) {
-      for (const edgeSegment of edgeSegments) {
-        nodeMap.set(
-          edgeSegment.source.node.id,
-          mergeNode(nodeMap.get(edgeSegment.source.node.id), edgeSegment.source.node),
-        );
-        nodeMap.set(
-          edgeSegment.target.node.id,
-          mergeNode(nodeMap.get(edgeSegment.target.node.id), edgeSegment.target.node),
-        );
-        mergeClassNames(nodeClassNames, edgeSegment.source.node.id, edgeSegment.source.classNames);
-        mergeClassNames(nodeClassNames, edgeSegment.target.node.id, edgeSegment.target.classNames);
-        attachNodeToCurrentSubgraph(edgeSegment.source.node.id);
-        attachNodeToCurrentSubgraph(edgeSegment.target.node.id);
-        edges.push({
-          sourceId: edgeSegment.source.node.id,
-          targetId: edgeSegment.target.node.id,
-          label: edgeSegment.label,
-          kind: edgeSegment.kind,
-        });
-      }
-      continue;
-    }
-
-    const parsedNode = parseNodeToken(normalizedLine);
-    nodeMap.set(parsedNode.node.id, mergeNode(nodeMap.get(parsedNode.node.id), parsedNode.node));
-    mergeClassNames(nodeClassNames, parsedNode.node.id, parsedNode.classNames);
-    attachNodeToCurrentSubgraph(parsedNode.node.id);
   }
-
-  if (subgraphStack.length > 0) {
-    throw new Error("parse_error: unclosed subgraph block");
-  }
-
-  const styledNodes = Array.from(nodeMap.values()).map((node) =>
-    applyClassStyles(node, nodeClassNames.get(node.id) ?? [], classStyles),
-  );
-  const subgraphList = Array.from(subgraphs.values()).map((subgraph) => ({
-    id: subgraph.id,
-    label: subgraph.label,
-    nodeIds: Array.from(subgraph.nodeIds),
-    parentId: subgraph.parentId,
-  }));
-  const layouts = computeFlowchartLayout(styledNodes, edges, subgraphList, direction);
 
   return {
     pageName: derivePageName(request.sourceName),
     diagramType: "flowchart",
     direction,
-    nodes: styledNodes.map((node) => ({ ...node, ...layouts.nodeLayouts.get(node.id) })),
+    nodes: nodes.map((node) => ({ ...node, ...nodeLayouts.get(node.id) })),
     edges: edges.map((edge, index) => ({
       ...edge,
-      points: layouts.edgeLayouts.get(index),
+      points: edgeLayouts.get(index),
     })),
-    subgraphs: subgraphList,
+    subgraphs,
     sequenceParticipants: [],
     sequenceMessages: [],
     sequenceNotes: [],
@@ -976,418 +860,105 @@ function parseFlowchart(
   };
 }
 
-function createStateNode(token: string, role: "source" | "target"): IntermediateNode {
-  if (token === "[*]") {
-    return {
-      id: role === "source" ? "__state_start__" : "__state_end__",
-      label: role === "source" ? "Start" : "End",
-      shape: "ellipse",
-    };
-  }
 
-  return {
-    id: token,
-    label: token,
-    shape: "rounded-rectangle",
+interface GanttTaskData {
+  id: string;
+  task: string;
+  section?: string;
+  startTime: Date;
+  endTime: Date;
+  done?: boolean;
+  crit?: boolean;
+  active?: boolean;
+  milestone?: boolean;
+}
+
+interface GanttDb {
+  getTasks(): GanttTaskData[];
+  getDiagramTitle(): string;
+  getDateFormat(): string;
+  getAxisFormat(): string;
+}
+
+interface XychartAxisData {
+  type: "band" | "linear";
+  title?: string;
+  categories?: Array<string | number>;
+  min?: number;
+  max?: number;
+}
+
+interface XychartPlotData {
+  type: string;
+  data: Array<[string | number, number]>;
+}
+
+interface XychartDb {
+  getDiagramTitle(): string;
+  getXYChartData(): {
+    xAxis?: XychartAxisData;
+    yAxis?: XychartAxisData;
+    plots?: XychartPlotData[];
   };
 }
 
-function parseGanttDuration(rawValue: string): { value: number; unit: string } | undefined {
-  const match = rawValue.match(GANTT_DURATION_PATTERN);
-  if (!match?.groups) {
-    return undefined;
-  }
-
-  return {
-    value: Number.parseFloat(match.groups.value),
-    unit: match.groups.unit,
-  };
-}
-
-function parseGanttPeriod(rawValue: string): { year: number; prefix: string; slot: number } | undefined {
-  const match = rawValue.match(GANTT_PERIOD_PATTERN);
-  if (!match?.groups) {
-    return undefined;
-  }
-
-  return {
-    year: Number.parseInt(match.groups.year, 10),
-    prefix: match.groups.prefix,
-    slot: Number.parseInt(match.groups.slot, 10),
-  };
-}
-
-function parseGanttMonth(rawValue: string): { year: number; month: number } | undefined {
-  const match = rawValue.match(GANTT_MONTH_PATTERN);
-  if (!match?.groups) {
-    return undefined;
-  }
-
-  return {
-    year: Number.parseInt(match.groups.year, 10),
-    month: Number.parseInt(match.groups.month, 10),
-  };
-}
-
-function parseGanttDay(rawValue: string): { year: number; month: number; day: number } | undefined {
-  const match = rawValue.match(GANTT_DAY_PATTERN);
-  if (!match?.groups) {
-    return undefined;
-  }
-
-  return {
-    year: Number.parseInt(match.groups.year, 10),
-    month: Number.parseInt(match.groups.month, 10),
-    day: Number.parseInt(match.groups.day, 10),
-  };
+interface GanttScale {
+  position(date: Date): number;
+  formatLabel(index: number): string;
 }
 
 function formatTwoDigits(value: number): string {
   return `${value}`.padStart(2, "0");
 }
 
-function getUtcDaysInMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+function ganttTimeFraction(date: Date): number {
+  const seconds =
+    date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds() + date.getMilliseconds() / 1000;
+  return seconds / 86400;
 }
 
-function addUtcDays(parts: { year: number; month: number; day: number }, days: number): { year: number; month: number; day: number } {
-  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
-  date.setUTCDate(date.getUTCDate() + days);
-  return {
-    year: date.getUTCFullYear(),
-    month: date.getUTCMonth() + 1,
-    day: date.getUTCDate(),
-  };
+function ganttLocalEpochDay(date: Date): number {
+  return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / GANTT_DAY_MS);
 }
 
-function addUtcMonths(parts: { year: number; month: number; day: number }, months: number): { year: number; month: number; day: number } {
-  const zeroBasedMonth = parts.month - 1 + months;
-  const year = parts.year + Math.floor(zeroBasedMonth / 12);
-  const monthIndex = ((zeroBasedMonth % 12) + 12) % 12;
-  const month = monthIndex + 1;
-
-  return {
-    year,
-    month,
-    day: Math.min(parts.day, getUtcDaysInMonth(year, month)),
-  };
+function requireSupportedGanttDateFormat(dateFormat: string): string {
+  // Mermaid (dayjs) has no quarter support: YYYY-QQ-style formats degrade
+  // silently into wrong dates, so reject them explicitly instead.
+  if (/Q/.test(dateFormat)) {
+    throw new Error(
+      `unsupported_construct: gantt dateFormat "${dateFormat}" uses quarter tokens, which mermaid does not support; use YYYY-MM or YYYY-MM-DD instead`,
+    );
+  }
+  return dateFormat;
 }
 
-function fromEpochDay(epochDay: number): { year: number; month: number; day: number } {
-  const date = new Date(epochDay * GANTT_DAY_MS);
-  return {
-    year: date.getUTCFullYear(),
-    month: date.getUTCMonth() + 1,
-    day: date.getUTCDate(),
-  };
-}
-
-function toEpochDay(parts: { year: number; month: number; day: number }): number {
-  return Math.floor(Date.UTC(parts.year, parts.month - 1, parts.day) / GANTT_DAY_MS);
-}
-
-function createGanttPeriodTimeline(taskLines: string[]): GanttTimelineConfig {
-  const explicitPeriods = taskLines
-    .flatMap((line) => line.split(","))
-    .map((token) => token.trim())
-    .map(parseGanttPeriod)
-    .filter((period): period is { year: number; prefix: string; slot: number } => Boolean(period));
-  const prefixes = new Set(explicitPeriods.map((period) => period.prefix.toUpperCase()));
-  if (prefixes.size > 1) {
-    throw new Error("unsupported_dialect: mixed named gantt periods are not supported in one chart");
+function createGanttScale(dateFormat: string): GanttScale {
+  // Month columns when the declared format references months but carries no
+  // day or time tokens (e.g. "YYYY-MM"); everything else gets day columns.
+  const monthScale = /M/.test(dateFormat) && !/[DdHhsSmxX]/.test(dateFormat.replace(/MM/g, ""));
+  if (monthScale) {
+    return {
+      position(date: Date): number {
+        const year = date.getFullYear();
+        const monthIndex = date.getMonth();
+        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+        return year * 12 + monthIndex + (date.getDate() - 1 + ganttTimeFraction(date)) / daysInMonth;
+      },
+      formatLabel(index: number): string {
+        const year = Math.floor(index / 12);
+        return `${year}-${formatTwoDigits((index % 12) + 1)}`;
+      },
+    };
   }
 
-  const prefix = explicitPeriods[0]?.prefix ?? "Q";
-  const periodsPerYear = explicitPeriods.length > 0 ? Math.max(...explicitPeriods.map((period) => period.slot)) : 4;
-
-  const monthToQuarterPosition = (rawValue: string): number | undefined => {
-    if (periodsPerYear !== 4) {
-      return undefined;
-    }
-    const month = parseGanttMonth(rawValue);
-    if (!month) {
-      return undefined;
-    }
-    const zeroBasedMonth = month.month - 1;
-    return month.year * 4 + Math.floor(zeroBasedMonth / 3) + (zeroBasedMonth % 3) / 3;
-  };
-
-  const dayToQuarterPosition = (rawValue: string): number | undefined => {
-    if (periodsPerYear !== 4) {
-      return undefined;
-    }
-    const day = parseGanttDay(rawValue);
-    if (!day) {
-      return undefined;
-    }
-    const zeroBasedMonth = day.month - 1;
-    const daysInMonth = getUtcDaysInMonth(day.year, day.month);
-    return day.year * 4 + Math.floor(zeroBasedMonth / 3) + ((zeroBasedMonth % 3) + (day.day - 1) / daysInMonth) / 3;
-  };
-
   return {
-    dateFormat: "YYYY-QQ",
-    parseStart(rawValue: string): number | undefined {
-      const period = parseGanttPeriod(rawValue);
-      if (period) {
-        if (period.prefix.toUpperCase() !== prefix.toUpperCase()) {
-          return undefined;
-        }
-        return period.year * periodsPerYear + (period.slot - 1);
-      }
-      return monthToQuarterPosition(rawValue) ?? dayToQuarterPosition(rawValue);
-    },
-    parseEnd(rawValue: string): number | undefined {
-      const period = parseGanttPeriod(rawValue);
-      if (period) {
-        if (period.prefix.toUpperCase() !== prefix.toUpperCase()) {
-          return undefined;
-        }
-        return period.year * periodsPerYear + period.slot;
-      }
-      const monthStart = monthToQuarterPosition(rawValue);
-      if (monthStart !== undefined) {
-        const month = parseGanttMonth(rawValue)!;
-        const nextMonth = month.month === 12
-          ? { year: month.year + 1, month: 1 }
-          : { year: month.year, month: month.month + 1 };
-        return monthToQuarterPosition(`${nextMonth.year}-${formatTwoDigits(nextMonth.month)}`);
-      }
-      const day = parseGanttDay(rawValue);
-      if (day) {
-        const nextDay = addUtcDays(day, 1);
-        return dayToQuarterPosition(`${nextDay.year}-${formatTwoDigits(nextDay.month)}-${formatTwoDigits(nextDay.day)}`);
-      }
-      return undefined;
-    },
-    parseDuration(rawValue: string): number | undefined {
-      const duration = parseGanttDuration(rawValue);
-      if (!duration || duration.unit.toLowerCase() !== "q") {
-        return undefined;
-      }
-      return duration.value;
-    },
-    formatLabel(index: number): string {
-      const year = Math.floor(index / periodsPerYear);
-      const slot = (index % periodsPerYear) + 1;
-      return `${year} ${prefix}${slot}`;
-    },
-  };
-}
-
-function createGanttMonthTimeline(): GanttTimelineConfig {
-  return {
-    dateFormat: "YYYY-MM",
-    parseStart(rawValue: string): number | undefined {
-      const month = parseGanttMonth(rawValue);
-      if (month) {
-        return month.year * 12 + (month.month - 1);
-      }
-      const day = parseGanttDay(rawValue);
-      if (!day) {
-        return undefined;
-      }
-      return day.year * 12 + (day.month - 1) + (day.day - 1) / getUtcDaysInMonth(day.year, day.month);
-    },
-    parseEnd(rawValue: string): number | undefined {
-      const month = parseGanttMonth(rawValue);
-      if (month) {
-        return month.year * 12 + month.month;
-      }
-      const day = parseGanttDay(rawValue);
-      if (!day) {
-        return undefined;
-      }
-      const nextDay = addUtcDays(day, 1);
-      return nextDay.year * 12 + (nextDay.month - 1) + (nextDay.day - 1) / getUtcDaysInMonth(nextDay.year, nextDay.month);
-    },
-    parseDuration(rawValue: string): number | undefined {
-      const duration = parseGanttDuration(rawValue);
-      if (!duration) {
-        return undefined;
-      }
-      if (duration.unit === "M") {
-        return duration.value;
-      }
-      if (duration.unit.toLowerCase() === "q") {
-        return duration.value * 3;
-      }
-      return undefined;
-    },
-    formatLabel(index: number): string {
-      const year = Math.floor(index / 12);
-      const month = (index % 12) + 1;
-      return `${year}-${formatTwoDigits(month)}`;
-    },
-  };
-}
-
-function createGanttDayTimeline(): GanttTimelineConfig {
-  return {
-    dateFormat: "YYYY-MM-DD",
-    parseStart(rawValue: string): number | undefined {
-      const day = parseGanttDay(rawValue);
-      return day ? toEpochDay(day) : undefined;
-    },
-    parseEnd(rawValue: string): number | undefined {
-      const day = parseGanttDay(rawValue);
-      return day ? toEpochDay(day) + 1 : undefined;
-    },
-    parseDuration(rawValue: string, startPosition: number): number | undefined {
-      const duration = parseGanttDuration(rawValue);
-      if (!duration) {
-        return undefined;
-      }
-      if (duration.unit.toLowerCase() === "d") {
-        return duration.value;
-      }
-      if (duration.unit.toLowerCase() === "w") {
-        return duration.value * 7;
-      }
-      if (duration.unit === "M") {
-        const startDay = fromEpochDay(startPosition);
-        return toEpochDay(addUtcMonths(startDay, duration.value)) - startPosition;
-      }
-      return undefined;
+    position(date: Date): number {
+      return ganttLocalEpochDay(date) + ganttTimeFraction(date);
     },
     formatLabel(index: number): string {
       const date = new Date(index * GANTT_DAY_MS);
       return `${date.getUTCFullYear()}-${formatTwoDigits(date.getUTCMonth() + 1)}-${formatTwoDigits(date.getUTCDate())}`;
     },
-  };
-}
-
-function createGanttTimelineConfig(dateFormat: string, taskLines: string[]): GanttTimelineConfig {
-  if (!GANTT_SUPPORTED_DATE_FORMATS.has(dateFormat)) {
-    throw new Error(`unsupported_dialect: unsupported gantt dateFormat "${dateFormat}"`);
-  }
-  if (dateFormat === "YYYY-QQ") {
-    return createGanttPeriodTimeline(taskLines);
-  }
-  if (dateFormat === "YYYY-MM") {
-    return createGanttMonthTimeline();
-  }
-  return createGanttDayTimeline();
-}
-
-function resolveGanttTaskStart(
-  rawValue: string | undefined,
-  previousEndQuarter: number | undefined,
-  tasksById: Map<string, ParsedGanttTask>,
-  timeline: GanttTimelineConfig,
-): number {
-  if (!rawValue) {
-    if (previousEndQuarter === undefined) {
-      throw new Error("parse_error: gantt task is missing a start date");
-    }
-    return previousEndQuarter;
-  }
-
-  const directQuarter = timeline.parseStart(rawValue);
-  if (directQuarter !== undefined) {
-    return directQuarter;
-  }
-
-  const referenceMatch = rawValue.match(GANTT_REFERENCE_PATTERN);
-  if (referenceMatch?.groups?.ids) {
-    const references = referenceMatch.groups.ids.split(/\s+/).map((entry) => entry.trim()).filter(Boolean);
-    if (references.length === 0) {
-      throw new Error(`parse_error: malformed gantt reference "${rawValue}"`);
-    }
-    const referencedTasks = references.map((reference) => tasksById.get(reference));
-    if (referencedTasks.some((task) => !task)) {
-      throw new Error(`parse_error: unknown gantt reference "${rawValue}"`);
-    }
-    return Math.max(...referencedTasks.map((task) => task!.endPosition));
-  }
-
-  throw new Error(`unsupported_construct: "${rawValue}"`);
-}
-
-function resolveGanttTaskEnd(
-  startQuarter: number,
-  rawValue: string | undefined,
-  tasksById: Map<string, ParsedGanttTask>,
-  previousEndQuarter: number | undefined,
-  timeline: GanttTimelineConfig,
-): number {
-  if (!rawValue) {
-    if (previousEndQuarter === undefined) {
-      throw new Error("parse_error: gantt task is missing an end or duration");
-    }
-    return previousEndQuarter;
-  }
-
-  const duration = timeline.parseDuration(rawValue, startQuarter);
-  if (duration !== undefined) {
-    return startQuarter + duration;
-  }
-
-  const directQuarter = timeline.parseEnd(rawValue);
-  if (directQuarter !== undefined) {
-    return directQuarter;
-  }
-
-  const untilMatch = rawValue.match(GANTT_UNTIL_PATTERN);
-  if (untilMatch?.groups?.id) {
-    const targetTask = tasksById.get(untilMatch.groups.id);
-    if (!targetTask) {
-      throw new Error(`parse_error: unknown gantt reference "${rawValue}"`);
-    }
-    return targetTask.startPosition;
-  }
-
-  throw new Error(`unsupported_construct: "${rawValue}"`);
-}
-
-function parseGanttTask(
-  line: string,
-  currentSection: string,
-  taskSequence: number,
-  previousEndQuarter: number | undefined,
-  tasksById: Map<string, ParsedGanttTask>,
-  timeline: GanttTimelineConfig,
-): ParsedGanttTask {
-  const separatorIndex = line.indexOf(":");
-  if (separatorIndex < 0) {
-    throw new Error(`unsupported_construct: "${line}"`);
-  }
-
-  const title = normalizeLabel(line.slice(0, separatorIndex));
-  const metadata = line
-    .slice(separatorIndex + 1)
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-
-  const tags: string[] = [];
-  while (metadata.length > 0 && GANTT_TAGS.has(metadata[0])) {
-    tags.push(metadata.shift()!);
-  }
-
-  let id = `gantt-task-${taskSequence}`;
-  if (metadata.length >= 3) {
-    id = metadata.shift()!;
-  }
-
-  if (metadata.length < 2) {
-    throw new Error(`unsupported_construct: "${line}"`);
-  }
-
-  const startQuarter = resolveGanttTaskStart(metadata[0], previousEndQuarter, tasksById, timeline);
-  const endQuarter = resolveGanttTaskEnd(startQuarter, metadata[1], tasksById, previousEndQuarter, timeline);
-  const isMilestone = tags.includes("milestone");
-  if (endQuarter < startQuarter || (endQuarter === startQuarter && !isMilestone)) {
-    throw new Error(`parse_error: gantt task "${title}" has a non-positive duration`);
-  }
-
-  return {
-    id,
-    section: currentSection,
-    title,
-    startPosition: startQuarter,
-    endPosition: endQuarter,
-    tags,
   };
 }
 
@@ -1423,67 +994,76 @@ function getGanttBarColors(tags: string[]): Pick<IntermediateNode, "fillColor" |
   };
 }
 
-function parseGanttDiagram(request: MermaidParseRequest, lines: string[]): IntermediateDiagram {
+async function parseGanttDiagram(request: MermaidParseRequest): Promise<IntermediateDiagram> {
+  const { mermaid } = await import("./mermaid-env.js");
   const warnings: string[] = [];
-  const sections: Array<{ label: string; tasks: ParsedGanttTask[] }> = [];
-  const rawTasks: Array<{ line: string; section: string }> = [];
-  const tasksById = new Map<string, ParsedGanttTask>();
-  let chartTitle: string | undefined;
-  let currentSection = "Tasks";
-  let taskSequence = 0;
-  let previousEndQuarter: number | undefined;
-  let dateFormat = "YYYY-QQ";
 
-  for (const line of lines.slice(1)) {
-    const titleMatch = line.match(GANTT_TITLE_PATTERN);
-    if (titleMatch?.groups?.title) {
-      chartTitle = normalizeLabel(titleMatch.groups.title);
-      continue;
-    }
-
-    const dateFormatMatch = line.match(GANTT_DATE_FORMAT_PATTERN);
-    if (dateFormatMatch?.groups?.format) {
-      dateFormat = dateFormatMatch.groups.format.trim();
-      continue;
-    }
-
-    const axisFormatMatch = line.match(GANTT_AXIS_FORMAT_PATTERN);
-    if (axisFormatMatch?.groups?.format) {
-      warnings.push(`ignored_gantt_directive: "${line}"`);
-      continue;
-    }
-
-    const sectionMatch = line.match(GANTT_SECTION_PATTERN);
-    if (sectionMatch?.groups?.label) {
-      currentSection = normalizeLabel(sectionMatch.groups.label);
-      sections.push({ label: currentSection, tasks: [] });
-      continue;
-    }
-
-    rawTasks.push({ line, section: currentSection });
+  let db: GanttDb;
+  try {
+    await mermaid.parse(request.mermaid);
+    db = (await mermaid.mermaidAPI.getDiagramFromText(request.mermaid)).db as GanttDb;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`parse_error: ${message.split("\n")[0]}`);
   }
 
-  const timeline = createGanttTimelineConfig(dateFormat, rawTasks.map((task) => task.line));
-  for (const rawTask of rawTasks) {
-    taskSequence += 1;
-    if (!sections.some((section) => section.label === rawTask.section)) {
-      sections.push({ label: rawTask.section, tasks: [] });
-    }
-    const task = parseGanttTask(rawTask.line, rawTask.section, taskSequence, previousEndQuarter, tasksById, timeline);
-    tasksById.set(task.id, task);
-    sections.find((section) => section.label === rawTask.section)!.tasks.push(task);
-    previousEndQuarter = task.endPosition;
+  const chartTitle = db.getDiagramTitle()?.trim() || undefined;
+  const axisFormat = db.getAxisFormat()?.trim();
+  if (axisFormat) {
+    warnings.push(`ignored_gantt_directive: "axisFormat ${axisFormat}"`);
   }
 
-  const tasks = sections.flatMap((section) => section.tasks);
-  if (tasks.length === 0) {
+  const dbTasks = db.getTasks();
+  if (dbTasks.length === 0) {
     throw new Error("parse_error: gantt input contains no tasks");
   }
 
-  const minQuarter = Math.floor(Math.min(...tasks.map((task) => task.startPosition)));
-  const maxQuarter = Math.ceil(Math.max(...tasks.map((task) => task.endPosition)));
-  const quarterCount = Math.max(1, maxQuarter - minQuarter);
-  const chartWidth = GANTT_LABEL_COLUMN_WIDTH + quarterCount * GANTT_TIMELINE_COLUMN_WIDTH;
+  const scale = createGanttScale(requireSupportedGanttDateFormat(db.getDateFormat() ?? ""));
+  const sections: Array<{ label: string; tasks: ParsedGanttTask[] }> = [];
+  for (const dbTask of dbTasks) {
+    const sectionLabel = dbTask.section?.trim() || "Tasks";
+    let section = sections.find((entry) => entry.label === sectionLabel);
+    if (!section) {
+      section = { label: sectionLabel, tasks: [] };
+      sections.push(section);
+    }
+
+    const tags: string[] = [];
+    if (dbTask.done) {
+      tags.push("done");
+    }
+    if (dbTask.crit) {
+      tags.push("crit");
+    }
+    if (dbTask.active) {
+      tags.push("active");
+    }
+    if (dbTask.milestone) {
+      tags.push("milestone");
+    }
+
+    const startPosition = scale.position(dbTask.startTime);
+    const endPosition = scale.position(dbTask.endTime);
+    if (endPosition < startPosition || (endPosition === startPosition && !dbTask.milestone)) {
+      throw new Error(`parse_error: gantt task "${dbTask.task.trim()}" has a non-positive duration`);
+    }
+
+    section.tasks.push({
+      id: dbTask.id,
+      section: sectionLabel,
+      title: dbTask.task.trim(),
+      startPosition,
+      endPosition,
+      tags,
+    });
+  }
+
+  const tasks = sections.flatMap((section) => section.tasks);
+
+  const minPosition = Math.floor(Math.min(...tasks.map((task) => task.startPosition)));
+  const maxPosition = Math.ceil(Math.max(...tasks.map((task) => task.endPosition)));
+  const periodCount = Math.max(1, maxPosition - minPosition);
+  const chartWidth = GANTT_LABEL_COLUMN_WIDTH + periodCount * GANTT_TIMELINE_COLUMN_WIDTH;
 
   const nodes: IntermediateNode[] = [];
   let currentY = 0;
@@ -1502,10 +1082,10 @@ function parseGanttDiagram(request: MermaidParseRequest, lines: string[]): Inter
     currentY += GANTT_TITLE_HEIGHT + GANTT_ROW_GAP;
   }
 
-  for (let offset = 0; offset < quarterCount; offset += 1) {
+  for (let offset = 0; offset < periodCount; offset += 1) {
     nodes.push({
-      id: `gantt-quarter-${offset}`,
-      label: timeline.formatLabel(minQuarter + offset),
+      id: `gantt-period-${offset}`,
+      label: scale.formatLabel(minPosition + offset),
       shape: "rectangle",
       fillColor: "#f5f5f5",
       strokeColor: "#d0d0d0",
@@ -1550,7 +1130,7 @@ function parseGanttDiagram(request: MermaidParseRequest, lines: string[]): Inter
 
       const barX =
         GANTT_LABEL_COLUMN_WIDTH +
-        Math.round((task.startPosition - minQuarter) * GANTT_TIMELINE_COLUMN_WIDTH) +
+        Math.round((task.startPosition - minPosition) * GANTT_TIMELINE_COLUMN_WIDTH) +
         GANTT_BAR_HORIZONTAL_PADDING;
       const barWidth = Math.max(
         24,
@@ -1589,67 +1169,6 @@ function parseGanttDiagram(request: MermaidParseRequest, lines: string[]): Inter
   };
 }
 
-function parseXychartStringArray(rawValue: string, line: string): string[] {
-  const values = splitTopLevel(rawValue, ",").map((entry) => normalizeLabel(entry).trim());
-  if (values.length === 0 || values.some((value) => value.length === 0)) {
-    throw new Error(`parse_error: malformed x-axis "${line}"`);
-  }
-  return values;
-}
-
-function parseXychartNumberArray(rawValue: string, line: string): number[] {
-  const values = splitTopLevel(rawValue, ",").map((entry) => entry.trim());
-  if (values.length === 0 || values.some((value) => value.length === 0)) {
-    throw new Error(`parse_error: malformed series "${line}"`);
-  }
-
-  return values.map((value) => {
-    const parsed = Number.parseFloat(value);
-    if (!Number.isFinite(parsed)) {
-      throw new Error(`parse_error: malformed series "${line}"`);
-    }
-    return parsed;
-  });
-}
-
-function parseXychartXAxis(line: string): { label?: string; categories: string[] } {
-  const body = line.slice("x-axis".length).trim();
-  if (containsTopLevelToken(body, "-->")) {
-    throw new Error(`unsupported_construct: "${line}"`);
-  }
-
-  const bracketStart = body.indexOf("[");
-  const bracketEnd = body.lastIndexOf("]");
-  if (bracketStart === -1 || bracketEnd !== body.length - 1 || bracketEnd <= bracketStart) {
-    throw new Error(`parse_error: malformed x-axis "${line}"`);
-  }
-
-  const rawLabel = body.slice(0, bracketStart).trim();
-  return {
-    label: rawLabel ? normalizeLabel(rawLabel) : undefined,
-    categories: parseXychartStringArray(body.slice(bracketStart + 1, bracketEnd), line),
-  };
-}
-
-function parseXychartYAxis(line: string): { label?: string; min: number; max: number } {
-  const body = line.slice("y-axis".length).trim();
-  const match = /^(?:(?<label>.+?)\s+)?(?<min>-?\d+(?:\.\d+)?)\s*-->\s*(?<max>-?\d+(?:\.\d+)?)$/.exec(body);
-  if (!match?.groups) {
-    throw new Error(`parse_error: malformed y-axis "${line}"`);
-  }
-
-  const min = Number.parseFloat(match.groups.min);
-  const max = Number.parseFloat(match.groups.max);
-  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
-    throw new Error(`parse_error: malformed y-axis "${line}"`);
-  }
-
-  return {
-    label: match.groups.label ? normalizeLabel(match.groups.label) : undefined,
-    min,
-    max,
-  };
-}
 
 function estimateTextWidth(text: string, minimum = 24): number {
   const lines = text.split(/\r\n|\r|\n/, -1);
@@ -1724,75 +1243,65 @@ function createXychartAnchorNode(id: string, x: number, y: number): Intermediate
   };
 }
 
-function parseXychartDiagram(request: MermaidParseRequest, lines: string[]): IntermediateDiagram {
-  let title: string | undefined;
-  let xAxisLabel: string | undefined;
-  let categories: string[] | undefined;
-  let yAxisLabel: string | undefined;
-  let yMin: number | undefined;
-  let yMax: number | undefined;
+async function parseXychartDiagram(request: MermaidParseRequest): Promise<IntermediateDiagram> {
+  const { mermaid } = await import("./mermaid-env.js");
+
+  let db: XychartDb;
+  try {
+    await mermaid.parse(request.mermaid);
+    db = (await mermaid.mermaidAPI.getDiagramFromText(request.mermaid)).db as XychartDb;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`parse_error: ${message.split("\n")[0]}`);
+  }
+
+  const data = db.getXYChartData();
+  const xAxis = data.xAxis;
+  if (!xAxis || xAxis.type !== "band" || !xAxis.categories || xAxis.categories.length === 0) {
+    throw new Error("unsupported_construct: xychart requires a categorical x-axis (numeric x-axis ranges are not supported)");
+  }
+
+  const title = db.getDiagramTitle()?.trim() || undefined;
+  const xAxisLabel = xAxis.title?.trim() || undefined;
+  const categories = xAxis.categories.map((category) => `${category}`.trim());
+
   const barSeries: number[][] = [];
   const lineSeries: number[][] = [];
-
-  for (const line of lines.slice(1)) {
-    if (line.startsWith("title ")) {
-      if (title !== undefined) {
-        throw new Error(`parse_error: duplicate directive "${line}"`);
+  for (const plot of data.plots ?? []) {
+    if (plot.type !== "bar" && plot.type !== "line") {
+      continue;
+    }
+    const valuesByCategory = new Map(
+      plot.data.map(([category, value]) => [`${category}`.trim(), Number(value)]),
+    );
+    const series = categories.map((category) => {
+      const value = valuesByCategory.get(category);
+      if (value === undefined || !Number.isFinite(value)) {
+        throw new Error(`parse_error: ${plot.type} series is missing a value for category "${category}"`);
       }
-      title = normalizeLabel(line.slice("title".length).trim());
-      continue;
+      return value;
+    });
+    if (plot.type === "bar") {
+      barSeries.push(series);
+    } else {
+      lineSeries.push(series);
     }
-
-    if (line.startsWith("x-axis ")) {
-      if (categories !== undefined) {
-        throw new Error(`parse_error: duplicate directive "${line}"`);
-      }
-      const xAxis = parseXychartXAxis(line);
-      xAxisLabel = xAxis.label;
-      categories = xAxis.categories;
-      continue;
-    }
-
-    if (line.startsWith("y-axis ")) {
-      if (yMin !== undefined || yMax !== undefined) {
-        throw new Error(`parse_error: duplicate directive "${line}"`);
-      }
-      const yAxis = parseXychartYAxis(line);
-      yAxisLabel = yAxis.label;
-      yMin = yAxis.min;
-      yMax = yAxis.max;
-      continue;
-    }
-
-    const barMatch = /^bar\s+\[(?<values>[\s\S]+)\]$/i.exec(line);
-    if (barMatch?.groups?.values) {
-      barSeries.push(parseXychartNumberArray(barMatch.groups.values, line));
-      continue;
-    }
-
-    const lineMatch = /^line\s+\[(?<values>[\s\S]+)\]$/i.exec(line);
-    if (lineMatch?.groups?.values) {
-      lineSeries.push(parseXychartNumberArray(lineMatch.groups.values, line));
-      continue;
-    }
-
-    throw new Error(`unsupported_construct: "${line}"`);
   }
 
-  if (!categories) {
-    throw new Error('parse_error: xychart is missing categorical x-axis labels');
-  }
-  if (yMin === undefined || yMax === undefined) {
-    throw new Error("parse_error: xychart is missing a ranged y-axis");
-  }
   if (barSeries.length === 0 && lineSeries.length === 0) {
     throw new Error("parse_error: xychart requires at least one bar or line series");
   }
-  if (barSeries.some((series) => series.length !== categories.length)) {
-    throw new Error("parse_error: bar series length must match x-axis category count");
-  }
-  if (lineSeries.some((series) => series.length !== categories.length)) {
-    throw new Error("parse_error: line series length must match x-axis category count");
+
+  const yAxisLabel = data.yAxis?.title?.trim() || undefined;
+  let yMin = data.yAxis?.min;
+  let yMax = data.yAxis?.max;
+  if (yMin === undefined || yMax === undefined || !(yMax > yMin)) {
+    const values = [...barSeries.flat(), ...lineSeries.flat()];
+    yMin = Math.min(0, ...values);
+    yMax = Math.max(...values);
+    if (!(yMax > yMin)) {
+      yMax = yMin + 1;
+    }
   }
 
   for (const value of [...barSeries.flat(), ...lineSeries.flat()]) {
@@ -2015,111 +1524,264 @@ function parseXychartDiagram(request: MermaidParseRequest, lines: string[]): Int
   };
 }
 
-function parseStateDirection(line: string): LayoutDirection | undefined {
-  const match = /^direction\s+(TD|TB|LR|RL)$/i.exec(line);
-  if (!match) {
-    return undefined;
-  }
-
-  return match[1].toUpperCase() as LayoutDirection;
+interface StateDbNode {
+  id: string;
+  label?: string;
+  shape?: string;
+  domId?: string;
+  parentId?: string;
+  isGroup?: boolean;
+  cssClasses?: string;
+  cssStyles?: string[];
 }
 
-function parseStateDiagram(request: MermaidParseRequest, lines: string[]): IntermediateDiagram {
-  const nodeMap = new Map<string, IntermediateNode>();
-  const edges: IntermediateEdge[] = [];
+interface StateDbEdge {
+  id: string;
+  start: string;
+  end: string;
+  label?: string;
+}
+
+interface StateDb {
+  nodes?: StateDbNode[];
+  edges?: StateDbEdge[];
+  classes?: Map<string, FlowchartClassData>;
+  getDirection(): string | undefined;
+}
+
+const STATE_BUILT_IN_CLASSES = new Set(["statediagram-state", "statediagram-cluster"]);
+const STATE_NOTE_COLORS = {
+  fillColor: "#fff3bf",
+  strokeColor: "#f08c00",
+  fontColor: "#333333",
+} as const;
+const STATE_PSEUDOSTATE_COLORS = {
+  fillColor: "#333333",
+  strokeColor: "#333333",
+  fontColor: "#ffffff",
+} as const;
+
+function mapStateNodeId(id: string): string {
+  if (id === "root_start") {
+    return "__state_start__";
+  }
+  if (id === "root_end") {
+    return "__state_end__";
+  }
+  return id;
+}
+
+function mapStateNode(dbNode: StateDbNode): IntermediateNode {
+  const base: IntermediateNode = {
+    id: mapStateNodeId(dbNode.id),
+    label: "",
+    shape: "rounded-rectangle",
+  };
+  if (dbNode.shape === "stateStart") {
+    return { ...base, shape: "ellipse", label: dbNode.id === "root_start" ? "Start" : "" };
+  }
+  if (dbNode.shape === "stateEnd") {
+    return { ...base, shape: "ellipse", label: dbNode.id === "root_end" ? "End" : "" };
+  }
+  if (dbNode.shape === "fork" || dbNode.shape === "join") {
+    return { ...base, shape: "rectangle", ...STATE_PSEUDOSTATE_COLORS };
+  }
+  if (dbNode.shape === "choice") {
+    return { ...base, shape: "rhombus", ...STATE_PSEUDOSTATE_COLORS };
+  }
+  return {
+    ...base,
+    label: normalizeFlowchartLabel(dbNode.label ?? dbNode.id),
+  };
+}
+
+async function parseStateDiagram(request: MermaidParseRequest): Promise<IntermediateDiagram> {
+  const { mermaid } = await import("./mermaid-env.js");
   const warnings: string[] = [];
-  let direction: LayoutDirection = "TD";
-  let pendingNoteTarget: string | undefined;
-  let pendingNoteLines: string[] = [];
+
+  let db: StateDb;
+  try {
+    await mermaid.parse(request.mermaid);
+    db = (await mermaid.mermaidAPI.getDiagramFromText(request.mermaid)).db as unknown as StateDb;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`parse_error: ${message.split("\n")[0]}`);
+  }
+
+  const rawDirection = db.getDirection();
+  const direction: LayoutDirection =
+    rawDirection === "LR" || rawDirection === "RL" ? rawDirection : "TD";
+
+  const classStyles = new Map<string, MermaidClassStyle>();
+  if (db.classes instanceof Map) {
+    for (const [className, classDef] of db.classes) {
+      if (className === "default") {
+        continue;
+      }
+      classStyles.set(
+        className,
+        parseFlowchartStyles([...(classDef.styles ?? []), ...(classDef.textStyles ?? [])]),
+      );
+    }
+  }
+
+  const dbNodes = db.nodes ?? [];
+  const dbEdges = db.edges ?? [];
+  const noteDbIds = new Set(dbNodes.filter((node) => node.shape === "note").map((node) => node.id));
+  const groupIds = new Set(
+    dbNodes.filter((node) => node.isGroup && node.shape !== "noteGroup" && node.shape !== "note").map((node) => node.id),
+  );
+
+  const nodes: IntermediateNode[] = [];
+  const subgraphs: IntermediateSubgraph[] = [];
+  const noteIdByDbId = new Map<string, string>();
+  const domIdByNodeId = new Map<string, string>();
+  const parentByNodeId = new Map<string, string>();
   let noteSequence = 0;
 
-  const upsertNode = (node: IntermediateNode): void => {
-    nodeMap.set(node.id, mergeNode(nodeMap.get(node.id), node));
-  };
-
-  const flushNote = (): void => {
-    if (!pendingNoteTarget) {
-      return;
+  for (const dbNode of dbNodes) {
+    if (dbNode.shape === "noteGroup") {
+      continue;
     }
-    noteSequence += 1;
-    const noteId = `state-note-${noteSequence}`;
-    upsertNode({
-      id: noteId,
-      label: pendingNoteLines.join("\n").trim(),
-      shape: "rectangle",
-      fillColor: "#fff3bf",
-      strokeColor: "#f08c00",
-      fontColor: "#333333",
-    });
-    edges.push({
-      sourceId: pendingNoteTarget,
-      targetId: noteId,
-      kind: "plain",
-    });
-    pendingNoteTarget = undefined;
-    pendingNoteLines = [];
-  };
-
-  for (const line of lines.slice(1)) {
-    if (pendingNoteTarget) {
-      if (line.toLowerCase() === "end note") {
-        flushNote();
-      } else {
-        pendingNoteLines.push(line.trim());
+    if (dbNode.shape === "note") {
+      noteSequence += 1;
+      const noteId = `state-note-${noteSequence}`;
+      noteIdByDbId.set(dbNode.id, noteId);
+      nodes.push({
+        id: noteId,
+        label: (dbNode.label ?? "")
+          .split("\n")
+          .map((line) => line.trim())
+          .join("\n")
+          .trim(),
+        shape: "rectangle",
+        ...STATE_NOTE_COLORS,
+      });
+      if (dbNode.domId) {
+        domIdByNodeId.set(noteId, dbNode.domId);
       }
       continue;
     }
-
-    const parsedDirection = parseStateDirection(line);
-    if (parsedDirection) {
-      direction = parsedDirection;
-      continue;
-    }
-
-    const noteMatch = line.match(STATE_NOTE_START_PATTERN);
-    if (noteMatch?.groups?.target) {
-      const targetNode = createStateNode(noteMatch.groups.target, "source");
-      upsertNode(targetNode);
-      pendingNoteTarget = targetNode.id;
-      pendingNoteLines = [];
-      continue;
-    }
-
-    const transitionMatch = line.match(STATE_TRANSITION_PATTERN);
-    if (transitionMatch?.groups) {
-      const sourceNode = createStateNode(transitionMatch.groups.source, "source");
-      const targetNode = createStateNode(transitionMatch.groups.target, "target");
-      upsertNode(sourceNode);
-      upsertNode(targetNode);
-      edges.push({
-        sourceId: sourceNode.id,
-        targetId: targetNode.id,
-        label: transitionMatch.groups.label ? normalizeLabel(transitionMatch.groups.label) : undefined,
-        kind: "directed",
+    if (dbNode.isGroup) {
+      subgraphs.push({
+        id: dbNode.id,
+        label: dbNode.shape === "divider" ? "" : (dbNode.label ?? dbNode.id).trim(),
+        nodeIds: [],
+        parentId: dbNode.parentId && groupIds.has(dbNode.parentId) ? dbNode.parentId : undefined,
       });
       continue;
     }
 
-    throw new Error(`unsupported_construct: "${line}"`);
+    let node = mapStateNode(dbNode);
+    const userClasses = (dbNode.cssClasses ?? "")
+      .split(/\s+/)
+      .filter((className) => className && !STATE_BUILT_IN_CLASSES.has(className));
+    node = applyClassStyles(node, userClasses, classStyles);
+    const inlineStyle = parseFlowchartStyles(dbNode.cssStyles ?? []);
+    if (inlineStyle.fillColor !== undefined) {
+      node = { ...node, fillColor: inlineStyle.fillColor };
+    }
+    if (inlineStyle.strokeColor !== undefined) {
+      node = { ...node, strokeColor: inlineStyle.strokeColor };
+    }
+    if (inlineStyle.fontColor !== undefined) {
+      node = { ...node, fontColor: inlineStyle.fontColor };
+    }
+    nodes.push(node);
+    if (dbNode.domId) {
+      domIdByNodeId.set(node.id, dbNode.domId);
+    }
+    if (dbNode.parentId && groupIds.has(dbNode.parentId)) {
+      parentByNodeId.set(node.id, dbNode.parentId);
+    }
   }
 
-  if (pendingNoteTarget) {
-    throw new Error("parse_error: unclosed state note");
+  for (const subgraph of subgraphs) {
+    for (const dbNode of dbNodes) {
+      if (dbNode.parentId === subgraph.id && !dbNode.isGroup && dbNode.shape !== "noteGroup") {
+        const modelId = dbNode.shape === "note" ? noteIdByDbId.get(dbNode.id) : mapStateNodeId(dbNode.id);
+        if (modelId) {
+          subgraph.nodeIds.push(modelId);
+        }
+      }
+    }
   }
 
-  const nodes = Array.from(nodeMap.values());
-  const layouts = computeFlowchartLayout(nodes, edges, [], direction);
+  const edges: IntermediateEdge[] = [];
+  // Stays index-aligned with edges: note edges have no extracted geometry
+  const edgeGeometryKeys: Array<string | undefined> = [];
+  for (const dbEdge of dbEdges) {
+    // Note edges link a note node to its state in either direction depending
+    // on the note placement; the model keeps state -> note.
+    const noteId = noteIdByDbId.get(dbEdge.start) ?? noteIdByDbId.get(dbEdge.end);
+    if (noteId) {
+      const stateDbId = noteIdByDbId.has(dbEdge.start) ? dbEdge.end : dbEdge.start;
+      edges.push({
+        sourceId: mapStateNodeId(stateDbId),
+        targetId: noteId,
+        kind: "plain",
+      });
+      edgeGeometryKeys.push(undefined);
+      continue;
+    }
+    edges.push({
+      sourceId: mapStateNodeId(dbEdge.start),
+      targetId: mapStateNodeId(dbEdge.end),
+      label: normalizeFlowchartLabel(dbEdge.label ?? "").trim() || undefined,
+      kind: "directed",
+    });
+    edgeGeometryKeys.push(dbEdge.id);
+  }
+
+  let nodeLayouts: Map<string, NodeLayout>;
+  const edgeLayouts = new Map<number, IntermediatePoint[]>();
+  let geometry: import("./mermaid-geometry.js").FlowchartGeometry | undefined;
+  try {
+    const { renderStateGeometry } = await import("./mermaid-geometry.js");
+    geometry = await renderStateGeometry(request.mermaid, {
+      vertices: nodes.map((node) => ({ id: node.id, domId: domIdByNodeId.get(node.id) })),
+      edgeIds: edgeGeometryKeys.filter((key): key is string => key !== undefined),
+    });
+    if (geometry === undefined) {
+      warnings.push("state_geometry_unavailable: canvas text measurement is unavailable on this platform");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warnings.push(`state_geometry_unavailable: ${message.split("\n")[0]}`);
+  }
+
+  if (geometry) {
+    nodeLayouts = new Map(
+      geometry.nodes.map((node) => [node.id, { x: node.x, y: node.y, width: node.width, height: node.height }]),
+    );
+    const pointsByEdgeId = new Map(geometry.edges.map((edge) => [edge.id, edge.points]));
+    edgeGeometryKeys.forEach((key, index) => {
+      if (key === undefined) {
+        return;
+      }
+      const points = pointsByEdgeId.get(key);
+      if (points) {
+        edgeLayouts.set(index, points);
+      }
+    });
+  } else {
+    const layouts = computeFlowchartLayout(nodes, edges, subgraphs, direction);
+    nodeLayouts = layouts.nodeLayouts;
+    for (const [index, points] of layouts.edgeLayouts) {
+      edgeLayouts.set(index, points);
+    }
+  }
 
   return {
     pageName: derivePageName(request.sourceName),
     diagramType: "state",
     direction,
-    nodes: nodes.map((node) => ({ ...node, ...layouts.nodeLayouts.get(node.id) })),
+    nodes: nodes.map((node) => ({ ...node, ...nodeLayouts.get(node.id) })),
     edges: edges.map((edge, index) => ({
       ...edge,
-      points: layouts.edgeLayouts.get(index),
+      points: edgeLayouts.get(index),
     })),
-    subgraphs: [],
+    subgraphs,
     sequenceParticipants: [],
     sequenceMessages: [],
     sequenceNotes: [],
@@ -2501,33 +2163,30 @@ async function parseSequence(request: MermaidParseRequest): Promise<Intermediate
 }
 
 export async function parseMermaid(request: MermaidParseRequest): Promise<IntermediateDiagram> {
-  const rawLines = normalizeLines(request.mermaid);
+  // Frontmatter (---\n...\n---) is mermaid-level config; skip it for header
+  // detection — the full text still goes to mermaid.parse for each diagram type.
+  const body = request.mermaid.replace(/^---\r?\n[\s\S]*?\r?\n---(\r?\n|$)/, "");
+  const rawLines = normalizeLines(body);
   if (rawLines.length === 0) {
     throw new Error("parse_error: Mermaid input is empty");
   }
 
   const header = parseHeader(rawLines[0]);
-  const lines = header.diagramType === "flowchart"
-    ? normalizeLines(request.mermaid, true)
-    : rawLines;
-  if (lines.length === 0) {
-    throw new Error("parse_error: Mermaid input is empty");
-  }
 
   if (header.diagramType === "sequence") {
     return parseSequence(request);
   }
   if (header.diagramType === "state") {
-    return parseStateDiagram(request, lines);
+    return parseStateDiagram(request);
   }
   if (header.diagramType === "gantt") {
-    return parseGanttDiagram(request, lines);
+    return parseGanttDiagram(request);
   }
   if (header.diagramType === "xychart") {
-    return parseXychartDiagram(request, lines);
+    return parseXychartDiagram(request);
   }
 
-  return parseFlowchart(request, lines, header.direction!);
+  return parseFlowchart(request, header.direction!);
 }
 
 export function serializeIntermediateDiagram(diagram: IntermediateDiagram): string {

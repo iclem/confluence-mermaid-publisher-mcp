@@ -10,7 +10,11 @@ async function main(): Promise<void> {
     throw new Error("Usage: preview-cli.js <input.mermaid> <output.png>");
   }
 
-  const svg = await renderMermaidSvg(readFileSync(inputPath, "utf8"));
+  // htmlLabels render through foreignObject, which resvg cannot rasterize;
+  // mermaid reads the top-level htmlLabels flag
+  const svg = await renderMermaidSvg(readFileSync(inputPath, "utf8"), {
+    htmlLabels: false,
+  });
   if (!svg) {
     throw new Error("render_unavailable: mermaid SVG rendering is unavailable on this platform");
   }
