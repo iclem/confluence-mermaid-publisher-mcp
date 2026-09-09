@@ -20,6 +20,24 @@ This gives a faster editing loop than using Confluence as the primary authoring 
 - update an existing embedded Confluence diagram in place
 - inspect diagrams already present on a page
 
+## Markdown formatting and page width
+
+Markdown is converted with Atlassian's official Markdown and JSON transformers. Links, strikethrough (`~~text~~`), bold, italic, inline code, nested lists, blockquotes and tables retain their ADF formatting. Mermaid code blocks are replaced in place with the selected diagram mode; failures retain their source. Raw HTML is treated as text. Relative document links are not automatically mapped to Confluence pages, and Markdown image URLs are not uploaded as local attachments.
+
+All four Markdown MCP tools accept `pageWidth: "full-width" | "default"`. Here `default` means Confluence's centered, fixed-width column, not “use the configured default”. New pages resolve width in this order: explicit call, `CONFLUENCE_DEFAULT_PAGE_WIDTH`, then `full-width`. Updates preserve existing width when neither a call override nor an environment override is present.
+
+```json
+{
+  "pageId": "123456",
+  "markdownFile": "/workspace/docs/architecture.md",
+  "pageWidth": "full-width"
+}
+```
+
+Set `CONFLUENCE_DEFAULT_PAGE_WIDTH=full-width` to apply wide layout to all Markdown publications, including updates. Set it to `default` for a centered column. The CLI equivalents are `--page-width full-width` and `--page-width default`. Pass the environment variable into Docker with `-e CONFLUENCE_DEFAULT_PAGE_WIDTH`; the local stdio helper and Compose services forward it automatically.
+
+Width is applied to both Confluence editor and published appearance properties after content publication. Existing matching properties are left untouched. If a property update fails, the tool reports that the content was already published; a partial property update is possible, and blindly retrying page creation can create duplicates. Single-diagram tools do not change page width.
+
 ## Opt-in adaptive SVG
 
 Set `"embeddingMode": "svg"` on the Mermaid diagram or Markdown MCP tools. For example:

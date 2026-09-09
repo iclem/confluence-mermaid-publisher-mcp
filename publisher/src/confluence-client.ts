@@ -9,6 +9,14 @@ import type {
   JsonObject,
 } from "./types.js";
 
+import type { PageWidth } from "./page-width.js";
+
+interface PageProperty {
+  id: string;
+  value: unknown;
+  version: { number: number };
+}
+
 interface ClientOptions {
   baseUrl: string;
   bearerToken?: string;
@@ -133,6 +141,25 @@ export class ConfluenceClient {
         },
       }),
     });
+  }
+
+  /** Keep published and editor width consistent through versioned page properties. */
+  async setPageWidth(pageId: string, width: PageWidth): Promise<void> {
+    const path = `/api/v2/pages/${encodeURIComponent(pageId)}/properties`;
+    for (const key of ["content-appearance-draft", "content-appearance-published"]) {
+      const properties = await this.requestJson<{ results: PageProperty[] }>(`${path}?key=${encodeURIComponent(key)}`);
+      const existing = properties.results[0];
+      if (existing?.value === width) continue;
+      await this.requestJson<PageProperty>(existing ? `${path}/${encodeURIComponent(existing.id)}` : path, {
+        method: existing ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key,
+          value: width,
+          ...(existing ? { version: { number: existing.version.number + 1 } } : {}),
+        }),
+      });
+    }
   }
 
   async updatePageAdf(

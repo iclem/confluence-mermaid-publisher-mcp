@@ -30,6 +30,7 @@ fi
 exec docker run --rm -i \
   -v "${WORKSPACE_ROOT}:${WORKSPACE_ROOT}" \
   -w "${WORKSPACE_ROOT}" \
+  -e CONFLUENCE_DEFAULT_PAGE_WIDTH \
   -e CONFLUENCE_BASE_URL \
   -e CONFLUENCE_EMAIL \
   -e CONFLUENCE_API_TOKEN \
