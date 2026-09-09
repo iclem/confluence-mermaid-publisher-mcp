@@ -34,7 +34,7 @@ image-mcp: # Build MCP server image
 	docker build -t confluence-mermaid-publisher-mcp:local .
 
 mcp-http: # Run the local HTTP MCP server through docker compose
-	docker compose $(COMPOSE_FILE) up -d mcp-http --force-recreate
+	docker compose $(COMPOSE_FILE) up -d mcp-http --force-recreate --renew-anon-volumes
 
 
 # End Strong Red Green Blue Teal White Yellow bacKground

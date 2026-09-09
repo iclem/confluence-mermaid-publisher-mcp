@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.5",
+    "@xmldom/xmldom": "0.9.12",
+    "agentic-mermaid": "0.4.1",
     "zod": "^3.24.4"
   },
   "devDependencies": {

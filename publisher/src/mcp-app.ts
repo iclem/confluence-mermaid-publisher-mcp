@@ -79,7 +79,7 @@ export function createMcpServer(): McpServer {
     version: "0.1.0",
   });
   const embeddingModeGuidance =
-    "Omit this field to use the server default embedding mode. Only set it when the user explicitly requests a non-default mode such as macropack or drawio. When omitted, the server uses its configured default; if that is unset, it falls back to macropack.";
+    "Omit this field to use the server default embedding mode. Only set it when the user explicitly requests a non-default mode such as svg or macropack. When omitted, the server uses its configured default; if that is unset, it falls back to drawio. SVG is opt-in and always uses adaptive light/dark colors.";
   const embeddingModeSchema = z.enum(EMBEDDING_MODES).optional().describe(
     `Optional Mermaid embedding mode override. ${embeddingModeGuidance}`,
   );
@@ -103,7 +103,7 @@ export function createMcpServer(): McpServer {
     `Create a new embedded Confluence diagram from Mermaid. ${defaultEmbeddingModeToolGuidance}`,
     {
       pageId: z.string().describe("Target Confluence page ID."),
-      diagramName: z.string().optional().describe("Optional diagram file name for draw.io mode, typically ending in .drawio."),
+      diagramName: z.string().optional().describe("Optional diagram file name (.drawio or .svg for the selected mode)."),
       mermaid: z.string().describe("Mermaid diagram source."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for the page."),
       anchorText: z.string().optional().describe("Optional text anchor. The widget is inserted immediately after the first matching text inside a paragraph."),
@@ -254,9 +254,9 @@ export function createMcpServer(): McpServer {
       pageId: z.string().describe("Target Confluence page ID."),
       mermaid: z.string().describe("Mermaid diagram source."),
       diagramName: z.string().optional().describe("Optional resulting draw.io file name or logical diagram name."),
-      widgetDiagramName: z.string().optional().describe("Existing draw.io diagram name selector. Use only one selector."),
+      widgetDiagramName: z.string().optional().describe("Existing draw.io or SVG diagram name selector. Use only one selector."),
       custContentId: z.string().optional().describe("Existing draw.io custom content ID selector. Use only one selector."),
-      localId: z.string().optional().describe("Existing embedded diagram local ID selector. Use only one selector."),
+      localId: z.string().optional().describe("Existing embedded diagram local ID selector (stable attachment ID for SVG). Use only one selector."),
       index: z.number().int().nonnegative().optional().describe("Existing embedded diagram index selector. Use only one selector. On mixed pages, also provide embeddingMode or use localId."),
       embeddingMode: embeddingModeSchema,
     },

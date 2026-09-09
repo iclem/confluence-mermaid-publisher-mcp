@@ -1,6 +1,6 @@
 # confluence-mermaid-publisher-mcp
 
-`confluence-mermaid-publisher-mcp` is an MCP server for publishing locally authored Markdown to Confluence while embedding Mermaid diagrams as Confluence diagrams. MacroPack is the default embedding mode, and draw.io remains available when you want editable `.drawio` artifacts.
+`confluence-mermaid-publisher-mcp` is an MCP server for publishing locally authored Markdown to Confluence while embedding Mermaid diagrams as Confluence diagrams. Draw.io is the default embedding mode for editable `.drawio` artifacts. Adaptive SVG is opt-in, and MacroPack remains available.
 
 Migration note: older MCP registrations may still refer to this server as `drawio-confluence-mcp` and to the previous draw.io-specific tool names. Update those registrations to use the `confluence-mermaid-publisher` server name and the generic Confluence diagram tool names.
 
@@ -10,15 +10,36 @@ The intended workflow is:
 2. keep that Markdown as the reproducible source of truth
 3. publish the final result to Confluence
 
-This gives a faster editing loop than using Confluence as the primary authoring surface, usually uses fewer model tokens during iterative edits, and avoids relying on Confluence's limited Mermaid support by publishing through MacroPack or draw.io.
+This gives a faster editing loop than using Confluence as the primary authoring surface, usually uses fewer model tokens during iterative edits, and avoids relying on Confluence's limited Mermaid support by publishing through draw.io, adaptive SVG, or MacroPack.
 
 ## What it does
 
 - publish Markdown documents to Confluence
-- embed Mermaid blocks as MacroPack or draw.io diagrams during publication
+- embed Mermaid blocks as draw.io diagrams, adaptive SVG images, or MacroPack macros during publication
 - create a Confluence diagram from Mermaid on an existing page
 - update an existing embedded Confluence diagram in place
 - inspect diagrams already present on a page
+
+## Opt-in adaptive SVG
+
+Set `"embeddingMode": "svg"` on the Mermaid diagram or Markdown MCP tools. For example:
+
+```json
+{
+  "pageId": "123456",
+  "diagramName": "rollout.svg",
+  "mermaid": "flowchart LR\nStart --> Done",
+  "embeddingMode": "svg"
+}
+```
+
+SVG uses Agentic Mermaid 0.4.1 locally on Node.js 22+, bypassing the Java/draw.io converter. No rendering service or Confluence diagram app is required for this mode. Each SVG contains `github-light` colors plus `github-dark` overrides selected by `prefers-color-scheme`; explicit colors in the source remain unchanged. Theme switching depends on the browser's scheme for embedded images and is not guaranteed to track Confluence's theme setting.
+
+The SVG is a native image attachment, not an editable draw.io widget. Original Mermaid is preserved in SVG metadata; Markdown publication also adds an expandable source block. Inspection returns `embeddingMode: "svg"`, the filename, dimensions, and a stable attachment ID as `localId`. Use that `localId` to update the image; its attachment version and media reference are refreshed. Renaming or changing embedding modes during a diagram update is not supported. On mixed pages, select by `localId`, or supply both `index` and `embeddingMode`.
+
+All Markdown tools support SVG, including file-based tools. The CLI's Markdown commands accept `--embedding-mode svg`. Invalid or unsupported Mermaid blocks retain the existing per-block source fallback; single-diagram failures return an error. Sources are not silently rewritten to accommodate renderer gaps.
+
+Known Agentic Mermaid limitations from the gallery: composite state layout can overlap labels, state class colors may be absent, and sequence activation placement can differ from Mermaid. Gantt and XY charts render, but success on these examples does not imply full Mermaid compatibility. Explicit light source colors may have poor contrast in dark mode. If light and dark renders disagree on geometry or content, adaptive rendering fails rather than publishing mismatched diagrams.
 
 ## Runtime shape
 
@@ -64,7 +85,7 @@ export COPILOT_MCP_CONFLUENCE_API_TOKEN="..."
 
 The local stdio helper forwards both the direct `CONFLUENCE_*` variables and the Copilot-style fallback variables into the container.
 
-Set `CONFLUENCE_DEFAULT_EMBEDDING_MODE=drawio` if you want draw.io to be the server default. When unset, the server defaults to `macropack`.
+When `CONFLUENCE_DEFAULT_EMBEDDING_MODE` is unset, the server defaults to `drawio`. Existing explicit server overrides are preserved. Pass `embeddingMode: "svg"` to opt into adaptive SVG for a tool call; there is no theme option in this release.
 
 Run local Docker stdio from the workspace you want mounted:
 

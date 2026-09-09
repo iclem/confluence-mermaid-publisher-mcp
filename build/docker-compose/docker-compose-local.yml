@@ -61,6 +61,12 @@ services:
     tty: false
     volumes:
       - ../../:/app
+      # Use image-built artifacts and Linux dependencies despite the workspace bind mount.
+      - /app/publisher/node_modules
+      - /app/publisher/dist
+      - /app/parser/node_modules
+      - /app/parser/dist
+      - /app/generator/target
       - confluence_mermaid_publisher_mcp_m2:/root/.m2
       - confluence_mermaid_publisher_mcp_npm:/root/.npm
 

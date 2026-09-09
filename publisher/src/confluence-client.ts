@@ -288,12 +288,15 @@ export class ConfluenceClient {
     minorEdit?: boolean;
   }): Promise<ConfluenceAttachment> {
     return this.attachmentMutation(
-      `/rest/api/content/${args.pageId}/child/attachment/${args.attachmentId}/data`,
+      args.contentType === "image/svg+xml"
+        ? `/rest/api/content/${args.pageId}/child/attachment`
+        : `/rest/api/content/${args.pageId}/child/attachment/${args.attachmentId}/data`,
       args.localPath,
       args.remoteFileName,
       args.contentType,
       args.comment,
       args.minorEdit ?? true,
+      args.contentType === "image/svg+xml" ? "PUT" : "POST",
     );
   }
 
@@ -304,6 +307,7 @@ export class ConfluenceClient {
     contentType: string,
     comment: string,
     minorEdit: boolean,
+    method: "POST" | "PUT" = "POST",
   ): Promise<ConfluenceAttachment> {
     const form = new FormData();
     form.append("file", new Blob([readFileSync(localPath)], { type: contentType }), remoteFileName);
@@ -311,7 +315,7 @@ export class ConfluenceClient {
     form.append("comment", comment);
 
     const response = await this.request(path, {
-      method: "POST",
+      method,
       headers: {
         "X-Atlassian-Token": "no-check",
       },

@@ -1,0 +1,26 @@
+[
+  {
+    "title": "1. Flowchart — shapes, edges, colors",
+    "source": "flowchart LR\n    subgraph Intake[\"Intake 🌀\"]\n        A([Start]) --> B[/Parse request/]\n        B --> C{Valid?}\n    end\n    subgraph Store[\"Storage\"]\n        D[(PostgreSQL)]\n        E[(Redis cache)]\n    end\n    C -->|yes| F[[Process]]:::ok\n    C ==>|retry| B\n    C -.->|no| G((Discard)):::bad\n    F --> D\n    F -.-> E\n    F ~~~ H[Queued]\n    H --> I(((Done))):::ok\n    classDef ok fill:#d5e8d4,stroke:#82b366,color:#1a4314\n    classDef bad fill:#f8cecc,stroke:#b85450,color:#571210\n    style A fill:#fff2cc,stroke:#d6b656"
+  },
+  {
+    "title": "2. Flowchart — more shapes and directions",
+    "source": "flowchart TD\n    A[/CLI input\\] --> B{{Normalize}}\n    B --> C[/Flags/]:::warn\n    C --> D[(config store)]\n    D --> E>Emit report]\n    E --> F@{ shape: hex, label: \"Review\" }\n    F --> G[/Done/]\n    classDef warn fill:#ffe6cc,stroke:#d79b00"
+  },
+  {
+    "title": "3. Sequence — actors, boxes, frames, autonumber",
+    "source": "sequenceDiagram\n    autonumber\n    actor U as User\n    participant GW as API gateway\n    box rgb(222, 235, 247) Core\n    participant S as Service\n    participant DB as Database\n    end\n    U->>GW: POST /orders\n    GW->>S: forward\n    activate S\n    alt happy path\n        S->>DB: insert order\n        DB-->>S: ok\n    else conflict\n        S-xGW: 409\n    end\n    S-->>GW: 201 Created\n    deactivate S\n    Note over GW,S: retries are client-side\n    GW--)U: async webhook"
+  },
+  {
+    "title": "4. State — composite, choice, fork/join, colors",
+    "source": "stateDiagram-v2\n    [*] --> Draft\n    Draft --> Review: submit\n    state Review {\n        [*] --> Screening\n        Screening --> Detailed: pass\n        Screening --> [*]: reject\n    }\n    Review --> Approved: sign off\n    Review --> Draft: request changes\n    state check <<choice>>\n    Approved --> check\n    check --> Live: metrics ok\n    check --> Paused: regressions\n    state Live {\n        state forkState <<fork>>\n        [*] --> forkState\n        forkState --> Serving\n        forkState --> Caching\n        state joinState <<join>>\n        Serving --> joinState\n        Caching --> joinState\n        joinState --> [*]\n    }\n    Live --> [*]: sunset\n    note right of Review : SLA is 2 days\n    classDef hot fill:#f8cecc,stroke:#b85450\n    class Live hot"
+  },
+  {
+    "title": "5. Gantt — sections, milestones, dependencies, tags",
+    "source": "gantt\n    title Platform rollout\n    dateFormat YYYY-MM-DD\n    axisFormat %b %d\n    section Foundations\n    Schema migration        :done, f1, 2026-09-01, 10d\n    Dual-write proxy        :active, f2, after f1, 8d\n    section Rollout\n    Shadow mode             :milestone, m1, after f2, 0d\n    10% traffic             :crit, r1, after m1, 7d\n    Full cutover            :crit, r2, after r1, 5d\n    section Cleanup\n    Retire legacy path      :after r2, 12d"
+  },
+  {
+    "title": "6. XY chart — bar + line overlay",
+    "source": "xychart-beta\n    title \"Render latency p50 by week (ms)\"\n    x-axis [W32, W33, W34, W35, W36, W37]\n    y-axis \"Latency (ms)\" 0 --> 200\n    bar [180, 165, 170, 140, 120, 95]\n    line [180, 160, 155, 130, 125, 100]"
+  }
+]

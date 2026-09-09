@@ -1,10 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { buildDrawioExtensionNode, DRAWIO_CUSTOM_CONTENT_TYPE } from "./drawio.js";
 import { buildMacroPackExtensionNode, findMacroPackExtensions } from "./macropack.js";
@@ -61,6 +60,7 @@ function getEmbeddedDiagramNames(result: { embeddedDiagrams: EmbeddedDiagram[] }
 }
 
 class FakeConfluenceClient {
+  readonly uploadedFiles: Array<{ path: string; body: string }> = [];
   readonly attachmentMutations: Array<{ pageId: string; remoteFileName?: string }> = [];
   readonly pageUpdateMessages: string[] = [];
   readonly pageUpdateStatuses: string[] = [];
@@ -207,18 +207,24 @@ class FakeConfluenceClient {
     pageId: string;
     localPath: string;
     remoteFileName?: string;
+    comment?: string;
   }): Promise<ConfluenceAttachment> {
     this.attachmentMutations.push({ pageId: args.pageId, remoteFileName: args.remoteFileName });
+    if (args.remoteFileName?.endsWith(".svg")) this.uploadedFiles.push({ path: args.localPath, body: readFileSync(args.localPath, "utf8") });
     const remoteFileName = args.remoteFileName ?? args.localPath;
     const existing = this.attachments.find((attachment) => attachment.title === remoteFileName);
     if (existing) {
+      existing.comment = args.comment;
       existing.version = {
         number: (existing.version?.number ?? 0) + 1,
       };
+      existing.fileId = `${existing.id}-file-v${existing.version.number}`;
       return clone(existing);
     }
     const created: ConfluenceAttachment = {
       id: `att-${this.attachments.length + 1}`,
+      fileId: `att-${this.attachments.length + 1}-file-v1`,
+      comment: args.comment,
       title: remoteFileName,
       version: {
         number: 1,
@@ -760,7 +766,7 @@ describe("DrawioPublisherService", () => {
   });
   it("updates the only MacroPack diagram when no selector is provided", async () => {
     const { client, pageId, localId } = createExistingMacroPackFixture();
-    const service = new DrawioPublisherService(client as never);
+    const service = new DrawioPublisherService(client as never, undefined, "macropack");
 
     const result = await service.updateDiagramFromMermaid({
       pageId,
@@ -890,7 +896,7 @@ describe("DrawioPublisherService", () => {
         index: 0,
       },
     })).rejects.toThrow(
-      "Index selector is ambiguous on pages with both draw.io and MacroPack diagrams; provide embeddingMode or localId",
+      "Index selector is ambiguous on pages with multiple embedding modes; provide embeddingMode or localId",
     );
   });
 
@@ -1184,5 +1190,65 @@ describe("DrawioPublisherService", () => {
       rmSync(dir, { recursive: true, force: true });
       rmSync(diagramDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("SVG publishing", () => {
+  it("creates and updates native SVG without Java or draw.io custom content", async () => {
+    const { client, pageId } = createExistingWidgetFixture();
+    const converter = vi.fn();
+    const service = new DrawioPublisherService(client as never, converter);
+    const created = await service.createDiagramFromMermaid({ pageId, mermaid: "flowchart LR\nA-->B", diagramName: "flow.svg", embeddingMode: "svg" });
+    const svg = created.embeddedDiagrams.find((diagram) => diagram.embeddingMode === "svg")!;
+    expect(svg).toMatchObject({ diagramName: "flow.svg", localId: expect.any(String) });
+    const originalFile = created.attachments.find((a) => a.title === "flow.svg")!.fileId;
+    const updated = await service.updateDiagramFromMermaid({ pageId, mermaid: "flowchart LR\nA-->Updated", diagram: { localId: svg.localId } });
+    expect(updated.embeddedDiagrams.find((diagram) => diagram.embeddingMode === "svg")?.localId).toBe(svg.localId);
+    const latestFile = updated.attachments.find((a) => a.title === "flow.svg")!.fileId;
+    expect(latestFile).not.toBe(originalFile);
+    expect(JSON.stringify(getStoredPageAdf(client))).toContain(latestFile);
+    expect(JSON.stringify(getStoredPageAdf(client))).not.toContain(originalFile);
+    expect(client.uploadedFiles.at(-1)?.body).toContain("Updated");
+    expect(client.uploadedFiles.every((file) => !existsSync(file.path))).toBe(true);
+    expect(client.customContentCreates).toEqual([]);
+    expect(converter).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate creates and ambiguous mixed-page updates before uploading", async () => {
+    const { client, pageId } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never);
+    await service.createDiagramFromMermaid({ pageId, mermaid: "flowchart LR\nA-->B", embeddingMode: "svg" });
+    await expect(service.createDiagramFromMermaid({ pageId, mermaid: "flowchart LR\nA-->C", embeddingMode: "svg" })).rejects.toThrow("already exists");
+    await expect(service.updateDiagramFromMermaid({ pageId, mermaid: "flowchart LR\nA-->C", diagram: { index: 0 } })).rejects.toThrow("ambiguous");
+    expect(client.uploadedFiles).toHaveLength(1);
+  });
+
+  it("falls back per invalid Markdown block and republishes SVG attachments in place", async () => {
+    const { client, pageId } = createExistingWidgetFixture();
+    const converter = vi.fn();
+    const service = new DrawioPublisherService(client as never, converter);
+    const markdown = "# Gallery\n\n```mermaid\ngantt\n dateFormat YYYY-MM-DD\n section Work\n Test :2026-09-01, 2d\n```\n\n```mermaid\ninvalid diagram\n```";
+    const first = await service.updatePageFromMarkdown({ pageId, markdown, embeddingMode: "svg" });
+    expect(first).toMatchObject({ embeddingMode: "svg", mermaidBlocks: 2, embeddedBlocks: 1, fallbackBlocks: 1 });
+    expect(JSON.stringify(getStoredPageAdf(client))).toContain("invalid diagram");
+    expect(JSON.stringify(getStoredPageAdf(client))).toContain("Original Mermaid source");
+    const second = await service.updatePageFromMarkdown({ pageId, markdown, embeddingMode: "svg" });
+    expect(second.embeddedDiagrams[0]?.localId).toBe(first.embeddedDiagrams[0]?.localId);
+    expect(client.uploadedFiles).toHaveLength(2);
+    expect(converter).not.toHaveBeenCalled();
+  });
+
+  it("cleans temporary SVG files when upload fails", async () => {
+    const { client, pageId } = createExistingWidgetFixture();
+    let path = "";
+    vi.spyOn(client, "upsertAttachment").mockImplementation(async (args) => {
+      path = args.localPath;
+      expect(existsSync(path)).toBe(true);
+      throw new Error("Upload failed");
+    });
+    const service = new DrawioPublisherService(client as never);
+    await expect(service.createDiagramFromMermaid({ pageId, mermaid: "flowchart LR\nA-->B", embeddingMode: "svg" })).rejects.toThrow("Upload failed");
+    expect(existsSync(path)).toBe(false);
+    expect(client.pageUpdateMessages).toEqual([]);
   });
 });

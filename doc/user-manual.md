@@ -4,14 +4,14 @@ This manual covers installation, runtime setup, and the most common operator wor
 
 For the shortest path to a first successful publish, see `doc/quick-start.md`.
 
-The intended workflow is: author locally in Markdown, iterate with normal file-based tools, and publish the final result to Confluence. This is typically faster, more reproducible, and less token-expensive than using Confluence itself as the primary editing surface. The project embeds Mermaid as MacroPack by default and can still use draw.io when editable `.drawio` artifacts are required.
+The intended workflow is: author locally in Markdown, iterate with normal file-based tools, and publish the final result to Confluence. This is typically faster, more reproducible, and less token-expensive than using Confluence itself as the primary editing surface. The project embeds Mermaid as editable draw.io diagrams by default; adaptive SVG and MacroPack are optional modes.
 
 ## What this server does
 
 The MCP server exposes a product-oriented tool surface for:
 
 - publishing Markdown documents to Confluence
-- embedding Mermaid blocks as MacroPack or draw.io diagrams
+- embedding Mermaid blocks as draw.io, adaptive SVG, or MacroPack diagrams
 - creating a single Confluence diagram from Mermaid
 - updating an existing embedded diagram in place
 - inspecting diagrams already present on a page
@@ -19,8 +19,8 @@ The MCP server exposes a product-oriented tool surface for:
 ## Prerequisites
 
 - Docker
-- access to a Confluence Cloud tenant with the draw.io app installed
-- access to a Confluence Cloud tenant with MacroPack installed if you want to use the default MacroPack mode
+- access to a Confluence Cloud tenant with the draw.io app installed for draw.io mode; SVG mode requires no diagram app
+- access to a Confluence Cloud tenant with MacroPack installed if you choose MacroPack mode
 - Confluence credentials via one of these explicit sets:
   - direct publisher variables:
     - `CONFLUENCE_BASE_URL`
@@ -337,7 +337,7 @@ The publisher:
 
 1. creates the page
 2. parses Markdown into Confluence ADF
-3. embeds each Mermaid block as MacroPack or draw.io based on the effective `embeddingMode`
+3. embeds each Mermaid block as draw.io, SVG, or MacroPack based on the effective `embeddingMode`
 4. uses draw.io conversion only when the effective mode is `drawio`
 5. falls back to Mermaid source blocks when embedding fails
 
@@ -371,7 +371,7 @@ Select the target diagram by:
 
 Use only one selector per update request.
 
-When `embeddingMode` is omitted, the server uses its configured default and falls back to `macropack` when no server default is set. Pass `embeddingMode` when you explicitly want to override that default for a specific tool call, or when selecting by `index` on a page that contains both draw.io and MacroPack diagrams.
+When `embeddingMode` is omitted, the server uses its configured default and falls back to `drawio` when no server default is set. Pass `embeddingMode` when you explicitly want to override that default for a specific tool call, or when selecting by `index` on a page that contains multiple embedding modes.
 
 ## Example prompts for agents
 

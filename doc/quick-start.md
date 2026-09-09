@@ -4,7 +4,7 @@ This is the shortest path from a clean checkout to a successful Confluence publi
 
 For the full setup and provider-specific installation details, see `doc/user-manual.md`.
 
-The workflow assumes that Markdown is your local source of truth and Confluence is the final publication target. That keeps iteration fast and file-based, while the MCP server embeds Mermaid as MacroPack by default and can still use draw.io when you want editable `.drawio` artifacts.
+The workflow assumes that Markdown is your local source of truth and Confluence is the final publication target. That keeps iteration fast and file-based, while the MCP server embeds Mermaid as editable draw.io diagrams by default, with adaptive SVG and MacroPack available as optional modes.
 
 ## 1. Set Confluence credentials
 
@@ -109,7 +109,7 @@ Optional default diagram mode:
 export CONFLUENCE_DEFAULT_EMBEDDING_MODE="drawio"
 ```
 
-If omitted, the server defaults to `macropack`.
+If omitted, the server defaults to `drawio`.
 
 ## 6. Do a first publish
 
@@ -149,7 +149,7 @@ Example request shape:
 - `update_confluence_diagram_from_mermaid` to replace an existing embedded diagram in place
 - `inspect_confluence_page_diagrams` to inspect current page/diagram state before updating it
 
-Every Mermaid-aware tool also accepts an optional `embeddingMode` of `macropack` or `drawio`. If you omit it, the server default is used.
+Every Mermaid-aware tool also accepts an optional `embeddingMode` of `macropack`, `drawio`, or `svg`. If you omit it, the server default is used.
 
 ## Common first-run issues
 

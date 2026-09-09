@@ -325,7 +325,7 @@ The server currently exposes:
 These tools:
 
 - authenticate using the same `CONFLUENCE_*` or `COPILOT_MCP_CONFLUENCE_*` environment variables
-- default to `macropack` unless `CONFLUENCE_DEFAULT_EMBEDDING_MODE` or a per-tool `embeddingMode` selects `drawio`
+- default to `drawio` unless `CONFLUENCE_DEFAULT_EMBEDDING_MODE` or a per-tool `embeddingMode` selects `macropack` or `svg`
 - convert Mermaid to `.drawio` inside the container only when the effective embedding mode is `drawio`
 - create or update embedded diagrams on Confluence pages
 - can create or update a page from Markdown content or from a Markdown file path and embed multiple Mermaid blocks with fallback to Mermaid code blocks when embedding fails

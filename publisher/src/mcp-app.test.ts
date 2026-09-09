@@ -34,14 +34,14 @@ describe("mcp app", () => {
     expect(() => createPublisherService()).not.toThrow();
   });
 
-  it("defaults the publisher service to macropack when embedding mode is unset", async () => {
+  it("defaults the publisher service to drawio when embedding mode is unset", async () => {
     process.env.CONFLUENCE_BASE_URL = "https://example.atlassian.net/wiki";
     process.env.CONFLUENCE_EMAIL = "user@example.com";
     process.env.CONFLUENCE_API_TOKEN = "token";
     delete process.env[DEFAULT_EMBEDDING_MODE_ENV];
 
     const service = createPublisherService();
-    expect((service as unknown as { defaultEmbeddingMode: string }).defaultEmbeddingMode).toBe("macropack");
+    expect((service as unknown as { defaultEmbeddingMode: string }).defaultEmbeddingMode).toBe("drawio");
   });
 
   it("rejects unsupported embedding mode configuration", () => {
@@ -70,7 +70,7 @@ describe("mcp app", () => {
     const createDiagramTool = result?.tools.find((tool: { name: string }) => tool.name === "create_confluence_diagram_from_mermaid");
     expect(createDiagramTool?.description).toContain("Omit embeddingMode to use the server default.");
     expect(createDiagramTool?.inputSchema?.properties?.embeddingMode).toBeDefined();
-    expect(createDiagramTool?.inputSchema?.properties?.embeddingMode?.enum).toEqual(["macropack", "drawio"]);
+    expect(createDiagramTool?.inputSchema?.properties?.embeddingMode?.enum).toEqual(["macropack", "drawio", "svg"]);
     expect(createDiagramTool?.inputSchema?.properties?.embeddingMode?.description).toContain(
       "Only set it when the user explicitly requests a non-default mode",
     );
