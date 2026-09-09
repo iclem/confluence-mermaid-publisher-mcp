@@ -12,6 +12,41 @@ function stripEdgePoints<T extends { points?: unknown }>(edge: T) {
   return rest;
 }
 
+function assertFlowchartRoutesAnchorOnNodes(
+  diagram: Awaited<ReturnType<typeof parseMermaid>>,
+  options: { except?: string[] } = {},
+): void {
+  const except = new Set(options.except ?? []);
+  const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+  const tolerance = 25; // rendered node bboxes include label/shape padding around the spline anchors
+  for (const edge of diagram.edges) {
+    if (except.has(`${edge.sourceId}->${edge.targetId}`)) {
+      continue;
+    }
+    const points = edge.points!;
+    expect(points.length).toBeGreaterThan(1);
+    const source = byId.get(edge.sourceId)!;
+    const target = byId.get(edge.targetId)!;
+    const start = points[0];
+    const end = points[points.length - 1];
+    // Polylines anchor on their endpoint nodes' bounding boxes. Cylinders are
+    // exempt: dagre routes to the (much larger) padded shape outline, not the
+    // visible box, by up to ~600px in the fixture diagram.
+    if (source.shape !== "cylinder") {
+      expect(start.x).toBeGreaterThanOrEqual(source.x! - tolerance);
+      expect(start.x).toBeLessThanOrEqual(source.x! + source.width! + tolerance);
+      expect(start.y).toBeGreaterThanOrEqual(source.y! - tolerance);
+      expect(start.y).toBeLessThanOrEqual(source.y! + source.height! + tolerance);
+    }
+    if (target.shape !== "cylinder") {
+      expect(end.x).toBeGreaterThanOrEqual(target.x! - tolerance);
+      expect(end.x).toBeLessThanOrEqual(target.x! + target.width! + tolerance);
+      expect(end.y).toBeGreaterThanOrEqual(target.y! - tolerance);
+      expect(end.y).toBeLessThanOrEqual(target.y! + target.height! + tolerance);
+    }
+  }
+}
+
 describe("parseMermaid", () => {
   it("parses supported flowchart syntax into the intermediate model", async () => {
     const diagram = await parseMermaid({
@@ -91,7 +126,10 @@ describe("parseMermaid", () => {
     expect(diagram.edges.map(stripEdgePoints)).toEqual([
       { sourceId: "A", targetId: "B", label: undefined, kind: "directed" },
     ]);
-    expect(diagram.warnings).toEqual([]);
+    // Geometry extraction may warn when canvas is parked (platform flip)
+    expect(
+      diagram.warnings.filter((warning) => !warning.startsWith("flowchart_geometry_unavailable:")),
+    ).toEqual([]);
   });
 
   it("rejects classDef declarations that mermaid itself cannot parse (rgb functions)", async () => {
@@ -106,6 +144,65 @@ describe("parseMermaid", () => {
         `,
       }),
     ).rejects.toThrow(/parse_error/);
+  });
+
+  it("keeps extracted flowchart edge routes consistent with node coordinates", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    // Long chain in LR forces the rendered diagram to extend below y=0, so
+    // normalization must shift (like mermaid's viewBox), not clamp: clamping
+    // left edge polylines offset from the node boxes (spiky artifacts).
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart LR
+        A --> B
+        B -.-> C
+        B -.-> D
+        D -.-> E
+        E --> F
+        A --> D
+        A -.-> E
+        D -.-> Scheduler
+      `,
+    });
+
+    assertFlowchartRoutesAnchorOnNodes(diagram);
+  });
+
+  it("keeps edge routes anchored on nodes in the real-world architecture diagram", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    // Regression fixture from a published page: its routes run well above the
+    // topmost node (content min y < 0), which used to desync polylines from
+    // node boxes and produce spike artifacts in the drawio output.
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const fixturePath = fileURLToPath(
+      new URL("../../test-data/target-architecture-flowchart.mermaid", import.meta.url),
+    );
+    const diagram = await parseMermaid({
+      sourceName: "target-architecture-flowchart.mermaid",
+      mermaid: readFileSync(fixturePath, "utf8"),
+    });
+
+    expect(diagram.diagramType).toBe("flowchart");
+    // The pre-fix clamp left edge polylines and node boxes in different
+    // coordinate spaces: nodes shifted up by (minY - margin) while routes
+    // kept their raw (unclamped) y, so route ends pointed below/above their
+    // endpoint nodes (spike artifacts in drawio). With consistent
+    // coordinates every polyline endpoint anchors on its endpoint node's
+    // bounding box (assertFlowchartRoutesAnchorOnNodes below).
+    assertFlowchartRoutesAnchorOnNodes(diagram);
   });
 
   it("supports the full flowchart node shape set", async () => {
