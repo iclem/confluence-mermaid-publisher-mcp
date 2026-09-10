@@ -1,4 +1,4 @@
-# Markdown to Confluence Draw.io MCP Coverage Matrix
+# Confluence Mermaid Publisher MCP Coverage Matrix
 
 This matrix tracks what the current converter can handle today and what remains out of scope.
 

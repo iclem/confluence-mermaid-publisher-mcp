@@ -1,201 +1,178 @@
-# Markdown to Confluence Draw.io MCP Specification
+# Confluence Mermaid Publisher MCP Specification
+
+This document describes the implemented product contract. For syntax-level Mermaid coverage, see [`coverage-matrix.md`](coverage-matrix.md). For installation and operation, see [`user-manual.md`](user-manual.md).
 
 ## Objective
 
-Convert Mermaid diagrams embedded in Markdown or stored in `.mermaid` resources into editable `.drawio` diagrams for downstream publication, including Confluence page publishing.
+Publish locally authored Markdown and Mermaid diagrams to Confluence through a small, workflow-oriented MCP interface. Mermaid remains the authoring format; Confluence pages are the publication target.
 
-## Scope
+The publisher supports two Confluence embedding modes:
 
-Version 1 focuses on a constrained, deterministic conversion path which is practical to implement and easy to validate.
+- `macropack` embeds Mermaid source directly in a MacroPack extension and is the default
+- `drawio` converts Mermaid into an editable `.drawio` attachment, creates or updates draw.io custom content, and embeds a draw.io extension
 
-For the current implementation status by Mermaid diagram family and by flowchart feature, see `doc/coverage-matrix.md`.
+## Product boundaries
 
 ### In scope
 
-- Mermaid input as inline text or resource content
-- `flowchart` / `graph` diagrams
-- initial `sequenceDiagram` support for participants, messages, self-messages, notes, explicit activation bars, and `opt` / `loop` control frames
-- initial `stateDiagram-v2` / `stateDiagram` support for transitions, start/end markers, and right-of notes
-- initial `gantt` support for quarter-based delivery-plan timelines (`dateFormat YYYY-QQ`, sections, and explicit task bars)
-- initial `xychart-beta` support for optional `title`, categorical `x-axis`, ranged `y-axis`, and one or more `bar` and/or `line` series
-- Conversion to a single `.drawio` document
-- One page per Mermaid diagram
-- One default layer per page
-- Basic node, edge, label, and direction mapping
-- Deterministic auto-layout suitable for manual refinement in Draw.io
-- Explicit warnings and errors for unsupported constructs
+- create and replace Confluence page bodies from Markdown text or server-visible files
+- create, inspect, and update embedded Mermaid diagrams on existing pages
+- select MacroPack or draw.io globally with `CONFLUENCE_DEFAULT_EMBEDDING_MODE`
+- override the embedding mode on an individual MCP call
+- convert the supported Mermaid subset to editable draw.io documents when draw.io mode is selected
+- preserve unsupported or failed Mermaid blocks as source code during Markdown publication
+- expose the same tools over stdio and stateless Streamable HTTP
 
-### Out of scope for version 1
+### Out of scope
 
-- `classDiagram`
-- `erDiagram`
-- `journey`
-- Theme parity with Mermaid
-- Pixel-perfect visual equivalence with Mermaid rendering
-- Full Draw.io editor integration
+- arbitrary Confluence page editing beyond the exposed publication workflows
+- full CommonMark or GitHub Flavored Markdown compatibility
+- full Mermaid grammar, theme, or pixel-level rendering parity
+- browser-driven draw.io editing
+- a full-fidelity PNG render of generated draw.io diagrams
+- automatic migration of an existing diagram from one embedding mode to another during update
 
-## Primary Use Case
+## MCP server contract
 
-1. Read Markdown containing Mermaid fenced blocks or `mermaid-resource` references.
-2. Convert each Mermaid diagram to `.drawio`.
-3. Save generated `.drawio` artifacts.
-4. Attach generated artifacts during Confluence publication.
-5. Embed or reference the generated Draw.io attachment in the published page.
+The server name is `confluence-mermaid-publisher`. Older registrations using `drawio-confluence-mcp` and the old draw.io-specific tool names must be migrated.
 
-## Functional Contract
+### Tools
 
-### Tool name
-
-`convert_mermaid_to_drawio`
-
-### Input
-
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `mermaid` | string | yes | Mermaid source text |
-| `source_name` | string | no | Logical source name for diagnostics and page naming |
-| `format` | enum | no | `drawio-xml` or `drawio-html`, default `drawio-xml` |
-| `layout` | enum | no | `auto` or `none`, default `auto` |
-| `page_name` | string | no | Optional Draw.io page name override |
-
-### Output
-
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `drawio_xml` | string | yes | Generated Draw.io XML |
-| `drawio_html` | string | no | HTML viewer output when requested |
-| `page_name` | string | yes | Generated page name |
-| `warnings` | string[] | yes | Non-fatal conversion warnings |
-
-### Error categories
-
-- `parse_error`
-- `unsupported_dialect`
-- `unsupported_construct`
-- `invalid_reference`
-- `conversion_error`
-
-## Conversion Model
-
-The converter shall translate Mermaid into an intermediate diagram model and then map that model to Nasdanika Draw.io objects using:
-
-- `Document.create(...)`
-- `Document.createPage()`
-- `Root.createLayer()`
-- `Layer.createNode()`
-- `Layer.createConnection(...)`
-- `Document.save(false)`
-
-The implementation should keep Mermaid parsing separate from Draw.io generation so parsers and mappings can evolve independently.
-
-## Version 1 Mermaid Mapping
-
-### Supported diagram headers
-
-- `flowchart TD`
-- `flowchart TB`
-- `flowchart LR`
-- `flowchart RL`
-- `graph TD`
-- `graph TB`
-- `graph LR`
-- `graph RL`
-
-### Node mapping
-
-| Mermaid form | Meaning | Draw.io mapping |
+| Tool | Required input | Purpose |
 | --- | --- | --- |
-| `A[Label]` | process node | rectangle |
-| `A(Label)` | rounded node | rounded rectangle |
-| `A{Decision}` | decision node | rhombus |
-| `A((Label))` | terminal-style node | ellipse |
-| bare identifier | implicit node | rectangle with identifier as label |
+| `inspect_confluence_page_diagrams` | `pageId` | Return page metadata, attachments, draw.io custom content, and detected draw.io/MacroPack diagrams |
+| `create_confluence_diagram_from_mermaid` | `pageId`, `mermaid` | Add one embedded diagram, optionally after the first paragraph containing `anchorText` |
+| `update_confluence_diagram_from_mermaid` | `pageId`, `mermaid`, exactly one selector | Update one embedded diagram in place without replacing the page |
+| `create_confluence_page_from_markdown` | `title`, `markdown`, and a destination | Create a page and publish an in-memory Markdown document |
+| `create_confluence_page_from_markdown_file` | `title`, `markdownFile`, and a destination | Create a page from a server-visible Markdown file |
+| `update_confluence_page_from_markdown` | `pageId`, `markdown` | Replace an existing page body from in-memory Markdown |
+| `update_confluence_page_from_markdown_file` | `pageId`, `markdownFile` | Replace an existing page body from a server-visible Markdown file |
+| `append_confluence_page_paragraph` | `pageId`, `text` | Append one plain-text paragraph |
 
-### Edge mapping
+A page-creation destination is either:
 
-| Mermaid form | Meaning | Draw.io mapping |
-| --- | --- | --- |
-| `A --> B` | directed edge | arrow connection |
-| `A --- B` | plain edge | line connection |
-| `A -->|Text| B` | labeled edge | arrow connection with label |
-| `A --> B & C` | branch to multiple targets | one arrow connection per target |
-| `A --> B & C --> D` | chained branch groups | cross-product edges between adjacent groups |
+- `spaceId`, with optional `parentId`; or
+- `siblingPageId`, which supplies the sibling page's space and parent
 
-### Layout mapping
+`spaceKey` is optional macro metadata. `sourceName` is optional publication metadata and defaults to the Markdown filename for file-based calls.
 
-| Mermaid direction | Preferred layout |
+### Embedding mode resolution
+
+`embeddingMode` accepts only `macropack` or `drawio`.
+
+For creation and full-page publication, resolution is:
+
+1. the call-level `embeddingMode`, when supplied
+2. `CONFLUENCE_DEFAULT_EMBEDDING_MODE`, when configured
+3. `macropack`
+
+For diagram updates, the target is resolved before mutation:
+
+- `widgetDiagramName` and `custContentId` are draw.io-only selectors
+- `localId` identifies either mode and lets the server detect the target mode
+- `index` is zero-based within a mode; on a page containing both modes, provide `embeddingMode` or use `localId`
+- supplying an override that contradicts the selected diagram fails instead of migrating it
+
+Exactly one of `widgetDiagramName`, `custContentId`, `localId`, or `index` is required for an update.
+
+### Results
+
+Inspection and single-diagram mutations return the current page summary plus detected embedded diagrams, attachments, and draw.io custom-content metadata.
+
+Markdown publication returns:
+
+- the updated page summary
+- the source name and effective embedding mode
+- counts for Mermaid, successfully embedded, and fallback blocks
+- the diagrams detected after publication
+
+## Markdown publication contract
+
+The block-level Markdown parser supports:
+
+- headings
+- paragraphs
+- block quotes
+- bullet lists
+- ordered lists, including a non-default starting number
+- tables
+- horizontal rules
+- fenced code blocks
+- fenced `mermaid` blocks
+
+Markdown publication replaces the destination page body; it is not a merge. Each Mermaid block is processed independently. If one block cannot be embedded, the publisher inserts an explanatory paragraph and the original Mermaid source as a code block, then continues with the remaining document.
+
+In draw.io mode, generated diagram names are derived from the page title and block ordinal, for example `architecture-overview-01.drawio`. The original Mermaid source is also placed in an expandable section below the diagram. In MacroPack mode, the Mermaid source lives in the extension node and no `.drawio` artifact is generated.
+
+## Mermaid-to-draw.io conversion contract
+
+The conversion pipeline is:
+
+1. TypeScript parses the supported Mermaid subset into a normalized intermediate model
+2. the intermediate JSON is passed to the Java/Nasdanika generator
+3. the generator creates one editable draw.io document and page
+4. the publisher uploads the document and a placeholder PNG required by the widget lifecycle
+
+Supported diagram families are:
+
+- `flowchart` and `graph`
+- `sequenceDiagram`
+- `stateDiagram` and `stateDiagram-v2`
+- `gantt`
+- `xychart-beta`
+
+Support within each family is intentionally partial. [`coverage-matrix.md`](coverage-matrix.md) is the normative feature matrix and must be updated with parser or generator changes.
+
+## Runtime contract
+
+The packaged Docker image contains Node.js, Java 21, the parser, the generator, the publisher, and both MCP transports.
+
+| Command | Behaviour |
 | --- | --- |
-| `TD`, `TB` | top-to-bottom |
-| `LR` | left-to-right |
-| `RL` | right-to-left |
+| `mcp` | stdio MCP server; default container command |
+| `mcp-http` | stateless Streamable HTTP at `/mcp`, with `/healthz` |
+| `publisher-cli` | direct Confluence publication CLI |
+| `convert` | Mermaid-to-draw.io conversion utility |
+| `test` | repository test entrypoint |
+| `shell` | interactive shell |
 
-The initial layout only needs to produce readable non-overlapping output. It does not need to replicate Mermaid positioning exactly.
+File-based MCP calls read paths in the server process. A Docker deployment must mount the source file so that the same path is visible inside the container. The supplied stdio helper enforces an absolute workspace path and mounts it at the same absolute location.
 
-## Non-Functional Requirements
+## Configuration contract
 
-- Deterministic output for identical input
-- Stable node and edge identifiers within a single conversion run
-- Clear diagnostics for unsupported syntax
-- Editable output in Draw.io
-- No dependency on the Draw.io editor UI
+Required base URL:
 
-## Markdown Integration Requirements
+- `CONFLUENCE_BASE_URL`, or fallback `COPILOT_MCP_CONFLUENCE_URL`
 
-The Markdown publication pipeline shall:
+Required authentication, using one set:
 
-1. detect `mermaid` fenced blocks
-2. detect `mermaid-resource` fenced blocks
-3. resolve resource references relative to the source document
-4. convert Mermaid content to `.drawio`
-5. persist generated `.drawio` files as publication artifacts
-6. hand the generated artifacts to the Confluence publishing step
+- `CONFLUENCE_EMAIL` plus `CONFLUENCE_API_TOKEN`
+- `CONFLUENCE_BEARER_TOKEN`
+- fallback `COPILOT_MCP_CONFLUENCE_USERNAME` plus `COPILOT_MCP_CONFLUENCE_API_TOKEN`
 
-## Confluence Integration Requirements
+Optional runtime settings:
 
-The publication flow shall support:
+- `CONFLUENCE_DEFAULT_EMBEDDING_MODE=macropack|drawio`
+- `MCP_HOST` and `MCP_PORT` for HTTP transport
+- `CONFLUENCE_MERMAID_PUBLISHER_MCP_IMAGE` and `CONFLUENCE_MERMAID_PUBLISHER_MCP_WORKSPACE` for the local stdio helper
 
-1. uploading generated `.drawio` files as page attachments
-2. embedding or referencing those attachments in the published page
-3. falling back to alternate rendering when the Draw.io macro is unavailable
+Blank fallback values are treated as unset. Unsupported embedding-mode values fail at server startup with the accepted values in the error.
 
-The Confluence-specific embedding mechanism is intentionally left configurable because it depends on the target Confluence environment and installed apps.
+## Error and safety behaviour
 
-## Suggested Architecture
+- invalid configuration fails before Confluence mutation
+- diagram updates reject zero or multiple selectors
+- ambiguous mixed-mode index selection requires an explicit mode
+- a selector/mode mismatch fails rather than mutating a different diagram
+- duplicate draw.io names fail creation; update the existing diagram or choose another name
+- Confluence writes use the latest page version to reduce version conflicts
+- live Confluence validation remains tenant-dependent and should begin on disposable pages
 
-### Components
+## Known limitations
 
-1. Mermaid parser adapter
-2. Intermediate diagram model
-3. Draw.io generator based on Nasdanika `drawio`
-4. Markdown integration layer
-5. Confluence publication integration layer
-
-### Runtime choice
-
-Use a containerized runtime combining:
-
-- Node.js for Mermaid parsing
-- Java for Draw.io generation via this repository
-
-## Incremental Delivery Plan
-
-### Version 1
-
-- Flowchart parsing
-- Basic node and edge mapping
-- Draw.io XML generation
-- Markdown integration hooks
-
-### Version 2
-
-- richer sequence diagram support (`alt`, create/destroy, actor shortcuts, and more complete frame rendering)
-- Better styles and themes
-- Richer layout
-- Confluence-specific embedding improvements
-
-## Open Decisions
-
-- Which Mermaid parser/library to use in the containerized runtime
-- Exact intermediate model schema
-- Whether generated `.drawio` files are stored on disk only or also returned inline
-- Exact Confluence macro or attachment embedding strategy
+- draw.io PNG previews are placeholders rather than rendered diagram images
+- Markdown support is block-oriented and does not implement the complete inline Markdown specification
+- diagram-family support is a documented subset, not full Mermaid compatibility
+- Confluence app availability and macro schemas vary by tenant
+- HTTP transport is stateless; the server does not retain MCP sessions between requests
+- the checked-in stdio helper and Compose services do not currently forward the server-wide embedding-mode environment variable; use a per-call override or a raw Docker launch

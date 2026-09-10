@@ -1,4 +1,4 @@
-# Markdown to Confluence Draw.io MCP Quick Start
+# Confluence Mermaid Publisher MCP Quick Start
 
 This is the shortest path from a clean checkout to a successful Confluence publish through the MCP server.
 
@@ -63,6 +63,7 @@ docker run --rm \
   -v "$PWD":"$PWD" \
   -e MCP_HOST=0.0.0.0 \
   -e MCP_PORT=3000 \
+  -e CONFLUENCE_DEFAULT_EMBEDDING_MODE \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
@@ -103,13 +104,15 @@ The common endpoint is:
 http://127.0.0.1:3000/mcp
 ```
 
-Optional default diagram mode:
+Optional default diagram mode (`macropack` or `drawio`):
 
 ```bash
 export CONFLUENCE_DEFAULT_EMBEDDING_MODE="drawio"
 ```
 
 If omitted, the server defaults to `macropack`.
+
+The raw Docker command forwards this setting. The checked-in stdio helper and Compose service currently do not, so use a per-tool `embeddingMode` override with those launch paths.
 
 ## 6. Do a first publish
 
@@ -150,6 +153,8 @@ Example request shape:
 - `inspect_confluence_page_diagrams` to inspect current page/diagram state before updating it
 
 Every Mermaid-aware tool also accepts an optional `embeddingMode` of `macropack` or `drawio`. If you omit it, the server default is used.
+
+When updating a diagram, inspect the page first and prefer its `localId`. Name and custom-content selectors are draw.io-only. An `index` is zero-based within an embedding mode; specify `embeddingMode` when a page contains both MacroPack and draw.io diagrams.
 
 ## Common first-run issues
 

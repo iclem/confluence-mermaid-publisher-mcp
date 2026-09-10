@@ -1,4 +1,4 @@
-# Markdown to Confluence Draw.io MCP User Manual
+# Confluence Mermaid Publisher MCP User Manual
 
 This manual covers installation, runtime setup, and the most common operator workflows for the Confluence diagram MCP server.
 
@@ -42,9 +42,9 @@ make image-mcp
 
 ## Choose a transport
 
-### Recommended: HTTP MCP
+### HTTP MCP
 
-HTTP is the best default for local agent integrations because one container can serve multiple clients and the current implementation is stateless.
+HTTP is a good default when one long-lived container should serve multiple clients. Use stdio instead when the MCP host should start a workspace-scoped server on demand.
 
 ```bash
 docker run --rm \
@@ -52,6 +52,7 @@ docker run --rm \
   -v "$PWD":"$PWD" \
   -e MCP_HOST=0.0.0.0 \
   -e MCP_PORT=3000 \
+  -e CONFLUENCE_DEFAULT_EMBEDDING_MODE \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
@@ -69,6 +70,8 @@ Equivalent Make target:
 ```bash
 make mcp-http
 ```
+
+The checked-in Compose service and stdio helper currently do not forward `CONFLUENCE_DEFAULT_EMBEDDING_MODE`; they therefore use the built-in `macropack` default. Use a per-call `embeddingMode` override with those launch paths, or use the raw Docker form when you need a server-wide draw.io default.
 
 For containerized HTTP, `MCP_HOST` must be `0.0.0.0` so the published Docker port can reach the server. MCP clients on the host should still use `http://127.0.0.1:3000/mcp`.
 
@@ -109,7 +112,7 @@ The helper launches the packaged image through `docker run` with:
 - the container working directory set to that workspace path
 - both direct `CONFLUENCE_*` variables and Copilot-style fallback variables forwarded into the container
 
-The raw Docker equivalent is:
+The raw Docker form is below. It also forwards the optional server-wide embedding default, unlike the current helper:
 
 ```bash
 docker run --rm -i \
@@ -316,6 +319,8 @@ and send the Markdown body directly instead.
 | `update_confluence_diagram_from_mermaid` | You want to replace an existing embedded diagram without recreating the page |
 | `append_confluence_page_paragraph` | You want a small text-only page edit |
 
+All creation and publication tools accept an optional `embeddingMode` override. Omit it to use `CONFLUENCE_DEFAULT_EMBEDDING_MODE`, which itself defaults to `macropack`.
+
 ## Typical workflows
 
 ### Publish a Markdown document with Mermaid blocks
@@ -362,16 +367,16 @@ Use:
 - `inspect_confluence_page_diagrams`
 - then `update_confluence_diagram_from_mermaid`
 
-Select the target diagram by:
+Inspect the page first, then select the target diagram by exactly one of:
 
 - `widgetDiagramName` for draw.io diagrams
 - or `custContentId` for draw.io diagrams
 - or `localId` for either embedding mode
-- or `index` within the chosen embedding mode
+- or a zero-based `index` within an embedding mode
 
 Use only one selector per update request.
 
-When `embeddingMode` is omitted, the server uses its configured default and falls back to `macropack` when no server default is set. Pass `embeddingMode` when you explicitly want to override that default for a specific tool call, or when selecting by `index` on a page that contains both draw.io and MacroPack diagrams.
+For `localId`, the server detects the existing diagram's mode. The draw.io-only selectors reject a contradictory `macropack` override. For `index`, pass `embeddingMode` when the page contains both draw.io and MacroPack diagrams; otherwise the request is ambiguous and fails. An update never migrates a diagram between modes.
 
 ## Example prompts for agents
 
@@ -386,6 +391,8 @@ When `embeddingMode` is omitted, the server uses its configured default and fall
 - The HTTP server is intentionally **stateless**. That avoids session bootstrap issues with current HTTP MCP hosts.
 - The draw.io preview uploaded with draw.io-backed diagrams is currently a **placeholder PNG preview**, not a full rendered export.
 - Markdown publication supports headings, paragraphs, block quotes, bullet lists, ordered lists, tables, rules, code blocks, and Mermaid fenced blocks.
+- Full-page update tools replace the page body; they do not merge with existing content.
+- Markdown publication reports Mermaid, embedded, and fallback block counts. A failed Mermaid block is preserved as source and does not stop the remaining document.
 
 ## Troubleshooting
 
@@ -413,3 +420,11 @@ Check:
 ### A page already has a widget with the same diagram name
 
 Use a new `diagramName` or switch to `update_confluence_diagram_from_mermaid`.
+
+### An update reports an ambiguous embedding mode
+
+The page contains both MacroPack and draw.io diagrams and the request used `index` without a mode. Inspect the page, then use the diagram's `localId`, or repeat the update with the intended `embeddingMode`.
+
+### An update reports that the target uses a different mode
+
+The selector identified an existing diagram whose mode conflicts with the requested `embeddingMode`. Remove the override to let the server detect the mode, or select a diagram that already uses the requested mode. Updates do not convert between MacroPack and draw.io.

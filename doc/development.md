@@ -1,4 +1,4 @@
-# Markdown to Confluence Draw.io MCP Development Environment
+# Confluence Mermaid Publisher MCP Development Environment
 
 ## Documentation map
 
@@ -254,9 +254,9 @@ When using `./scripts/confluence-drawio.sh`, the `docker compose` service forwar
 
 The wrapper automatically maps `COPILOT_MCP_CONFLUENCE_*` into the direct `CONFLUENCE_*` variables expected by the publisher CLI when the direct variables are not already set.
 
-## Confluence draw.io MCP server
+## Confluence Mermaid Publisher MCP server
 
-The same Docker image now also exposes the draw.io + Confluence MCP server in two transports:
+The same Docker image exposes the Confluence Mermaid Publisher MCP server in two transports:
 
 - stdio for local process-spawned clients
 - Streamable HTTP for remote/container-hosted clients
@@ -279,6 +279,7 @@ docker run --rm -i \
   -e CONFLUENCE_EMAIL \
   -e CONFLUENCE_API_TOKEN \
   -e CONFLUENCE_BEARER_TOKEN \
+  -e CONFLUENCE_DEFAULT_EMBEDDING_MODE \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
@@ -291,6 +292,7 @@ docker run --rm -i \
 docker run --rm -p 127.0.0.1:3000:3000 \
   -e MCP_HOST=0.0.0.0 \
   -e MCP_PORT=3000 \
+  -e CONFLUENCE_DEFAULT_EMBEDDING_MODE \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
@@ -329,6 +331,8 @@ These tools:
 - convert Mermaid to `.drawio` inside the container only when the effective embedding mode is `drawio`
 - create or update embedded diagrams on Confluence pages
 - can create or update a page from Markdown content or from a Markdown file path and embed multiple Mermaid blocks with fallback to Mermaid code blocks when embedding fails
+
+The raw Docker examples forward `CONFLUENCE_DEFAULT_EMBEDDING_MODE`. The checked-in stdio helper and Compose services currently do not, so they use the built-in `macropack` default unless a tool call provides `embeddingMode`.
 
 ### Current limitation
 
@@ -392,6 +396,7 @@ The publication package currently supports:
 - updating an existing MacroPack-backed diagram by rewriting its embedded Mermaid source in page ADF
 - creating a new draw.io-backed diagram by creating attachments, creating draw.io custom content, and appending a draw.io extension node to the page ADF
 - creating a new MacroPack-backed diagram by appending a MacroPack extension node directly to the page ADF
+- resolving updates safely across mixed MacroPack/draw.io pages by selector and rejecting ambiguous or contradictory mode requests
 
 The live Confluence validation path remains tenant-dependent and should be exercised first on disposable pages.
 

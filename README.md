@@ -1,6 +1,6 @@
 # confluence-mermaid-publisher-mcp
 
-`confluence-mermaid-publisher-mcp` is an MCP server for publishing locally authored Markdown to Confluence while embedding Mermaid diagrams as Confluence diagrams. MacroPack is the default embedding mode, and draw.io remains available when you want editable `.drawio` artifacts.
+`confluence-mermaid-publisher-mcp` publishes locally authored Markdown and Mermaid diagrams to Confluence through MCP. MacroPack is the default embedding mode; draw.io remains available when editable `.drawio` artifacts are required.
 
 Migration note: older MCP registrations may still refer to this server as `drawio-confluence-mcp` and to the previous draw.io-specific tool names. Update those registrations to use the `confluence-mermaid-publisher` server name and the generic Confluence diagram tool names.
 
@@ -19,6 +19,18 @@ This gives a faster editing loop than using Confluence as the primary authoring 
 - create a Confluence diagram from Mermaid on an existing page
 - update an existing embedded Confluence diagram in place
 - inspect diagrams already present on a page
+
+The server currently exposes eight workflow-oriented tools:
+
+| Workflow | Tools |
+| --- | --- |
+| Inspect | `inspect_confluence_page_diagrams` |
+| Publish a new page | `create_confluence_page_from_markdown`, `create_confluence_page_from_markdown_file` |
+| Republish a page | `update_confluence_page_from_markdown`, `update_confluence_page_from_markdown_file` |
+| Manage one diagram | `create_confluence_diagram_from_mermaid`, `update_confluence_diagram_from_mermaid` |
+| Small text edit | `append_confluence_page_paragraph` |
+
+Mermaid-to-draw.io conversion currently covers documented subsets of flowcharts, sequence diagrams, state diagrams, Gantt charts, and `xychart-beta`. See [`doc/coverage-matrix.md`](doc/coverage-matrix.md) before relying on a specific Mermaid construct.
 
 ## Runtime shape
 
@@ -62,9 +74,9 @@ export COPILOT_MCP_CONFLUENCE_USERNAME="you@example.com"
 export COPILOT_MCP_CONFLUENCE_API_TOKEN="..."
 ```
 
-The local stdio helper forwards both the direct `CONFLUENCE_*` variables and the Copilot-style fallback variables into the container.
+The local stdio helper forwards both supported direct Confluence credential variables and the Copilot-style fallback credential variables into the container.
 
-Set `CONFLUENCE_DEFAULT_EMBEDDING_MODE=drawio` if you want draw.io to be the server default. When unset, the server defaults to `macropack`.
+The server accepts `CONFLUENCE_DEFAULT_EMBEDDING_MODE=macropack|drawio`; when unset, it defaults to `macropack`. Individual publication and diagram calls can override the default with `embeddingMode`. See the launch-path note below before relying on the environment variable.
 
 Run local Docker stdio from the workspace you want mounted:
 
@@ -93,6 +105,7 @@ docker run --rm \
   -v "$PWD":"$PWD" \
   -e MCP_HOST=0.0.0.0 \
   -e MCP_PORT=3000 \
+  -e CONFLUENCE_DEFAULT_EMBEDDING_MODE \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
@@ -104,6 +117,8 @@ Or use the development compose service:
 ```bash
 docker compose -f build/docker-compose/docker-compose-local.yml up mcp-http
 ```
+
+The checked-in helper and Compose service currently use the built-in `macropack` default because they do not forward `CONFLUENCE_DEFAULT_EMBEDDING_MODE`. Use a per-call `embeddingMode` override, or the raw Docker form above, when you need draw.io.
 
 The container binds to `0.0.0.0`, while local MCP clients should still connect to `http://127.0.0.1:3000/mcp` on the host.
 
@@ -122,6 +137,7 @@ http://127.0.0.1:3000/mcp
 - `doc/quick-start.md` - shortest path to a first publish
 - `doc/user-manual.md` - installation and operator workflows
 - `doc/architecture.md` - implementation structure
-- `doc/spec.md` - product and conversion scope
+- `doc/spec.md` - implemented MCP, publication, conversion, and runtime contracts
+- `doc/coverage-matrix.md` - exact Mermaid syntax coverage and limitations
 - `doc/development.md` - development workflow and packaged layout
 - `doc/adr/0001-product-runtime-and-publication-shape.md` - key design rationale
