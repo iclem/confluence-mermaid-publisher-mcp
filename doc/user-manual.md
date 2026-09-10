@@ -1,4 +1,4 @@
-# Markdown to Confluence Draw.io MCP User Manual
+# Confluence Mermaid Publisher MCP User Manual
 
 This manual covers installation, runtime setup, and the most common operator workflows for the Confluence diagram MCP server.
 
@@ -42,9 +42,9 @@ make image-mcp
 
 ## Choose a transport
 
-### Recommended: HTTP MCP
+### HTTP MCP
 
-HTTP is the best default for local agent integrations because one container can serve multiple clients and the current implementation is stateless.
+HTTP is a good default when one long-lived container should serve multiple clients. Use stdio instead when the MCP host should start a workspace-scoped server on demand.
 
 ```bash
 docker run --rm \
@@ -52,6 +52,8 @@ docker run --rm \
   -v "$PWD":"$PWD" \
   -e MCP_HOST=0.0.0.0 \
   -e MCP_PORT=3000 \
+  -e CONFLUENCE_DEFAULT_EMBEDDING_MODE \
+  -e CONFLUENCE_DEFAULT_PAGE_WIDTH \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
@@ -69,6 +71,8 @@ Equivalent Make target:
 ```bash
 make mcp-http
 ```
+
+The checked-in Compose service and stdio helper currently do not forward `CONFLUENCE_DEFAULT_EMBEDDING_MODE`; they therefore use the built-in `drawio` default. Use a per-call `embeddingMode` override with those launch paths, or use the raw Docker form when you need a different server-wide default. Both launch paths forward `CONFLUENCE_DEFAULT_PAGE_WIDTH`.
 
 For containerized HTTP, `MCP_HOST` must be `0.0.0.0` so the published Docker port can reach the server. MCP clients on the host should still use `http://127.0.0.1:3000/mcp`.
 
@@ -109,7 +113,7 @@ The helper launches the packaged image through `docker run` with:
 - the container working directory set to that workspace path
 - both direct `CONFLUENCE_*` variables and Copilot-style fallback variables forwarded into the container
 
-The raw Docker equivalent is:
+The raw Docker form is below. It also forwards the optional server-wide embedding default, unlike the current helper:
 
 ```bash
 docker run --rm -i \
@@ -120,6 +124,7 @@ docker run --rm -i \
   -e CONFLUENCE_API_TOKEN \
   -e CONFLUENCE_BEARER_TOKEN \
   -e CONFLUENCE_DEFAULT_EMBEDDING_MODE \
+  -e CONFLUENCE_DEFAULT_PAGE_WIDTH \
   -e COPILOT_MCP_CONFLUENCE_URL \
   -e COPILOT_MCP_CONFLUENCE_USERNAME \
   -e COPILOT_MCP_CONFLUENCE_API_TOKEN \
@@ -316,6 +321,8 @@ and send the Markdown body directly instead.
 | `update_confluence_diagram_from_mermaid` | You want to replace an existing embedded diagram without recreating the page |
 | `append_confluence_page_paragraph` | You want a small text-only page edit |
 
+All diagram creation and Markdown publication tools accept an optional `embeddingMode` override. Omit it to use `CONFLUENCE_DEFAULT_EMBEDDING_MODE`, which itself defaults to `drawio`. Accepted values are `drawio`, `svg`, and `macropack`.
+
 ## Typical workflows
 
 ### Publish a Markdown document with Mermaid blocks
@@ -351,7 +358,7 @@ Provide:
 
 - `pageId`
 - `mermaid`
-- optional `diagramName` when the embedding mode is `drawio`
+- optional `diagramName` for draw.io or SVG attachments
 - optional `embeddingMode` only when you want to override the server default
 - optional `anchorText`
 
@@ -362,16 +369,16 @@ Use:
 - `inspect_confluence_page_diagrams`
 - then `update_confluence_diagram_from_mermaid`
 
-Select the target diagram by:
+Inspect the page first, then select the target diagram by exactly one of:
 
-- `widgetDiagramName` for draw.io diagrams
+- `widgetDiagramName` for draw.io or SVG diagrams
 - or `custContentId` for draw.io diagrams
-- or `localId` for either embedding mode
-- or `index` within the chosen embedding mode
+- or `localId` for draw.io, SVG, or MacroPack diagrams
+- or a zero-based `index` within an embedding mode
 
 Use only one selector per update request.
 
-When `embeddingMode` is omitted, the server uses its configured default and falls back to `drawio` when no server default is set. Pass `embeddingMode` when you explicitly want to override that default for a specific tool call, or when selecting by `index` on a page that contains multiple embedding modes.
+For `localId` and `widgetDiagramName`, the server detects the existing diagram's mode. `custContentId` is draw.io-only. For `index`, pass `embeddingMode` when the page contains multiple embedding modes; otherwise the request is ambiguous and fails. An update never migrates a diagram between modes, and an SVG cannot be renamed during update.
 
 ## Markdown formatting and width
 
@@ -380,6 +387,14 @@ The content and file-based Markdown tools share Atlassian's official Markdown-to
 Use `pageWidth: "full-width"` or `pageWidth: "default"` on any Markdown create/update call. `default` means the centered column. The environment override is `CONFLUENCE_DEFAULT_PAGE_WIDTH`; new pages use call → environment → `full-width`. Existing pages retain their width when neither override is set. For CLI publication, use `--page-width full-width` or `--page-width default`.
 
 Page width uses the REST v2 page-property API for both `content-appearance-draft` and `content-appearance-published`. If changing properties fails after publishing, the error identifies the already-published page; inspect it before retrying creation. This API requires page-property write permission in addition to publishing access.
+
+## Adaptive SVG mode
+
+Use `embeddingMode: "svg"` when you want a native image attachment instead of an editable draw.io widget or a MacroPack macro. SVG rendering runs locally through Agentic Mermaid and requires neither the Java converter nor a Confluence diagram app. The generated attachment contains light and dark color rules selected by `prefers-color-scheme`, plus the original Mermaid source in metadata.
+
+Inspection reports SVG attachments with `embeddingMode: "svg"`, dimensions, a filename, and a stable attachment ID as `localId`. Prefer that `localId` for updates. Updating refreshes the attachment version and page media reference; changing the mode or filename during the update is rejected.
+
+Markdown publishing adds an expandable Mermaid source block below an SVG. Unsupported blocks retain their source instead of aborting the whole document. Single-diagram SVG rendering failures return an error.
 
 ## Example prompts for agents
 
@@ -392,8 +407,10 @@ Page width uses the REST v2 page-property API for both `content-appearance-draft
 ## Operational notes
 
 - The HTTP server is intentionally **stateless**. That avoids session bootstrap issues with current HTTP MCP hosts.
-- The draw.io preview uploaded with draw.io-backed diagrams is currently a **placeholder PNG preview**, not a full rendered export.
-- Markdown publication supports headings, paragraphs, block quotes, bullet lists, ordered lists, tables, rules, code blocks, and Mermaid fenced blocks.
+- Draw.io publication attempts a rendered PNG preview and falls back to a placeholder if preview generation fails.
+- Markdown publication preserves common inline formatting and nested structures through Atlassian's transformers, in addition to headings, lists, quotes, tables, code, and Mermaid fences.
+- Full-page update tools replace the page body; they do not merge with existing content.
+- Markdown publication reports Mermaid, embedded, and fallback block counts. A failed Mermaid block is preserved as source and does not stop the remaining document.
 
 ## Troubleshooting
 
@@ -421,3 +438,11 @@ Check:
 ### A page already has a widget with the same diagram name
 
 Use a new `diagramName` or switch to `update_confluence_diagram_from_mermaid`.
+
+### An update reports an ambiguous embedding mode
+
+The page contains multiple embedding modes and the request used `index` without a mode. Inspect the page, then use the diagram's `localId`, or repeat the update with the intended `embeddingMode`.
+
+### An update reports that the target uses a different mode
+
+The selector identified an existing diagram whose mode conflicts with the requested `embeddingMode`. Remove the override to let the server detect the mode, or select a diagram that already uses the requested mode. Updates do not convert between draw.io, SVG, and MacroPack.
