@@ -1,0 +1,47 @@
+doc/user-manual.md
+  s_84cf8d7fed249e::t_bdc4544bdc3421 115
+  s_84cf8d7fed249e::t_226ae59fc8a9c5 1,45,47,322-323,370,375,379,394-395,423-430
+  s_84cf8d7fed249e::t_c9817745d835be 55,74
+  s_84cf8d7fed249e::t_70b1f1d2e58fef 75
+doc/spec.md
+  s_84cf8d7fed249e::t_c510b8d1757b1e 1-2,7,9,11-12,14,18-24,26,28-33,35,37,39,41-50,52,54-55,57,59,61,63,65-67,69,71-74,76,78,80,82,84-87,89,91,93-101,103,105,107,109,111-114,116,118-122,124,126,128,130-137,139,141,143,145,147,149-151,153,155-157,159,161,163-169,171,173-177
+  s_84cf8d7fed249e::t_c5a9696abef451 3
+  s_84cf8d7fed249e::t_bdc4544bdc3421 178
+README.md
+  s_84cf8d7fed249e::t_bdc4544bdc3421 77,79
+  s_84cf8d7fed249e::t_c9817745d835be 108,121
+  s_84cf8d7fed249e::t_3de9b041cc1599 3,23-34,140-141
+  s_84cf8d7fed249e::t_91b15bafe05e4f 122
+doc/adr/0001-product-runtime-and-publication-shape.md
+  s_84cf8d7fed249e::t_5fe84b52d37f42 10,12,30,43,133-136,143,151
+doc/coverage-matrix.md
+  s_84cf8d7fed249e::t_8ef3ac30b607dc 1
+doc/architecture.md
+  s_84cf8d7fed249e::t_8ef3ac30b607dc 1,113-117,162-166
+  s_84cf8d7fed249e::t_c9817745d835be 26,150,159
+doc/quick-start.md
+  s_84cf8d7fed249e::t_6cb704dd095075 1,107,157
+  s_84cf8d7fed249e::t_c9817745d835be 66,115
+  s_84cf8d7fed249e::t_ae159b7a42b459 116
+  s_84cf8d7fed249e::t_d2e1b221a45367 158
+doc/development.md
+  s_84cf8d7fed249e::t_c9817745d835be 335-336
+  s_84cf8d7fed249e::t_8ef3ac30b607dc 1,257,282,295,399
+  s_84cf8d7fed249e::t_ddf917bb5bb9c0 259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "69a9eefd66969b08333ede152bcb560c4cb9ffa0",
+  "prompts": {},
+  "sessions": {
+    "s_84cf8d7fed249e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08804-205e-7f82-af8f-6ca01e27cbdd",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
