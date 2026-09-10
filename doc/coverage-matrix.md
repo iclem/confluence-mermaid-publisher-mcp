@@ -18,13 +18,13 @@ Source of Mermaid diagram-type list:
 
 | Mermaid diagram type | Mermaid syntax | Status | Notes |
 | --- | --- | --- | --- |
-| Flowchart / Graph | `flowchart`, `graph` | `partial` | Current converter target. Supports a constrained v1 subset only. |
+| Flowchart / Graph | `flowchart`, `graph` | `supported` | Parsed with Mermaid's own flowchart parser and laid out with Mermaid's Dagre render geometry (headless render with canvas-backed text measurement): all node shapes, edge types, `&` branch groups, chains, (nested) subgraphs, `classDef`/`class`/inline `style` styling. Falls back to a computed Dagre layout when canvas is unavailable. |
 | Architecture | `architecture-beta` | `not-started` | No parser or mapping yet. |
 | Block diagram | `block-beta` | `not-started` | No parser or mapping yet. |
 | C4 | `C4Context`, `C4Container`, `C4Component`, `C4Dynamic`, `C4Deployment` | `not-started` | No parser or mapping yet. |
 | Class diagram | `classDiagram` | `not-started` | Out of current v1 scope. |
 | Entity relationship diagram | `erDiagram` | `not-started` | Out of current v1 scope. |
-| Gantt | `gantt` | `partial` | Supports a narrow explicit-layout slice used by the delivery-plan sample: `title`, `dateFormat` (`YYYY-QQ`, `YYYY-MM`, `YYYY-MM-DD`), `axisFormat`, `section`, and task rows with explicit starts plus limited duration/reference metadata. |
+| Gantt | `gantt` | `partial` | Parsed with Mermaid's own gantt parser (full syntax coverage: any `dateFormat`, `after` references, durations, task tags, milestones), then laid out with the converter's explicit month/day column layout. |
 | Git graph | `gitGraph` | `not-started` | No parser or mapping yet. |
 | Ishikawa / Fishbone | `ishikawa-beta` | `not-started` | No parser or mapping yet. |
 | Kanban | `kanban` | `not-started` | No parser or mapping yet. |
@@ -35,20 +35,20 @@ Source of Mermaid diagram-type list:
 | Radar | `radar-beta` | `not-started` | No parser or mapping yet. |
 | Requirement diagram | `requirementDiagram` | `not-started` | No parser or mapping yet. |
 | Sankey | `sankey-beta` | `not-started` | No parser or mapping yet. |
-| Sequence diagram | `sequenceDiagram` | `partial` | Supports participants, `->>` / `-->>` messages, self-messages, `Note over`, explicit activation bars, and `opt` / `loop` control frames; branching frames are still missing. |
-| State diagram | `stateDiagram-v2`, `stateDiagram` | `partial` | Supports a narrow v1 slice: transitions, start/end markers, explicit direction (`TD`, `TB`, `LR`, `RL`), and right/left-of notes rendered through the flowchart generator path. |
+| Sequence diagram | `sequenceDiagram` | `supported` | Parsed through Mermaid's own sequence parser and laid out with Mermaid's render geometry (headless render with canvas-backed text measurement), matching stock draw.io mermaid import: participants, actors, boxes, autonumbering, the full message arrow set, inline `->>+` activation, activation bars, `Note over/left of/right of`, and `opt` / `loop` / `alt` / `par` / `critical` / `break` frames with section dividers. `create` / `destroy` and `rect` are ignored with warnings. When canvas is unavailable on a platform, conversion falls back to a computed grid layout with a warning. |
+| State diagram | `stateDiagram-v2`, `stateDiagram` | `supported` | Parsed with Mermaid's own state parser (transitions, labels, notes, descriptions, composite/nested states, concurrent regions, fork/join/choice pseudostates, direction, classDef/class styling) and laid out with Mermaid's render geometry (headless render), falling back to a computed Dagre layout when canvas is unavailable. |
 | Timeline | `timeline` | `not-started` | No parser or mapping yet. |
 | Tree view | `treeView-beta` | `not-started` | No parser or mapping yet. |
 | Treemap | `treemap-beta` | `not-started` | No parser or mapping yet. |
 | User journey | `journey` | `not-started` | Out of current v1 scope. |
 | Venn | `venn` | `not-started` | No parser or mapping yet. |
 | Wardley map | `wardley` | `not-started` | No parser or mapping yet. |
-| XY chart | `xychart-beta` | `partial` | Supports a constrained explicit-layout subset: optional `title`, categorical `x-axis`, ranged `y-axis`, and one or more `bar` and/or `line` series; horizontal charts, numeric x-axis ranges, legends, and Mermaid theming remain unsupported. |
+| XY chart | `xychart-beta` | `partial` | Parsed with Mermaid's own xychart parser and laid out with the converter's explicit layout: optional `title`, categorical `x-axis`, optional ranged `y-axis` (auto-derived from data when omitted), and one or more `bar` and/or `line` series; horizontal charts, numeric x-axis ranges, legends, and Mermaid theming remain unsupported. |
 | ZenUML | `zenuml` | `not-planned` | Mermaid treats this as an integration surface rather than a core target for this converter. |
 
 ## Flowchart feature coverage
 
-The current implementation is intentionally narrow. It is usable for simple process flows, but it is not close to full Mermaid flowchart coverage yet.
+Flowcharts are parsed with Mermaid's own parser and laid out with geometry extracted from a headless Mermaid render, so syntax coverage matches stock draw.io mermaid import.
 
 | Flowchart feature | Example | Status | Notes |
 | --- | --- | --- | --- |
@@ -59,31 +59,34 @@ The current implementation is intentionally narrow. It is usable for simple proc
 | Decision node | `A{Decision}` | `supported` | Mapped to rhombus. |
 | Terminal node | `A((Done))` | `supported` | Mapped to ellipse. |
 | Bare node identifier | `A` | `supported` | Implicit rectangle node. |
+| Additional flowchart shapes | `A([stadium])`, `A[[subroutine]]`, `A[(db)]`, `A{{hex}}`, `A>odd]`, `A[/para/]`, `A[\para\]`, `A[/trap\]`, `A[\trap/]`, `A(((double)))`, `A@{ shape: ... }` | `supported` | The full classic shape set plus common `@{shape:}` aliases are mapped to stock draw.io shapes (stadium, cylinder, hexagon, parallelogram, trapezoid, predefined process, double circle, etc.). Unknown shapes fall back to rectangle with a warning. |
 | Directed edge | `A --> B` | `supported` | Mapped to arrow connection. |
 | Plain edge | `A --- B` | `supported` | Mapped to plain line connection. |
+| Dotted edges | `A -.-> B`, `A -.- B` | `supported` | Dashed directed and dashed open variants. |
+| Thick edges | `A ==> B`, `A === B` | `supported` | Rendered with a wider stroke. |
+| Invisible edges | `A ~~~ B` | `supported` | Participate in layout, rendered without a stroke. |
+| Bidirectional edges | `A <--> B` | `supported` | Arrowheads on both ends. |
+| Circle / cross arrowheads | `A --o B`, `A --x B` | `partial` | Rendered as block arrows with a warning. |
 | Edge labels | `A -->|yes| B` | `supported` | Label preserved on connection. |
 | Chained edges | `A --> B --> C` | `supported` | Expanded into multiple edges. |
 | Branch targets | `A --> B & C` | `supported` | Expanded into one edge per target. |
 | Chained branch groups | `A --> B & C --> D` | `supported` | Expanded as cross-product between adjacent groups. |
-| Semicolon-separated statements | `A[Start]; B{Check}` | `supported` | Split before parsing. |
-| Deterministic auto-layout | generated | `supported` | Flowcharts now use Dagre-based layered layout on the parser side, and the generator reuses Dagre edge waypoints so branching connections stay closer to Mermaid's routed geometry. |
-| Subgraphs | `subgraph X ... end` | `supported` | Quoted subgraph labels are supported and emitted as Draw.io container nodes. |
-| `classDef` styling | `classDef red fill:#f00,stroke:#900,color:#fff` | `partial` | Node `fill`, `stroke`, and text `color` are mapped into Draw.io node styles; unsupported Mermaid style keys are still ignored. |
-| Node class suffixes | `A[Label]:::danger` | `supported` | Class suffixes now propagate `classDef` node colors into Draw.io output. |
-| Node `style` directives | `style A fill:#f9f` | `not-started` | Ignored support has not been added yet. |
-| `linkStyle` directives | `linkStyle 0 stroke:#333` | `not-started` | Explicitly rejected today. |
-| `click` directives | `click A href ...` | `not-started` | Explicitly rejected today. |
-| Mermaid directives | `%%{init: ...}%%` | `not-started` | Explicitly rejected today. |
-| Frontmatter config | `--- ... ---` | `not-started` | Not parsed by the converter yet. |
+| Semicolon-separated statements | `A[Start]; B{Check}` | `supported` | Handled by Mermaid's parser. |
+| Mermaid render geometry | generated | `supported` | Node rectangles and edge polylines come from a headless Mermaid (Dagre) render with canvas-backed text measurement; without canvas the converter falls back to its own Dagre layout with a warning. |
+| Subgraphs | `subgraph X ... end` | `supported` | Explicit and generated ids, quoted titles, and nested subgraphs are emitted as Draw.io container nodes. |
+| Edges attached to subgraphs | `subgraph A --> B` | `not-started` | Skipped with an `unsupported_subgraph_edge` warning. |
+| `classDef` styling | `classDef red fill:#f00,stroke:#900,color:#fff` | `partial` | Node `fill`, `stroke`, and text `color` are mapped into Draw.io node styles; unsupported Mermaid style keys are still ignored. Note: `rgb()`/`rgba()` values in `classDef` are rejected by Mermaid's own parser. |
+| Node class suffixes | `A[Label]:::danger` | `supported` | Class suffixes propagate `classDef` node colors into Draw.io output. |
+| Node `style` directives | `style A fill:#f9f` | `supported` | Inline node styles override class colors. |
+| `linkStyle` directives | `linkStyle 0 stroke:#333` | `not-started` | Ignored with a warning. |
+| `click` directives | `click A href ...` | `not-started` | Parsed by Mermaid; links are not rendered (warning). |
+| Mermaid directives | `%%{init: ...}%%` | `partial` | Handled by Mermaid during parsing/rendering; the converter does not map theme variables into draw.io styles. |
+| Frontmatter config | `--- ... ---` | `partial` | Skipped for header detection and handled by Mermaid during parsing; config is not mapped into draw.io styles. |
 | Mermaid themes / looks | `look: handDrawn` | `not-started` | No theme parity with Mermaid. |
-| ELK / Dagre config passthrough | `layout: elk` | `not-started` | The converter now reuses Mermaid's default Dagre family for flowchart geometry, but explicit Mermaid layout-configuration passthrough is still not implemented. |
-| Additional flowchart shapes | many Mermaid shape aliases | `not-started` | Only the current four node forms are mapped. |
+| ELK layout | `layout: elk` | `not-started` | Stock draw.io uses ELK for flowcharts; the converter uses Mermaid's own Dagre geometry instead. |
 | Rich text / quoted labels | `"A label"` forms | `supported` | Quoted node labels and multiline quoted labels inside supported node shapes are parsed. |
-| Icons / images / markdown strings | Mermaid extensions | `not-started` | No support yet. |
+| Icons / images / markdown strings | Mermaid extensions | `not-started` | Markdown label markup is preserved as literal text. |
 | Alternate quoted edge labels | `A -- "label" --> B` | `supported` | Implemented for directed edges. |
-| Dotted directed edges | `A -.-> B` | `supported` | Parsed as directed edges. |
-| Edge variants beyond `-->`, `-.->`, and `---` | e.g. thick/arrows | `not-started` | No support yet. |
-| Multi-line substructure and nested constructs | various | `not-started` | No support yet. |
 
 ## Sequence diagram feature coverage
 
@@ -92,18 +95,30 @@ The current implementation is intentionally narrow. It is usable for simple proc
 | Sequence header | `sequenceDiagram` | `supported` | Dispatches to the sequence parser/generator path. |
 | Explicit participants | `participant AC as api-catalogue` | `supported` | Preserves declaration order and aliases. |
 | Implicit participants from messages/notes | `AC->>MQ: Publish` | `supported` | Auto-created when referenced before declaration. |
-| Solid messages | `A->>B: Message` | `supported` | Rendered as horizontal arrows between lifelines. |
+| Solid messages | `A->>B: Message` | `supported` | Rendered as horizontal arrows between lifelines with filled arrowheads. |
 | Self-messages | `A->>A: Persist` | `supported` | Rendered as right-hand loopback arrows. |
 | Notes over one or more participants | `Note over AC: text` | `supported` | Rendered as yellow note boxes spanning one or more lifelines. |
-| Dashed messages | `A-->>B: Ack` | `supported` | Rendered as dashed arrows. |
+| Dashed messages | `A-->>B: Ack` | `supported` | Rendered as dashed arrows with `dashPattern=2 3`, matching stock draw.io Mermaid import. |
+| Open messages without arrowheads | `A->B` / `A-->B` | `supported` | Rendered as plain solid/dotted lines, matching stock draw.io Mermaid import. |
+| Cross messages | `A-xB` / `A--xB` | `supported` | Rendered with cross arrowheads. |
+| Open-arrow (async) messages | `A-)B` / `A--)B` | `supported` | Rendered with open (`classic`) arrowheads. |
+| Bidirectional messages | `A<<->>B` / `A<<-->>B` | `supported` | Rendered with arrowheads on both ends. |
 | Participant aliases with rich labels | `participant BO as Backoffice / Internal` | `supported` | Multiline aliases are preserved as labels. |
+| Actors | `actor U as User` | `supported` | Rendered as stick-figure lifelines (`umlActor`), matching stock draw.io Mermaid import. |
 | Activation bars | `activate A` / `deactivate A` | `supported` | Explicit activation spans are rendered as nested bars on lifelines. |
-| `opt` control frame | `opt Cache miss ... end` | `supported` | Rendered as a labeled frame spanning the affected sequence area. |
-| `loop` control frame | `loop Retry ... end` | `supported` | Rendered as a labeled frame spanning the affected sequence area. |
+| `opt` control frame | `opt Cache miss ... end` | `supported` | Rendered as a `umlFrame` with a label tab, matching stock draw.io Mermaid import. |
+| `loop` control frame | `loop Retry ... end` | `supported` | Rendered as a `umlFrame` with a label tab, matching stock draw.io Mermaid import. |
+| `alt` / `else` frames | `alt No cache ... else Cached ... end` | `supported` | Rendered as a `umlFrame` with dashed section dividers between `else` branches, matching stock draw.io Mermaid import. |
+| `par` / `and` frames | `par Task ... and ... end` | `supported` | Rendered as a `umlFrame` with dashed section dividers. |
+| `critical` / `option` frames | `critical ... option ... end` | `supported` | Rendered as a `umlFrame` with dashed section dividers. |
+| `break` frames | `break Abort ... end` | `supported` | Rendered as a `umlFrame` with a label tab. |
+| Participant boxes | `box rgb(...) Group ... end` | `supported` | Rendered as a labeled background box around the grouped participants, matching stock draw.io Mermaid import. |
+| Autonumbering | `autonumber` | `supported` | Rendered as numbered badges on messages; `autonumber off`, custom starts, and steps are honored. |
 | `rect` grouping wrappers | `rect rgb(...) ... end` | `partial` | Wrapper is ignored with a warning so inner sequence content can still convert. |
-| Other control blocks | `alt`, `par`, `critical`, `break` | `not-started` | Explicitly rejected today. |
-| Actor / boundary shortcuts | `actor User` | `not-started` | Explicitly rejected today. |
-| Create / destroy semantics | `create participant A` | `not-started` | Explicitly rejected today. |
+| Notes left/right of a participant | `Note left of A: text` | `supported` | Rendered beside the lifeline. |
+| Entity escapes | `Note over A: a #59; b` | `supported` | Mermaid numeric entity codes (e.g. `#59;` for `;`, `#35;` for `#`) are decoded to real characters, matching stock rendering. Raw `;` still terminates the statement, as in stock mermaid. |
+| Inline activation | `A->>+B: msg` | `supported` | Parsed through Mermaid's sequence DB, rendered as activation bars. |
+| Create / destroy semantics | `create participant A` | `partial` | Accepted (parsed by Mermaid); created participants render as regular participants, destroy markers are ignored with a warning. |
 
 ## State diagram feature coverage
 
@@ -116,10 +131,10 @@ The current implementation is intentionally narrow. It is usable for simple proc
 | Diagram direction | `direction LR` | `supported` | `TD`, `TB`, `LR`, and `RL` are honored; default is `TD` to match Mermaid's usual top-down rendering. |
 | Right/left notes | `note right of A ... end note` | `supported` | Rendered as yellow note boxes attached to the referenced state. |
 | Multiline notes | note block with multiple lines | `supported` | Note sizing now respects real line breaks instead of collapsing to a single line. |
-| Composite states / nested blocks | `state Foo { ... }` | `not-started` | No nested state containers yet. |
-| Choice / fork / join pseudostates | Mermaid pseudostate syntax | `not-started` | Not mapped today. |
-| Concurrent regions | nested `--` regions | `not-started` | Not parsed today. |
-| State styling directives | `classDef`, `style` | `not-started` | No state-specific styling support yet. |
+| Composite states / nested blocks | `state Foo { ... }` | `supported` | Rendered as Draw.io container nodes with nested states and transitions; nested start/end markers are supported. |
+| Choice / fork / join pseudostates | `state f <<fork>>` | `supported` | Forks/joins render as dark bars, choices as rhombi. |
+| Concurrent regions | nested `--` regions | `partial` | Regions render as nested containers inside the composite state. |
+| State styling directives | `classDef`, `class`, `style` | `partial` | Node `fill`, `stroke`, and text `color` are mapped, as for flowcharts. |
 
 ## Gantt feature coverage
 
@@ -127,15 +142,15 @@ The current implementation is intentionally narrow. It is usable for simple proc
 | --- | --- | --- | --- |
 | Gantt header | `gantt` | `supported` | Dispatches to the gantt parser/generator path. |
 | Chart title | `title Delivery plan` | `supported` | Rendered as a top text node. |
-| Date formats | `dateFormat YYYY-QQ`, `YYYY-MM`, `YYYY-MM-DD` | `supported` | `YYYY-QQ` accepts quarter-like labels such as `Q1` or `S1`; the current delivery-plan sample also uses month-aligned starts under quarter headers. |
-| Axis format directive | `axisFormat %Y Q%q` | `partial` | Accepted and preserved as a warning today; explicit axis-format rendering is not implemented yet. |
+| Date formats | `dateFormat YYYY-MM-DD`, `YYYY-MM`, `YYYY-MM-DD HH:mm`, ... | `supported` | Parsed by Mermaid's gantt parser, so every Mermaid `dateFormat` is accepted. Charts whose format carries months but no day/time tokens render month columns; everything else renders day columns. The former bespoke `YYYY-QQ` quarter dialect was **removed** (Mermaid/dayjs has no quarter support and silently degraded it); quarter-token formats now fail explicitly with `unsupported_construct`. |
+| Axis format directive | `axisFormat %Y-%m` | `partial` | Accepted and preserved as a warning today; explicit axis-format rendering is not implemented yet. |
 | Sections | `section api-catalogue` | `supported` | Rendered as grey band rows. |
-| Explicit task ids | `Task :task1, ...` | `supported` | Preserved for `after` / `until` references. |
-| Explicit start + duration | `Task :id, 2026-01, 2M` | `supported` | Supported for quarter/month/day timelines with limited unit sets. |
-| Explicit start + end | `Task :id, 2026-01-01, 2026-01-04` | `supported` | End dates are treated as inclusive Mermaid-style bounds. |
-| `after` references | `Task :id, after other, 1q` | `supported` | Uses the latest referenced task end as the next start. |
-| `until` references | `Task :id, 2026-01, until other` | `supported` | Stops at the referenced task start. |
-| Duration units | `1q`, `2M`, `3d`, `1w` | `partial` | `q` for quarter-style timelines, `M` for month and day timelines, and `d` / `w` for day timelines are supported; broader Mermaid duration coverage is still missing. |
+| Explicit task ids | `Task :task1, ...` | `supported` | Preserved for `after` references. |
+| Explicit start + duration | `Task :id, 2026-01, 2M` | `supported` | Resolved by Mermaid for any supported `dateFormat`. |
+| Explicit start + end | `Task :id, 2026-01-01, 2026-01-04` | `supported` | End dates are treated as exclusive Mermaid-style bounds. |
+| `after` references | `Task :id, after other, 1w` | `supported` | Resolved by Mermaid (uses the latest referenced task end). |
+| Tasks without ids or sections | `Task : 2026-01-01, 2d` | `supported` | Mermaid-generated ids; tasks before any `section` land in a default `Tasks` band. |
+| Duration units | `1h`, `3d`, `1w`, `2M` | `supported` | Resolved by Mermaid's gantt parser. |
 | Task tags | `crit`, `done`, `active`, `milestone` | `partial` | Tags drive bar colors and milestone shape, but Mermaid's richer gantt styling/config is still missing. |
 | Milestones | `milestone` task tag | `supported` | Rendered as ellipse markers. |
 | Excludes / weekends | `excludes weekends` | `not-started` | Calendar-aware exclusion logic is not implemented. |
@@ -149,7 +164,7 @@ The current implementation is intentionally narrow. It is usable for simple proc
 | XY chart header | `xychart-beta` | `supported` | Dispatches to the xychart parser path and emits explicit-layout nodes and edges. |
 | Chart title | `title Cost by phase` | `supported` | Rendered as a top text node. |
 | Categorical x-axis | `x-axis "Phase" [prep, judge, scale]` | `supported` | Optional quoted axis label plus categorical bands are supported. |
-| Ranged y-axis | `y-axis "Cost" 0 --> 100` | `supported` | Optional quoted axis label plus numeric `min --> max` range drive linear scaling and readable ticks. |
+| Ranged y-axis | `y-axis "Cost" 0 --> 100` | `supported` | Optional quoted axis label plus numeric `min --> max` range drive linear scaling and readable ticks; when omitted, the range is derived from the data. |
 | Bar series | `bar [10, 20, 30]` | `supported` | One or more bar series are rendered as grouped rounded-rectangle columns. |
 | Line series | `line [10, 20, 30]` | `supported` | One or more line series are rendered as point markers connected by plain edges. |
 | Mixed bar + line charts | repeated `bar` and `line` directives | `supported` | Mixed charts convert through the same explicit-layout synthesis path. |

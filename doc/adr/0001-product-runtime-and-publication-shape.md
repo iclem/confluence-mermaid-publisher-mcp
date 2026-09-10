@@ -7,9 +7,9 @@
 
 The product goal is not only to convert Mermaid into draw.io, but to do it in a form that works for automated documentation publishing:
 
-1. embed Mermaid blocks through MacroPack by default or convert them into editable `.drawio` artifacts
+1. convert Mermaid blocks into editable `.drawio` artifacts by default, with adaptive SVG and MacroPack alternatives
 2. publish Markdown documents to Confluence
-3. create or update MacroPack and draw.io diagrams on those pages
+3. create or update draw.io, SVG, and MacroPack diagrams on those pages
 4. support local and agent-driven usage through MCP
 5. run the same way across Copilot, Codex, Claude, and Gemini
 
@@ -27,7 +27,7 @@ We will:
 4. expose both **stdio MCP** and **stateless Streamable HTTP MCP**
 5. keep **direct Confluence HTTP** as the reference publication backend
 6. support both **in-memory Markdown publication** and **file-based Markdown publication**
-7. make **MacroPack the default embedding mode**, while retaining draw.io as a configurable server or per-call choice
+7. make **draw.io the default embedding mode**, while retaining adaptive SVG and MacroPack as server-wide or per-call choices
 
 ## Why use Nasdanika
 
@@ -132,7 +132,7 @@ The file-based variant exists to reduce token usage and avoid forcing agents to 
 
 ### Configurable embedding modes
 
-MacroPack is the default because it embeds Mermaid source directly and avoids draw.io artifact generation. Draw.io remains available when editable `.drawio` attachments are required. The server-level default can be changed with `CONFLUENCE_DEFAULT_EMBEDDING_MODE`, and publication calls can override it explicitly. Existing-diagram updates detect the target mode where possible and reject contradictory overrides instead of silently migrating content.
+Draw.io is the default because it produces editable `.drawio` attachments and is the project's primary artifact path. Adaptive SVG provides a diagram-app-free native image with light/dark styling, while MacroPack embeds Mermaid source directly when the compatible app is installed. The server-level default can be changed with `CONFLUENCE_DEFAULT_EMBEDDING_MODE`, and publication calls can override it explicitly. Existing-diagram updates detect the target mode where possible and reject contradictory overrides instead of silently migrating content.
 
 ## Consequences
 
@@ -140,7 +140,7 @@ MacroPack is the default because it embeds Mermaid source directly and avoids dr
 
 - one product-owned MCP surface for the real workflow users care about
 - deterministic `.drawio` artifact generation
-- direct Mermaid embedding without conversion when MacroPack is selected
+- native adaptive SVG and direct Mermaid embedding alternatives when draw.io is not desired
 - clean separation between parser, generator, publisher, and transport
 - provider-neutral packaging
 - efficient publication of large Markdown files
@@ -150,7 +150,7 @@ MacroPack is the default because it embeds Mermaid source directly and avoids dr
 - the product owns draw.io widget lifecycle details directly
 - MacroPack operation depends on the target tenant having the compatible app installed
 - file-based publication requires the Markdown path to exist inside the container
-- the preview image is currently a placeholder preview, not full-fidelity rendering
+- draw.io preview rendering can fall back to a placeholder when rendering fails
 
 ## Revisit conditions
 

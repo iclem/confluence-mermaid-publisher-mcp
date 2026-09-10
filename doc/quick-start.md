@@ -4,7 +4,7 @@ This is the shortest path from a clean checkout to a successful Confluence publi
 
 For the full setup and provider-specific installation details, see `doc/user-manual.md`.
 
-The workflow assumes that Markdown is your local source of truth and Confluence is the final publication target. That keeps iteration fast and file-based, while the MCP server embeds Mermaid as MacroPack by default and can still use draw.io when you want editable `.drawio` artifacts.
+The workflow assumes that Markdown is your local source of truth and Confluence is the final publication target. That keeps iteration fast and file-based, while the MCP server embeds Mermaid as editable draw.io diagrams by default, with adaptive SVG and MacroPack available as optional modes.
 
 ## 1. Set Confluence credentials
 
@@ -110,7 +110,7 @@ Optional default diagram mode (`macropack` or `drawio`):
 export CONFLUENCE_DEFAULT_EMBEDDING_MODE="drawio"
 ```
 
-If omitted, the server defaults to `macropack`.
+If omitted, the server defaults to `drawio`.
 
 The raw Docker command forwards this setting. The checked-in stdio helper and Compose service currently do not, so use a per-tool `embeddingMode` override with those launch paths.
 
@@ -152,9 +152,9 @@ Example request shape:
 - `update_confluence_diagram_from_mermaid` to replace an existing embedded diagram in place
 - `inspect_confluence_page_diagrams` to inspect current page/diagram state before updating it
 
-Every Mermaid-aware tool also accepts an optional `embeddingMode` of `macropack` or `drawio`. If you omit it, the server default is used.
+Every Mermaid-aware tool also accepts an optional `embeddingMode` of `macropack`, `drawio`, or `svg`. If you omit it, the server default is used.
 
-When updating a diagram, inspect the page first and prefer its `localId`. Name and custom-content selectors are draw.io-only. An `index` is zero-based within an embedding mode; specify `embeddingMode` when a page contains both MacroPack and draw.io diagrams.
+When updating a diagram, inspect the page first and prefer its `localId`. The name selector works for draw.io and SVG diagrams; the custom-content selector is draw.io-only. An `index` is zero-based within an embedding mode, so specify `embeddingMode` when a page contains multiple modes.
 
 ## Common first-run issues
 

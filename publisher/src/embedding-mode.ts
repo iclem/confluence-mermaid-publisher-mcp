@@ -1,6 +1,6 @@
 import { EMBEDDING_MODES, type EmbeddingMode } from "./types.js";
 
-export const DEFAULT_EMBEDDING_MODE: EmbeddingMode = "macropack";
+export const DEFAULT_EMBEDDING_MODE: EmbeddingMode = "drawio";
 export const DEFAULT_EMBEDDING_MODE_ENV = "CONFLUENCE_DEFAULT_EMBEDDING_MODE";
 
 export function parseEmbeddingMode(value: string | undefined): EmbeddingMode | undefined {

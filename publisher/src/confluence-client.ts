@@ -9,6 +9,14 @@ import type {
   JsonObject,
 } from "./types.js";
 
+import type { PageWidth } from "./page-width.js";
+
+interface PageProperty {
+  id: string;
+  value: unknown;
+  version: { number: number };
+}
+
 interface ClientOptions {
   baseUrl: string;
   bearerToken?: string;
@@ -133,6 +141,25 @@ export class ConfluenceClient {
         },
       }),
     });
+  }
+
+  /** Keep published and editor width consistent through versioned page properties. */
+  async setPageWidth(pageId: string, width: PageWidth): Promise<void> {
+    const path = `/api/v2/pages/${encodeURIComponent(pageId)}/properties`;
+    for (const key of ["content-appearance-draft", "content-appearance-published"]) {
+      const properties = await this.requestJson<{ results: PageProperty[] }>(`${path}?key=${encodeURIComponent(key)}`);
+      const existing = properties.results[0];
+      if (existing?.value === width) continue;
+      await this.requestJson<PageProperty>(existing ? `${path}/${encodeURIComponent(existing.id)}` : path, {
+        method: existing ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key,
+          value: width,
+          ...(existing ? { version: { number: existing.version.number + 1 } } : {}),
+        }),
+      });
+    }
   }
 
   async updatePageAdf(
@@ -288,12 +315,15 @@ export class ConfluenceClient {
     minorEdit?: boolean;
   }): Promise<ConfluenceAttachment> {
     return this.attachmentMutation(
-      `/rest/api/content/${args.pageId}/child/attachment/${args.attachmentId}/data`,
+      args.contentType === "image/svg+xml"
+        ? `/rest/api/content/${args.pageId}/child/attachment`
+        : `/rest/api/content/${args.pageId}/child/attachment/${args.attachmentId}/data`,
       args.localPath,
       args.remoteFileName,
       args.contentType,
       args.comment,
       args.minorEdit ?? true,
+      args.contentType === "image/svg+xml" ? "PUT" : "POST",
     );
   }
 
@@ -304,6 +334,7 @@ export class ConfluenceClient {
     contentType: string,
     comment: string,
     minorEdit: boolean,
+    method: "POST" | "PUT" = "POST",
   ): Promise<ConfluenceAttachment> {
     const form = new FormData();
     form.append("file", new Blob([readFileSync(localPath)], { type: contentType }), remoteFileName);
@@ -311,7 +342,7 @@ export class ConfluenceClient {
     form.append("comment", comment);
 
     const response = await this.request(path, {
-      method: "POST",
+      method,
       headers: {
         "X-Atlassian-Token": "no-check",
       },

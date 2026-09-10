@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, join, resolve } from "node:path";
 
 import { ConfluenceClient } from "./confluence-client.js";
 import { convertMermaidToArtifacts, type ConvertedArtifacts } from "./converter.js";
@@ -20,7 +22,9 @@ import {
   selectDrawioExtension,
   updateDrawioExtensionMetadata,
 } from "./drawio.js";
+import { DEFAULT_PAGE_WIDTH, parsePageWidth, type PageWidth } from "./page-width.js";
 import { DEFAULT_EMBEDDING_MODE } from "./embedding-mode.js";
+import { buildSvgMedia, findSvgDiagrams, renderAdaptiveSvg, selectSvgDiagram, svgFileName, SVG_ATTACHMENT_COMMENT } from "./svg.js";
 import {
   buildMacroPackExtensionNode,
   findMacroPackExtensions,
@@ -28,15 +32,10 @@ import {
   updateMacroPackExtensionSource,
 } from "./macropack.js";
 import {
-  buildBlockquoteNode,
-  buildBulletListNode,
   buildCodeBlockNode,
   buildExpandNode,
-  buildHeadingNode,
-  buildOrderedListNode,
   buildParagraphNode,
-  buildTableNode,
-  parseMarkdown,
+  markdownToAdf,
 } from "./markdown.js";
 import type {
   ConfluenceAttachment,
@@ -71,7 +70,7 @@ function summarizePage(page: ConfluencePage): InspectResult["page"] {
   };
 }
 
-function buildEmbeddedDiagrams(adf: JsonObject): EmbeddedDiagram[] {
+function buildEmbeddedDiagrams(adf: JsonObject, attachments: ConfluenceAttachment[]): EmbeddedDiagram[] {
   const drawioDiagrams = findDrawioExtensions(adf).map((extension) => ({
     embeddingMode: "drawio" as const,
     diagramName: extension.diagramName,
@@ -85,11 +84,14 @@ function buildEmbeddedDiagrams(adf: JsonObject): EmbeddedDiagram[] {
     localId: extension.localId,
     height: extension.height,
   }));
-  return [...drawioDiagrams, ...macroPackDiagrams];
+  const svgDiagrams = findSvgDiagrams(adf, attachments).map(({ localId, diagramName, width, height }) => ({
+    embeddingMode: "svg" as const, localId, diagramName, width, height,
+  }));
+  return [...drawioDiagrams, ...macroPackDiagrams, ...svgDiagrams];
 }
 
 function hasDrawioOnlySelector(target: DiagramTarget): boolean {
-  return Boolean(target.custContentId || target.diagramName);
+  return Boolean(target.custContentId);
 }
 
 function hasGenericSelector(target: DiagramTarget): boolean {
@@ -115,13 +117,14 @@ export class DrawioPublisherService {
     private readonly client: ConfluenceClient,
     private readonly mermaidConverter: (mermaid: string, diagramName: string) => Promise<ConvertedArtifacts> = convertMermaidToArtifacts,
     private readonly defaultEmbeddingMode: EmbeddingMode = DEFAULT_EMBEDDING_MODE,
+    private readonly defaultPageWidth?: PageWidth,
   ) {}
 
   private resolveEmbeddingMode(override?: EmbeddingMode): EmbeddingMode {
     return override ?? this.defaultEmbeddingMode;
   }
 
-  private detectTargetEmbeddingMode(adf: JsonObject, target: DiagramTarget): EmbeddingMode | undefined {
+  private detectTargetEmbeddingMode(adf: JsonObject, target: DiagramTarget, attachments: ConfluenceAttachment[]): EmbeddingMode | undefined {
     if (target.custContentId) {
       return "drawio";
     }
@@ -129,7 +132,8 @@ export class DrawioPublisherService {
     if (target.localId) {
       const drawioExtension = findDrawioExtensions(adf).find((extension) => extension.localId === target.localId);
       const macroPackExtension = findMacroPackExtensions(adf).find((extension) => extension.localId === target.localId);
-      if (drawioExtension && macroPackExtension) {
+      const svgDiagram = findSvgDiagrams(adf, attachments).find((diagram) => diagram.localId === target.localId);
+      if ([drawioExtension, macroPackExtension, svgDiagram].filter(Boolean).length > 1) {
         throw new Error(`Multiple embedded diagrams matched localId ${target.localId}`);
       }
       if (drawioExtension) {
@@ -138,23 +142,29 @@ export class DrawioPublisherService {
       if (macroPackExtension) {
         return "macropack";
       }
+      if (svgDiagram) return "svg";
       throw new Error(`No embedded diagram found for localId ${target.localId}`);
     }
 
     if (target.diagramName) {
+      const svg = findSvgDiagrams(adf, attachments).some((diagram) => diagram.diagramName === target.diagramName);
+      const drawio = findDrawioExtensions(adf).some((diagram) => diagram.diagramName === target.diagramName);
+      if (svg && drawio) throw new Error("Diagram name is ambiguous; use localId");
+      if (svg) return "svg";
       return "drawio";
     }
 
     return undefined;
   }
 
-  private resolveIndexEmbeddingMode(adf: JsonObject): EmbeddingMode {
+  private resolveIndexEmbeddingMode(adf: JsonObject, attachments: ConfluenceAttachment[]): EmbeddingMode {
     const drawioCount = findDrawioExtensions(adf).length;
     const macroPackCount = findMacroPackExtensions(adf).length;
+    const svgCount = findSvgDiagrams(adf, attachments).length;
 
-    if (drawioCount > 0 && macroPackCount > 0) {
+    if ([drawioCount, macroPackCount, svgCount].filter((count) => count > 0).length > 1) {
       throw new Error(
-        "Index selector is ambiguous on pages with both draw.io and MacroPack diagrams; provide embeddingMode or localId",
+        "Index selector is ambiguous on pages with multiple embedding modes; provide embeddingMode or localId",
       );
     }
 
@@ -165,12 +175,13 @@ export class DrawioPublisherService {
     if (macroPackCount > 0) {
       return "macropack";
     }
+    if (svgCount > 0) return "svg";
 
     return this.defaultEmbeddingMode;
   }
 
-  private resolveUpdateEmbeddingMode(adf: JsonObject, target: DiagramTarget, override?: EmbeddingMode): EmbeddingMode {
-    if (hasDrawioOnlySelector(target) && override === "macropack") {
+  private resolveUpdateEmbeddingMode(adf: JsonObject, target: DiagramTarget, override: EmbeddingMode | undefined, attachments: ConfluenceAttachment[]): EmbeddingMode {
+    if (hasDrawioOnlySelector(target) && override && override !== "drawio") {
       throw new Error(
         `Target diagram does not use embedding mode ${override}; detected drawio instead`,
       );
@@ -180,9 +191,9 @@ export class DrawioPublisherService {
       if (override) {
         return override;
       }
-      return this.resolveIndexEmbeddingMode(adf);
+      return this.resolveIndexEmbeddingMode(adf, attachments);
     }
-    const detected = this.detectTargetEmbeddingMode(adf, target);
+    const detected = this.detectTargetEmbeddingMode(adf, target, attachments);
     if (override && detected && override !== detected) {
       throw new Error(
         `Target diagram does not use embedding mode ${override}; detected ${detected} instead`,
@@ -203,10 +214,29 @@ export class DrawioPublisherService {
   }): InspectResult {
     return {
       page: summarizePage(args.page),
-      embeddedDiagrams: buildEmbeddedDiagrams(args.adf),
+      embeddedDiagrams: buildEmbeddedDiagrams(args.adf, args.attachments),
       attachments: args.attachments,
       customContents: args.customContents,
     };
+  }
+
+  private async createSvgImage(pageId: string, mermaid: string, name: string): Promise<JsonObject> {
+    const filename = svgFileName(name);
+    const rendered = renderAdaptiveSvg(mermaid);
+    const directory = await mkdtemp(join(tmpdir(), "mermaid-svg-"));
+    try {
+      const localPath = join(directory, filename);
+      await writeFile(localPath, rendered.svg, "utf8");
+      const uploaded = await this.client.upsertAttachment({
+        pageId, localPath, remoteFileName: filename, contentType: "image/svg+xml", comment: SVG_ATTACHMENT_COMMENT,
+      });
+      // REST v1 uploads omit fileId; v2 supplies the current media identity, including after replacement.
+      const attachment = (await this.client.listPageAttachments(pageId, filename)).find((item) => item.id === uploaded.id);
+      if (!attachment) throw new Error(`Cannot resolve uploaded SVG attachment ${filename}`);
+      return buildSvgMedia(pageId, attachment, rendered);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   }
 
   private async createExtensionForArtifacts(args: {
@@ -219,7 +249,10 @@ export class DrawioPublisherService {
   }): Promise<JsonObject> {
     const dimensions = getPngDimensions(args.previewPath);
 
-    await this.client.upsertAttachment({
+    // The draw.io app renders the attachment version pinned by contentVer, so
+    // the macro must track the attachment version produced by this upload —
+    // otherwise republishing keeps showing the first version forever.
+    const diagramAttachment = await this.client.upsertAttachment({
       pageId: args.pageId,
       localPath: args.drawioPath,
       remoteFileName: args.diagramName,
@@ -255,6 +288,7 @@ export class DrawioPublisherService {
       width: dimensions.width,
       height: dimensions.height,
       baseUrl: this.client.getBaseUrl(),
+      contentVer: diagramAttachment.version?.number ?? 1,
     });
   }
 
@@ -321,7 +355,10 @@ export class DrawioPublisherService {
     const previewPath = args.previewPath ?? inferPreviewPath(args.drawioPath);
     const dimensions = getPngDimensions(previewPath);
 
-    await this.client.upsertAttachment({
+    // The draw.io app renders the attachment version pinned by contentVer, so
+    // the macro must track the new attachment version — otherwise the page
+    // keeps rendering the previously pinned version.
+    const diagramAttachment = await this.client.upsertAttachment({
       pageId: args.pageId,
       localPath: args.drawioPath,
       remoteFileName: resolvedDiagramName,
@@ -340,6 +377,7 @@ export class DrawioPublisherService {
     const rawBody = parseCustomContentRawBody(customContent);
     const currentRevision = typeof rawBody.revision === "number" ? rawBody.revision : 1;
 
+    const newRevision = currentRevision + 1;
     await this.client.updateCustomContent({
       id: customContent.id,
       type: DRAWIO_CUSTOM_CONTENT_TYPE,
@@ -348,21 +386,25 @@ export class DrawioPublisherService {
       bodyRaw: buildCustomContentRawBody({
         pageId: args.pageId,
         diagramName: resolvedDiagramName,
-        revision: currentRevision + 1,
+        revision: newRevision,
         drawioXml: readFileSync(args.drawioPath, "utf8"),
       }),
       versionNumber: customContent.version.number + 1,
     });
 
+    const newContentVer = diagramAttachment.version?.number ?? targetExtension.guestParams.contentVer;
     if (
       resolvedDiagramName !== targetExtension.diagramName ||
       dimensions.width !== targetExtension.guestParams.width ||
-      dimensions.height !== targetExtension.guestParams.height
+      dimensions.height !== targetExtension.guestParams.height ||
+      newContentVer !== targetExtension.guestParams.contentVer
     ) {
       updateDrawioExtensionMetadata(adf, targetExtension, {
         diagramName: resolvedDiagramName,
         width: dimensions.width,
         height: dimensions.height,
+        contentVer: newContentVer,
+        revision: newRevision,
       });
       await this.client.updatePageAdf(page, adf, "Update draw.io widget metadata", "current");
     }
@@ -424,6 +466,21 @@ export class DrawioPublisherService {
   }): Promise<InspectResult> {
     const embeddingMode = this.resolveEmbeddingMode(args.embeddingMode);
 
+    if (embeddingMode === "svg") {
+      const page = await this.client.getPage(args.pageId, "atlas_doc_format");
+      const adf = parseAtlasDocFormat(page.body?.atlas_doc_format?.value ?? { type: "doc", version: 1, content: [] });
+      const filename = svgFileName(args.diagramName);
+      if ((await this.client.listPageAttachments(args.pageId, filename)).length) {
+        throw new Error(`An attachment named ${filename} already exists; choose another name or update the diagram`);
+      }
+      // Validate an anchor before uploading anything.
+      if (args.anchorText) insertDrawioExtensionAtAnchor(structuredClone(adf), {}, args.anchorText);
+      const image = await this.createSvgImage(args.pageId, args.mermaid, filename);
+      const nextAdf = args.anchorText ? insertDrawioExtensionAtAnchor(adf, image, args.anchorText) : appendDrawioExtension(adf, image);
+      await this.client.updatePageAdf(page, nextAdf, "Create Mermaid SVG", "current");
+      return this.inspectPage(args.pageId);
+    }
+
     if (embeddingMode === "macropack") {
       const page = await this.client.getPage(args.pageId, "atlas_doc_format");
       return this.createMacroPackDiagram({
@@ -461,7 +518,19 @@ export class DrawioPublisherService {
     assertSingleDiagramSelector(args.diagram);
     const page = await this.client.getPage(args.pageId, "atlas_doc_format");
     const adf = parseAtlasDocFormat(page.body?.atlas_doc_format?.value ?? { type: "doc", version: 1, content: [] });
-    const embeddingMode = this.resolveUpdateEmbeddingMode(adf, args.diagram, args.embeddingMode);
+    const attachments = await this.client.listPageAttachments(args.pageId);
+    const embeddingMode = this.resolveUpdateEmbeddingMode(adf, args.diagram, args.embeddingMode, attachments);
+
+    if (embeddingMode === "svg") {
+      const target = selectSvgDiagram(findSvgDiagrams(adf, attachments), args.diagram);
+      const filename = svgFileName(args.diagramName ?? target.diagramName);
+      if (filename !== target.diagramName) throw new Error("Renaming an SVG on update is not supported; keep its diagramName or create a new diagram");
+      const image = await this.createSvgImage(args.pageId, args.mermaid, filename);
+      Object.assign(target.node, image);
+      if (target.sourceBlock) Object.assign(target.sourceBlock, buildCodeBlockNode(args.mermaid, "mermaid"));
+      await this.client.updatePageAdf(page, adf, "Update Mermaid SVG", "current");
+      return this.inspectPage(args.pageId);
+    }
 
     if (embeddingMode === "macropack") {
       return this.updateMacroPackDiagram({
@@ -493,13 +562,18 @@ export class DrawioPublisherService {
     sourceName?: string;
     spaceKey?: string;
     embeddingMode?: EmbeddingMode;
+    pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     const source = args.sourceName ?? "markdown.md";
     const page = args.page;
     const embeddingMode = this.resolveEmbeddingMode(args.embeddingMode);
-    const blocks = parseMarkdown(args.markdown);
-    const adfDocument: JsonObject = { type: "doc", version: 1, content: [] };
-    const content = adfDocument.content as unknown[];
+    const adfDocument = markdownToAdf(args.markdown);
+    const existingSvgNames = embeddingMode === "svg"
+      ? new Set(findSvgDiagrams(
+        parseAtlasDocFormat(page.body?.atlas_doc_format?.value ?? { type: "doc", version: 1, content: [] }),
+        await this.client.listPageAttachments(page.id),
+      ).map((diagram) => diagram.diagramName))
+      : new Set<string>();
     const baseDiagramName = page.title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
@@ -508,81 +582,83 @@ export class DrawioPublisherService {
     let embeddedBlocks = 0;
     let fallbackBlocks = 0;
 
-    for (const block of blocks) {
-      if (block.type === "heading") {
-        content.push(buildHeadingNode(block.level, block.text));
-        continue;
-      }
-      if (block.type === "paragraph") {
-        content.push(buildParagraphNode(block.text));
-        continue;
-      }
-      if (block.type === "blockquote") {
-        content.push(buildBlockquoteNode(block.text));
-        continue;
-      }
-      if (block.type === "bulletList") {
-        content.push(buildBulletListNode(block.items));
-        continue;
-      }
-      if (block.type === "orderedList") {
-        content.push(buildOrderedListNode(block.items, block.start));
-        continue;
-      }
-      if (block.type === "table") {
-        content.push(buildTableNode(block.header, block.rows));
-        continue;
-      }
-      if (block.type === "rule") {
-        content.push({ type: "rule" });
-        continue;
-      }
-      if (block.type === "code") {
-        content.push(buildCodeBlockNode(block.text, block.language));
-        continue;
-      }
-
-      mermaidBlocks += 1;
-      try {
-        if (embeddingMode === "macropack") {
-          content.push(buildMacroPackExtensionNode({
-            pageId: page.id,
-            spaceId: page.spaceId,
-            spaceKey: args.spaceKey,
-            mermaid: block.text,
-          }));
-          embeddedBlocks += 1;
+    const replaceMermaid = async (nodes: JsonObject[], topLevel = false): Promise<JsonObject[]> => {
+      const content: JsonObject[] = [];
+      for (const node of nodes) {
+        const attrs = node.attrs as JsonObject | undefined;
+        if (node.type !== "codeBlock" || attrs?.language !== "mermaid") {
+          if (Array.isArray(node.content)) node.content = await replaceMermaid(node.content as JsonObject[]);
+          content.push(node);
           continue;
         }
-
-        const diagramName = `${baseDiagramName}-${String(mermaidBlocks).padStart(2, "0")}.drawio`;
-        const artifacts = await this.mermaidConverter(block.text, diagramName);
+        const block = { text: (node.content as JsonObject[] | undefined)?.map((child) => child.text ?? "").join("") ?? "" };
+        mermaidBlocks += 1;
         try {
-          const extensionNode = await this.createExtensionForArtifacts({
-            page,
-            pageId: page.id,
-            drawioPath: artifacts.drawioPath,
-            previewPath: artifacts.previewPath,
-            diagramName,
-            spaceKey: args.spaceKey,
-          });
-          content.push(extensionNode);
-          content.push(buildExpandNode("Original Mermaid source", [buildCodeBlockNode(block.text, "mermaid")]));
-          embeddedBlocks += 1;
-        } finally {
-          await artifacts.cleanup();
+          if (embeddingMode === "svg") {
+            const filename = `${baseDiagramName}-${String(mermaidBlocks).padStart(2, "0")}.svg`;
+            if (!existingSvgNames.has(filename) && (await this.client.listPageAttachments(page.id, filename)).length) {
+              throw new Error(`Attachment ${filename} already exists and is not a managed Mermaid SVG`);
+            }
+            content.push(await this.createSvgImage(page.id, block.text, filename));
+            // Expand nodes are only valid at document level; nested source stays a code block.
+            const sourceBlock = buildCodeBlockNode(block.text, "mermaid");
+            content.push(topLevel ? buildExpandNode("Original Mermaid source", [sourceBlock]) : sourceBlock);
+            embeddedBlocks += 1;
+            continue;
+          }
+          if (embeddingMode === "macropack") {
+            content.push(buildMacroPackExtensionNode({
+              pageId: page.id,
+              spaceId: page.spaceId,
+              spaceKey: args.spaceKey,
+              mermaid: block.text,
+            }));
+            embeddedBlocks += 1;
+            continue;
+          }
+
+          const draftName = `${baseDiagramName}-${String(mermaidBlocks).padStart(2, "0")}.drawio`;
+          const artifacts = await this.mermaidConverter(block.text, draftName);
+          try {
+            // Include a content hash in the diagram name: the draw.io app caches
+            // rendered content per page+name, so unchanged diagrams keep their
+            // name (and caches) while edited diagrams get fresh names that every
+            // cache layer picks up.
+            const contentHash = createHash("sha1")
+              .update(readFileSync(artifacts.drawioPath))
+              .digest("hex")
+              .slice(0, 8);
+            const diagramName = draftName.replace(/\.drawio$/, `-${contentHash}.drawio`);
+            const extensionNode = await this.createExtensionForArtifacts({
+              page,
+              pageId: page.id,
+              drawioPath: artifacts.drawioPath,
+              previewPath: artifacts.previewPath,
+              diagramName,
+              spaceKey: args.spaceKey,
+            });
+            content.push(extensionNode);
+            // Expand nodes are only valid at document level; nested source stays a code block.
+            const sourceBlock = buildCodeBlockNode(block.text, "mermaid");
+            content.push(topLevel ? buildExpandNode("Original Mermaid source", [sourceBlock]) : sourceBlock);
+            embeddedBlocks += 1;
+          } finally {
+            await artifacts.cleanup();
+          }
+        } catch (error) {
+          fallbackBlocks += 1;
+          const message = error instanceof Error ? error.message : String(error);
+          content.push(
+            buildParagraphNode(
+              `Mermaid block ${mermaidBlocks} could not be converted automatically: ${message}`,
+            ),
+          );
+          content.push(buildCodeBlockNode(block.text, "mermaid"));
         }
-      } catch (error) {
-        fallbackBlocks += 1;
-        const message = error instanceof Error ? error.message : String(error);
-        content.push(
-          buildParagraphNode(
-            `Mermaid block ${mermaidBlocks} could not be converted automatically: ${message}`,
-          ),
-        );
-        content.push(buildCodeBlockNode(block.text, "mermaid"));
       }
-    }
+      return content;
+    };
+    adfDocument.content = await replaceMermaid(adfDocument.content as JsonObject[], true);
 
     const latestPage = await this.client.getPage(page.id, "atlas_doc_format", false);
     const updatedPage = await this.client.updatePageAdf(
@@ -591,6 +667,13 @@ export class DrawioPublisherService {
       `Publish ${source}`,
       "current",
     );
+    if (args.pageWidth) {
+      try {
+        await this.client.setPageWidth(page.id, args.pageWidth);
+      } catch (error) {
+        throw new Error(`Page ${page.id} content was published, but setting page width failed`, { cause: error });
+      }
+    }
     const inspect = await this.inspectPage(page.id);
 
     return {
@@ -613,8 +696,10 @@ export class DrawioPublisherService {
     siblingPageId?: string;
     spaceKey?: string;
     embeddingMode?: EmbeddingMode;
+    pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     const source = args.sourceName ?? "markdown.md";
+    const pageWidth = parsePageWidth(args.pageWidth) ?? this.defaultPageWidth ?? DEFAULT_PAGE_WIDTH;
     const siblingPage =
       args.siblingPageId ? await this.client.getPage(args.siblingPageId, "atlas_doc_format", false) : undefined;
     const spaceId = args.spaceId ?? siblingPage?.spaceId;
@@ -635,6 +720,7 @@ export class DrawioPublisherService {
       sourceName: source,
       spaceKey: args.spaceKey,
       embeddingMode: args.embeddingMode,
+      pageWidth,
     });
   }
 
@@ -647,6 +733,7 @@ export class DrawioPublisherService {
     siblingPageId?: string;
     spaceKey?: string;
     embeddingMode?: EmbeddingMode;
+    pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     const markdownFile = resolve(args.markdownFile);
     const markdown = await readFile(markdownFile, "utf8");
@@ -659,6 +746,7 @@ export class DrawioPublisherService {
       siblingPageId: args.siblingPageId,
       spaceKey: args.spaceKey,
       embeddingMode: args.embeddingMode,
+      pageWidth: args.pageWidth,
     });
   }
 
@@ -668,7 +756,9 @@ export class DrawioPublisherService {
     sourceName?: string;
     spaceKey?: string;
     embeddingMode?: EmbeddingMode;
+    pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
+    const pageWidth = parsePageWidth(args.pageWidth) ?? this.defaultPageWidth;
     const page = await this.client.getPage(args.pageId, "atlas_doc_format", false);
     return this.publishMarkdownToPage({
       page,
@@ -676,6 +766,7 @@ export class DrawioPublisherService {
       sourceName: args.sourceName,
       spaceKey: args.spaceKey,
       embeddingMode: args.embeddingMode,
+      pageWidth,
     });
   }
 
@@ -685,6 +776,7 @@ export class DrawioPublisherService {
     sourceName?: string;
     spaceKey?: string;
     embeddingMode?: EmbeddingMode;
+    pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     const markdownFile = resolve(args.markdownFile);
     const markdown = await readFile(markdownFile, "utf8");
@@ -694,6 +786,7 @@ export class DrawioPublisherService {
       sourceName: args.sourceName ?? basename(markdownFile),
       spaceKey: args.spaceKey,
       embeddingMode: args.embeddingMode,
+      pageWidth: args.pageWidth,
     });
   }
 }

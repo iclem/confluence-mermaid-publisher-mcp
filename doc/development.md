@@ -327,16 +327,16 @@ The server currently exposes:
 These tools:
 
 - authenticate using the same `CONFLUENCE_*` or `COPILOT_MCP_CONFLUENCE_*` environment variables
-- default to `macropack` unless `CONFLUENCE_DEFAULT_EMBEDDING_MODE` or a per-tool `embeddingMode` selects `drawio`
+- default to `drawio` unless `CONFLUENCE_DEFAULT_EMBEDDING_MODE` or a per-tool `embeddingMode` selects `macropack` or `svg`
 - convert Mermaid to `.drawio` inside the container only when the effective embedding mode is `drawio`
 - create or update embedded diagrams on Confluence pages
 - can create or update a page from Markdown content or from a Markdown file path and embed multiple Mermaid blocks with fallback to Mermaid code blocks when embedding fails
 
-The raw Docker examples forward `CONFLUENCE_DEFAULT_EMBEDDING_MODE`. The checked-in stdio helper and Compose services currently do not, so they use the built-in `macropack` default unless a tool call provides `embeddingMode`.
+The raw Docker examples forward `CONFLUENCE_DEFAULT_EMBEDDING_MODE`. The checked-in stdio helper and Compose services currently do not, so they use the built-in `drawio` default unless a tool call provides `embeddingMode`. They do forward `CONFLUENCE_DEFAULT_PAGE_WIDTH`.
 
-### Current limitation
+### Preview fallback
 
-The MCP server currently generates a simple placeholder PNG preview internally when creating or updating from Mermaid. This is sufficient for exercising the end-to-end widget contract, but it is not yet a full-fidelity rendered preview export of the actual diagram.
+The MCP server attempts to render a PNG preview when creating or updating a draw.io diagram. If preview rendering fails, it uses a simple placeholder PNG so the end-to-end widget contract can still complete.
 
 ### Commands
 

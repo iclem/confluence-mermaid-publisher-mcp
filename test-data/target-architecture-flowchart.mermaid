@@ -1,0 +1,149 @@
+flowchart LR
+
+    Scheduler["Scheduler (cron)"]
+    Initializer["Scraping Initializer"]
+    InitializerDispatchRepo[(Dispatch Authorization Inbox + Outbox)]
+
+    ScrapeQueue[/"Information to Scrape"/]
+    Router["Scraping Router"]
+
+    subgraph ScrapingService
+        Scraper["Scraping Processor"]
+        Browser["Browser Automation"]
+    end
+
+    Balancer["Provider Request Balancer\n(shared proxy_type rate-limit monitor)"]
+    Provider["Scraping Provider"]
+    CallbackEndpoint["Scraping Provider Callback Endpoint"]
+    CallbackQueue[/"Scraping Provider Callbacks"/]
+
+    ScrapingRepo[(Scraping Results)]
+
+    ScrapeEvents{{"Product Scraped (fan-out)"}}
+    ParseQueue[/"Information to Parse"/]
+    PhotoQueue[/"Photos to Process"/]
+
+    subgraph ParsingService
+        Parser["Parsing Processor"]
+        Photo["Photo Processor"]
+    end
+
+    ParsingRepo[(Parsing Results)]
+    PhotoRepo[(Photo Repository)]
+
+    QualityQueue[/"Products to Qualify"/]
+    Quality["Quality Checker & Decision Maker"]
+    QualityRepo[(Quality Decisions + Outbox)]
+    QualityEvents{{"Quality Decisions (fan-out)"}}
+    WorksetEvents{{"Qualification Workset Completed\n(including deadline exceeded)"}}
+    WorksetDispatchEvents{{"Workset Dispatch Authorized"}}
+
+    Materialization["Materialization Processor"]
+
+    ProductDB[(Product Table + Outbox)]
+
+    Replication["Replication Service"]
+    NDate["nDate Computation Service"]
+    ScheduleRepo[(Due Schedule)]
+
+    JobTracker["Job Tracker"]
+    JobRepo[(Job Tracking + Qualification Worksets)]
+    DeadlinePolicy[(Qualification Deadline Policy)]
+
+    ProviderUpdate["Scraping Provider Update"]
+    ProviderConfigRepo[(Store Provider Assignment)]
+
+    %% Trigger the Initializer
+    Scheduler --> Initializer
+    Initializer -. "Register root workset" .-> JobTracker
+    DeadlinePolicy -. "duration + policy version" .-> JobTracker
+
+    %% nDate writes the schedule; Initializer just reads it (no live call)
+    NDate --> ScheduleRepo
+    ScheduleRepo -.-> Initializer
+
+    %% Initial scraping
+    Initializer --> InitializerDispatchRepo
+    InitializerDispatchRepo -. "Authorized StartScrape\n(transactional outbox)" .-> ScrapeQueue
+    ScrapeQueue --> Router
+
+    %% Each job takes exactly one execution route
+    Router -. "Claim authorization\n(open + before deadline)" .-> JobTracker
+    Router -->|"HTTP (exclusive)"| Scraper
+    Router -->|"Browser (exclusive)"| Browser
+
+    %% Router alone selects the provider. The shared Balancer only monitors
+    %% rate-limit state for each proxy_type; it does not select proxies/accounts.
+    Scraper -. "proxy_type rate-limit telemetry" .-> Balancer
+    Browser -. "proxy_type rate-limit telemetry" .-> Balancer
+    ProviderConfigRepo -.-> Router
+
+    %% Provider scraping is asynchronous: submit work with a callback URL,
+    %% then consume the provider's response from the callback queue.
+    Scraper -->|"Submit request + callback URL"| Provider
+    Provider -->|"POST scrape response"| CallbackEndpoint
+    CallbackEndpoint -->|"Direct enqueue"| CallbackQueue
+    CallbackQueue -->|"Consume response"| Scraper
+
+    %% Persist scraping results
+    Scraper --> ScrapingRepo
+    Browser --> ScrapingRepo
+
+    %% ProductScraped is fanned out into one dedicated queue per consumer
+    ScrapingRepo -. "Transactional outbox" .-> ScrapeEvents
+    ScrapeEvents --> ParseQueue
+    ScrapeEvents --> PhotoQueue
+
+    %% Parallel parsing
+    ParseQueue --> Parser
+    PhotoQueue --> Photo
+
+    %% Persist parsing results
+    Parser --> ParsingRepo
+    Photo --> PhotoRepo
+
+    %% Publish quality jobs
+    ParsingRepo -. "Transactional outbox" .-> QualityQueue
+    PhotoRepo -. "Transactional outbox" .-> QualityQueue
+
+    %% Parse/photo events wake Quality, but only a closed qualification
+    %% workset can authorize a final decision.
+    QualityQueue --> Quality
+    ParsingRepo -.-> Quality
+    PhotoRepo -.-> Quality
+    JobRepo -. "Read workset status" .-> Quality
+
+    %% Quality Decisions fan out: only production approvals materialize
+    Quality --> QualityRepo
+    QualityRepo -. "Transactional outbox" .-> QualityEvents
+    QualityEvents -->|"Quality OK (production)"| Materialization
+
+    Materialization --> ProductDB
+    ProductDB -. "Transactional outbox" .-> Replication
+    ProductDB -. "Transactional outbox" .-> NDate
+
+    %% Workset Admission authorizes root, child, and retry work before the
+    %% Initializer, the only ScrapeQueue publisher, dispatches it.
+    ParsingRepo -. "RequestAdditionalScrape\nchild-work manifest\n(transactional outbox)" .-> JobTracker
+    QualityEvents -. "Quality decision\n(retry admits successor)" .-> JobTracker
+
+    %% Scraping Provider Update: quality-driven upgrade, cost-driven downgrade (see prose below)
+    %% Both directions trial candidate providers via the Initializer first, and only write
+    %% Store Provider Assignment if a candidate actually clears the quality bar.
+    JobRepo -.-> ProviderUpdate
+    Scheduler -. "On schedule: test cheaper\nproviders for expensive stores" .-> ProviderUpdate
+    ProviderUpdate -. "Trial request (batch)\nwith candidate provider(s)" .-> Initializer
+    ProviderUpdate --> ProviderConfigRepo
+
+    %% Job Tracking receives broker copies. Its Qualification Workset ledger is
+    %% a Quality completion barrier; its append-only audit remains observational.
+    ScrapeQueue -.-> JobTracker
+    ScrapeEvents -.-> JobTracker
+    QualityQueue -.-> JobTracker
+    ProductDB -.-> JobTracker
+    JobTracker --> JobRepo
+    JobRepo -. "Transactional outbox:\nadmitted root / child / retry" .-> WorksetDispatchEvents
+    WorksetDispatchEvents --> Initializer
+    JobRepo -. "Transactional outbox:\nnormal completion or deadline exceeded" .-> WorksetEvents
+    WorksetEvents --> QualityQueue
+

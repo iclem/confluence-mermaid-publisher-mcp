@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -96,11 +97,13 @@ export async function convertMermaidToArtifacts(mermaid: string, diagramName: st
   const previewConfig = getPreviewConfig(mermaid);
 
   await writeFile(mermaidPath, mermaid, "utf8");
-  await writeFile(previewPath, createPlaceholderPreviewBuffer(previewConfig.width, previewConfig.height, previewConfig.color));
   await execFileAsync("bash", [CONVERT_SCRIPT, mermaidPath, drawioPath], {
     cwd: PROJECT_ROOT,
     env: process.env,
   });
+  if (!existsSync(previewPath)) {
+    await writeFile(previewPath, createPlaceholderPreviewBuffer(previewConfig.width, previewConfig.height, previewConfig.color));
+  }
 
   return {
     mermaidPath,

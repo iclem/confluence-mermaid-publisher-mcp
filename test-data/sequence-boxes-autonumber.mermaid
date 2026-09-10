@@ -1,0 +1,16 @@
+sequenceDiagram
+    actor U as User
+    participant A as api
+    box rgb(230,240,255) Backend
+    participant B as worker
+    participant C as audit
+    end
+    autonumber
+    U->>A: request
+    A->>+B: dispatch
+    Note left of C: watched async
+    B-->>A: done
+    deactivate B
+    A-)U: notify
+    autonumber off
+    A->>C: log

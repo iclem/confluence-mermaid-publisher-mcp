@@ -1,3 +1,4 @@
+import { getConfiguredPageWidth, PAGE_WIDTHS } from "./page-width.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
@@ -59,6 +60,7 @@ export function createPublisherService(): DrawioPublisherService {
     }),
     undefined,
     defaultEmbeddingMode,
+    getConfiguredPageWidth(),
   );
 }
 
@@ -79,10 +81,11 @@ export function createMcpServer(): McpServer {
     version: "0.1.0",
   });
   const embeddingModeGuidance =
-    "Omit this field to use the server default embedding mode. Only set it when the user explicitly requests a non-default mode such as macropack or drawio. When omitted, the server uses its configured default; if that is unset, it falls back to macropack.";
+    "Omit this field to use the server default embedding mode. Only set it when the user explicitly requests a non-default mode such as svg or macropack. When omitted, the server uses its configured default; if that is unset, it falls back to drawio. SVG is opt-in and always uses adaptive light/dark colors.";
   const embeddingModeSchema = z.enum(EMBEDDING_MODES).optional().describe(
     `Optional Mermaid embedding mode override. ${embeddingModeGuidance}`,
   );
+  const pageWidthSchema = z.enum(PAGE_WIDTHS).optional().describe("Page width: full-width or default (centered column). Overrides CONFLUENCE_DEFAULT_PAGE_WIDTH. New pages default to full-width; updates preserve width when neither is set.");
   const defaultEmbeddingModeToolGuidance =
     "Omit embeddingMode to use the server default. Only set it when the user explicitly requests a non-default mode.";
 
@@ -103,7 +106,7 @@ export function createMcpServer(): McpServer {
     `Create a new embedded Confluence diagram from Mermaid. ${defaultEmbeddingModeToolGuidance}`,
     {
       pageId: z.string().describe("Target Confluence page ID."),
-      diagramName: z.string().optional().describe("Optional diagram file name for draw.io mode, typically ending in .drawio."),
+      diagramName: z.string().optional().describe("Optional diagram file name (.drawio or .svg for the selected mode)."),
       mermaid: z.string().describe("Mermaid diagram source."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for the page."),
       anchorText: z.string().optional().describe("Optional text anchor. The widget is inserted immediately after the first matching text inside a paragraph."),
@@ -149,8 +152,9 @@ export function createMcpServer(): McpServer {
       siblingPageId: z.string().optional().describe("Optional existing page ID whose parent should be reused for the new sibling page."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
       embeddingMode: embeddingModeSchema,
+      pageWidth: pageWidthSchema,
     },
-    async ({ title, markdown, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode }) => {
+    async ({ title, markdown, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode, pageWidth }) => {
       const service = createPublisherService();
       return textResult(
         await service.createPageFromMarkdown({
@@ -162,6 +166,7 @@ export function createMcpServer(): McpServer {
           siblingPageId,
           spaceKey,
           embeddingMode,
+          pageWidth,
         }),
       );
     },
@@ -179,8 +184,9 @@ export function createMcpServer(): McpServer {
       siblingPageId: z.string().optional().describe("Optional existing page ID whose parent should be reused for the new sibling page."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
       embeddingMode: embeddingModeSchema,
+      pageWidth: pageWidthSchema,
     },
-    async ({ title, markdownFile, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode }) => {
+    async ({ title, markdownFile, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode, pageWidth }) => {
       const service = createPublisherService();
       return textResult(await withMarkdownFileHint(
         markdownFile,
@@ -193,6 +199,7 @@ export function createMcpServer(): McpServer {
           siblingPageId,
           spaceKey,
           embeddingMode,
+          pageWidth,
         }),
       ));
     },
@@ -207,8 +214,9 @@ export function createMcpServer(): McpServer {
       sourceName: z.string().optional().describe("Optional source file name used in publication metadata."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
       embeddingMode: embeddingModeSchema,
+      pageWidth: pageWidthSchema,
     },
-    async ({ pageId, markdown, sourceName, spaceKey, embeddingMode }) => {
+    async ({ pageId, markdown, sourceName, spaceKey, embeddingMode, pageWidth }) => {
       const service = createPublisherService();
       return textResult(
         await service.updatePageFromMarkdown({
@@ -217,6 +225,7 @@ export function createMcpServer(): McpServer {
           sourceName,
           spaceKey,
           embeddingMode,
+          pageWidth,
         }),
       );
     },
@@ -231,8 +240,9 @@ export function createMcpServer(): McpServer {
       sourceName: z.string().optional().describe("Optional source file name used in publication metadata."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
       embeddingMode: embeddingModeSchema,
+      pageWidth: pageWidthSchema,
     },
-    async ({ pageId, markdownFile, sourceName, spaceKey, embeddingMode }) => {
+    async ({ pageId, markdownFile, sourceName, spaceKey, embeddingMode, pageWidth }) => {
       const service = createPublisherService();
       return textResult(await withMarkdownFileHint(
         markdownFile,
@@ -242,6 +252,7 @@ export function createMcpServer(): McpServer {
           sourceName,
           spaceKey,
           embeddingMode,
+          pageWidth,
         }),
       ));
     },
@@ -254,9 +265,9 @@ export function createMcpServer(): McpServer {
       pageId: z.string().describe("Target Confluence page ID."),
       mermaid: z.string().describe("Mermaid diagram source."),
       diagramName: z.string().optional().describe("Optional resulting draw.io file name or logical diagram name."),
-      widgetDiagramName: z.string().optional().describe("Existing draw.io diagram name selector. Use only one selector."),
+      widgetDiagramName: z.string().optional().describe("Existing draw.io or SVG diagram name selector. Use only one selector."),
       custContentId: z.string().optional().describe("Existing draw.io custom content ID selector. Use only one selector."),
-      localId: z.string().optional().describe("Existing embedded diagram local ID selector. Use only one selector."),
+      localId: z.string().optional().describe("Existing embedded diagram local ID selector (stable attachment ID for SVG). Use only one selector."),
       index: z.number().int().nonnegative().optional().describe("Existing embedded diagram index selector. Use only one selector. On mixed pages, also provide embeddingMode or use localId."),
       embeddingMode: embeddingModeSchema,
     },

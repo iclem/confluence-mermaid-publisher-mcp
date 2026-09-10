@@ -46,7 +46,12 @@ Markdown / Mermaid input
 The parser owns Mermaid-specific concerns:
 
 - diagram header detection
-- supported subset parsing
+- sequence diagram parsing through Mermaid's own parser (`mermaid.parse` + the sequence diagram DB, run headlessly via jsdom) so sequence syntax support matches stock draw.io behavior
+- sequence layout geometry from a headless Mermaid render (jsdom + canvas text measurement), matching stock draw.io coordinates; falls back to a computed grid when canvas is unavailable
+- gantt and xychart parsing through Mermaid's own parser (`mermaid.parse` + the gantt/xychart diagram DBs), then converter-owned explicit layouts (month/day columns for gantt; band/linear scaling for xychart)
+- flowchart parsing through Mermaid's own flowchart DB (all node shapes, edge types, `&` branch groups, chains, nested subgraphs, `classDef`/`class`/inline `style`), with node rectangles and edge polylines extracted from a headless Mermaid (Dagre) render; falls back to a converter-side Dagre layout when canvas is unavailable
+- state diagram parsing through Mermaid's own state DB (transitions, notes, descriptions, composite states, concurrent regions, fork/join/choice pseudostates), with geometry from the same headless render path
+- supported subset parsing for the other diagram families
 - Mermaid validation and normalization
 - stable intermediate-model output
 
@@ -208,15 +213,15 @@ The current reference backend talks to Confluence directly. The product therefor
 - custom content
 - page ADF mutation
 
-and MacroPack-specific page ADF mutation for embedded Mermaid diagrams.
+plus native SVG attachments and MacroPack-specific page ADF mutation for the other embedding modes.
 
 ### Preview boundary
 
-The publisher currently generates a **placeholder PNG preview** for draw.io widgets. This is enough for the widget contract and page publication flow, but it is not yet a full rendered preview of the generated diagram.
+The publisher attempts to render a real PNG preview for draw.io widgets. If rendering is unavailable or fails, it falls back to the placeholder required by the widget contract so publication can continue.
 
 ### Supported Markdown boundary
 
-The Markdown publisher currently supports:
+The Markdown publisher uses Atlassian's transformers and supports:
 
 - headings
 - paragraphs
@@ -227,6 +232,10 @@ The Markdown publisher currently supports:
 - rules
 - fenced code blocks
 - fenced Mermaid blocks
+- inline links, emphasis, strikethrough, and code marks
+- nested lists and inline formatting inside block containers
+
+Raw HTML remains literal text. Local images are not uploaded automatically, and relative document links are not mapped to Confluence pages.
 
 ### Repository boundary
 

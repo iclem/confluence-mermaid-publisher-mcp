@@ -1,11 +1,12 @@
 #!/usr/bin/env node
+import { getConfiguredPageWidth, parsePageWidth } from "./page-width.js";
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ConfluenceClient } from "./confluence-client.js";
-import { getDefaultEmbeddingMode } from "./embedding-mode.js";
+import { getDefaultEmbeddingMode, parseEmbeddingMode } from "./embedding-mode.js";
 import { DrawioPublisherService } from "./service.js";
 
 interface ParsedArgs {
@@ -16,7 +17,8 @@ interface ParsedArgs {
 export const CLI_USAGE =
   "Usage: cli.js <inspect-page|update-widget|create-widget|create-page-from-markdown|update-page-from-markdown> " +
   "--base-url <https://site.atlassian.net> " +
-  "[--bearer-token <token> | --email <email> --api-token <token>] ...";
+  "[--bearer-token <token> | --email <email> --api-token <token>] " +
+  "[--embedding-mode <drawio|macropack|svg>] [--page-width <default|full-width>] ...";
 
 function parseArgs(argv: string[]): ParsedArgs {
   const [command, ...rest] = argv;
@@ -63,7 +65,8 @@ export function createService(options: Map<string, string>): DrawioPublisherServ
       apiToken,
     }),
     undefined,
-    getDefaultEmbeddingMode(),
+    parseEmbeddingMode(options.get("embedding-mode")) ?? getDefaultEmbeddingMode(),
+    getConfiguredPageWidth(),
   );
 }
 
@@ -127,6 +130,7 @@ async function main(): Promise<void> {
     const result = await service.createPageFromMarkdown({
       title: requireOption(options, "title"),
       markdown,
+      pageWidth: parsePageWidth(options.get("page-width")),
       sourceName: options.get("source-name") ?? options.get("markdown-file"),
       spaceId: options.get("space-id"),
       parentId: options.get("parent-id"),
@@ -147,6 +151,7 @@ async function main(): Promise<void> {
     const result = await service.updatePageFromMarkdown({
       pageId: requireOption(options, "page-id"),
       markdown,
+      pageWidth: parsePageWidth(options.get("page-width")),
       sourceName: options.get("source-name") ?? options.get("markdown-file"),
       spaceKey: options.get("space-key"),
     });

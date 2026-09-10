@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseMermaid } from "./index.js";
+import { computeFlowchartLayout, parseMermaid } from "./index.js";
 
 function stripLayout<T extends { x?: number; y?: number; width?: number; height?: number }>(node: T) {
   const { x: _x, y: _y, width: _width, height: _height, ...rest } = node;
@@ -12,9 +12,45 @@ function stripEdgePoints<T extends { points?: unknown }>(edge: T) {
   return rest;
 }
 
+function assertFlowchartRoutesAnchorOnNodes(
+  diagram: Awaited<ReturnType<typeof parseMermaid>>,
+  options: { except?: string[] } = {},
+): void {
+  const except = new Set(options.except ?? []);
+  const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+  const tolerance = 25; // rendered node bboxes include label/shape padding around the spline anchors
+  for (const edge of diagram.edges) {
+    if (except.has(`${edge.sourceId}->${edge.targetId}`)) {
+      continue;
+    }
+    const points = edge.points!;
+    expect(points.length).toBeGreaterThan(1);
+    const source = byId.get(edge.sourceId)!;
+    const target = byId.get(edge.targetId)!;
+    const start = points[0];
+    const end = points[points.length - 1];
+    // Polylines anchor on their endpoint nodes' bounding boxes. Dagre routes
+    // cylinder edges to a padded outline that can sit well outside the
+    // visible box, so cylinder terminals are projected onto the bbox in the
+    // generator instead of asserted here.
+    if (source.shape !== "cylinder") {
+      expect(start.x).toBeGreaterThanOrEqual(source.x! - tolerance);
+      expect(start.x).toBeLessThanOrEqual(source.x! + source.width! + tolerance);
+      expect(start.y).toBeGreaterThanOrEqual(source.y! - tolerance);
+      expect(start.y).toBeLessThanOrEqual(source.y! + source.height! + tolerance);
+    }
+    if (target.shape !== "cylinder") {
+      expect(end.x).toBeGreaterThanOrEqual(target.x! - tolerance);
+      expect(end.x).toBeLessThanOrEqual(target.x! + target.width! + tolerance);
+      expect(end.y).toBeGreaterThanOrEqual(target.y! - tolerance);
+      expect(end.y).toBeLessThanOrEqual(target.y! + target.height! + tolerance);
+    }
+  }
+}
+
 describe("parseMermaid", () => {
-  it("parses supported flowchart syntax into the intermediate model", () => {
-    const diagram = parseMermaid({
+  it("parses supported flowchart syntax into the intermediate model", async () => {
+    const diagram = await parseMermaid({
       sourceName: "sample.mermaid",
       mermaid: `
         flowchart LR
@@ -47,8 +83,8 @@ describe("parseMermaid", () => {
     expect(diagram.subgraphs).toEqual([]);
   });
 
-  it("creates implicit rectangle nodes from bare identifiers", () => {
-    const diagram = parseMermaid({
+  it("creates implicit rectangle nodes from bare identifiers", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         graph TD
         Alpha --> Beta
@@ -61,8 +97,8 @@ describe("parseMermaid", () => {
     ]);
   });
 
-  it("preserves class-based node colors from classDef directives and suffixes", () => {
-    const diagram = parseMermaid({
+  it("preserves class-based node colors from classDef directives and suffixes", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         flowchart TD
         classDef danger fill:#ffdddd,stroke:#ff0000,color:#330000
@@ -91,40 +127,199 @@ describe("parseMermaid", () => {
     expect(diagram.edges.map(stripEdgePoints)).toEqual([
       { sourceId: "A", targetId: "B", label: undefined, kind: "directed" },
     ]);
-    expect(diagram.warnings).toEqual([]);
+    // Geometry extraction may warn when canvas is parked (platform flip)
+    expect(
+      diagram.warnings.filter((warning) => !warning.startsWith("flowchart_geometry_unavailable:")),
+    ).toEqual([]);
   });
 
-  it("preserves rgb and rgba values in classDef directives", () => {
-    const diagram = parseMermaid({
+  it("rejects classDef declarations that mermaid itself cannot parse (rgb functions)", async () => {
+    // Mermaid's own parser (used by stock draw.io) rejects rgb()/rgba() values
+    // in classDef declarations; we inherit that behavior for parity.
+    await expect(
+      parseMermaid({
+        mermaid: `
+          flowchart TD
+          classDef themed fill:rgb(230, 240, 255),stroke:rgba(25, 113, 194, 0.8),color:rgb(10, 20, 30)
+          A[Start]:::themed --> B[Finish]:::themed
+        `,
+      }),
+    ).rejects.toThrow(/parse_error/);
+  });
+
+  it("keeps extracted flowchart edge routes consistent with node coordinates", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    // Long chain in LR forces the rendered diagram to extend below y=0, so
+    // normalization must shift (like mermaid's viewBox), not clamp: clamping
+    // left edge polylines offset from the node boxes (spiky artifacts).
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart LR
+        A --> B
+        B -.-> C
+        B -.-> D
+        D -.-> E
+        E --> F
+        A --> D
+        A -.-> E
+        D -.-> Scheduler
+      `,
+    });
+
+    assertFlowchartRoutesAnchorOnNodes(diagram);
+  });
+
+  it("keeps edge routes anchored on nodes in the real-world architecture diagram", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    // Regression fixture from a published page: its routes run well above the
+    // topmost node (content min y < 0), which used to desync polylines from
+    // node boxes and produce spike artifacts in the drawio output.
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const fixturePath = fileURLToPath(
+      new URL("../../test-data/target-architecture-flowchart.mermaid", import.meta.url),
+    );
+    const diagram = await parseMermaid({
+      sourceName: "target-architecture-flowchart.mermaid",
+      mermaid: readFileSync(fixturePath, "utf8"),
+    });
+
+    expect(diagram.diagramType).toBe("flowchart");
+    // The pre-fix clamp left edge polylines and node boxes in different
+    // coordinate spaces: nodes shifted up by (minY - margin) while routes
+    // kept their raw (unclamped) y, so route ends pointed below/above their
+    // endpoint nodes (spike artifacts in drawio). With consistent
+    // coordinates every polyline endpoint anchors on its endpoint node's
+    // bounding box (assertFlowchartRoutesAnchorOnNodes below).
+    assertFlowchartRoutesAnchorOnNodes(diagram);
+  });
+
+  it("supports the full flowchart node shape set", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         flowchart TD
-        classDef themed fill:rgb(230, 240, 255),stroke:rgba(25, 113, 194, 0.8),color:rgb(10, 20, 30)
-        A[Start]:::themed --> B[Finish]:::themed
+        A[square] --> B(round) --> C([stadium]) --> D[[subroutine]] --> E[(cylinder)]
+        E --> F((circle)) --> G(((double))) --> H{diamond} --> I{{hexagon}} --> J>odd]
+        J --> K[/para/] --> L[\\para-alt\\] --> M[/trap\\] --> N[\\trap-alt/]
+        N --> O@{ shape: circ }
       `,
     });
 
     expect(diagram.nodes.map(stripLayout)).toEqual([
-      {
-        id: "A",
-        label: "Start",
-        shape: "rectangle",
-        fillColor: "rgb(230, 240, 255)",
-        strokeColor: "rgba(25, 113, 194, 0.8)",
-        fontColor: "rgb(10, 20, 30)",
-      },
-      {
-        id: "B",
-        label: "Finish",
-        shape: "rectangle",
-        fillColor: "rgb(230, 240, 255)",
-        strokeColor: "rgba(25, 113, 194, 0.8)",
-        fontColor: "rgb(10, 20, 30)",
-      },
+      { id: "A", label: "square", shape: "rectangle" },
+      { id: "B", label: "round", shape: "rounded-rectangle" },
+      { id: "C", label: "stadium", shape: "stadium" },
+      { id: "D", label: "subroutine", shape: "subroutine" },
+      { id: "E", label: "cylinder", shape: "cylinder" },
+      { id: "F", label: "circle", shape: "ellipse" },
+      { id: "G", label: "double", shape: "double-circle" },
+      { id: "H", label: "diamond", shape: "rhombus" },
+      { id: "I", label: "hexagon", shape: "hexagon" },
+      { id: "J", label: "odd", shape: "odd" },
+      { id: "K", label: "para", shape: "parallelogram" },
+      { id: "L", label: "para-alt", shape: "parallelogram-alt" },
+      { id: "M", label: "trap", shape: "trapezoid" },
+      { id: "N", label: "trap-alt", shape: "trapezoid-alt" },
+      { id: "O", label: "O", shape: "ellipse" },
     ]);
   });
 
-  it("applies class assignments declared separately from node definitions", () => {
-    const diagram = parseMermaid({
+  it("supports thick, open, invisible, and bidirectional flowchart edges", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart TD
+        A ==> B
+        B --- C
+        C -.- D
+        D ~~~ E
+        E <--> F
+        G --o H
+      `,
+    });
+
+    expect(diagram.edges.map(stripEdgePoints)).toEqual([
+      { sourceId: "A", targetId: "B", label: undefined, kind: "thick-directed" },
+      { sourceId: "B", targetId: "C", label: undefined, kind: "plain" },
+      { sourceId: "C", targetId: "D", label: undefined, kind: "dashed-plain" },
+      { sourceId: "D", targetId: "E", label: undefined, kind: "invisible" },
+      { sourceId: "E", targetId: "F", label: undefined, kind: "bidirectional-directed" },
+      { sourceId: "G", targetId: "H", label: undefined, kind: "directed" },
+    ]);
+    expect(diagram.warnings.some((warning) => warning.startsWith("unsupported_arrow_variant:"))).toBe(true);
+  });
+
+  it("supports nested subgraphs with explicit and generated ids", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart TD
+        subgraph outer [Outer]
+          subgraph inner [Inner]
+            A[X]
+          end
+          B[Y]
+        end
+        A --> B
+      `,
+    });
+
+    expect(diagram.subgraphs).toEqual([
+      { id: "inner", label: "Inner", nodeIds: ["A"], parentId: "outer" },
+      { id: "outer", label: "Outer", nodeIds: ["B"], parentId: undefined },
+    ]);
+  });
+
+  it("extracts mermaid render geometry for flowchart diagrams", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart LR
+        A[Start] --> B{Decision}
+        B -->|yes| C[Done]
+        B -->|no| D[Retry]
+      `,
+    });
+
+    const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+    const a = byId.get("A")!;
+    const b = byId.get("B")!;
+    const c = byId.get("C")!;
+    const d = byId.get("D")!;
+    // LR layout: A left of B, B left of C/D; C and D stacked vertically
+    expect(a.x! + a.width!).toBeLessThanOrEqual(b.x! + 1);
+    expect(b.x! + b.width!).toBeLessThanOrEqual(c.x! + 1);
+    expect(c.y).not.toBe(d.y);
+    for (const node of diagram.nodes) {
+      expect(node.width).toBeGreaterThan(0);
+      expect(node.height).toBeGreaterThan(0);
+    }
+    // Edge routes follow the rendered splines
+    for (const edge of diagram.edges) {
+      expect(edge.points?.length ?? 0).toBeGreaterThan(1);
+    }
+    const ab = diagram.edges[0];
+    expect(ab.points![0].x).toBeLessThan(ab.points![ab.points!.length - 1].x);
+  });
+
+  it("applies class assignments declared separately from node definitions", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         flowchart TD
         A[Start] --> B[Finish]
@@ -153,21 +348,157 @@ describe("parseMermaid", () => {
     ]);
   });
 
-  it("rejects unsupported sequence constructs explicitly", () => {
-    expect(() =>
+  it("supports alt frames with else sections", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        sequenceDiagram
+        A->>B: Try
+        alt No cache
+          A->>B: Render
+        else Cached
+          A->>B: Passthrough
+        end
+        B-->>A: Done
+      `,
+    });
+
+    expect(diagram.sequenceMessages.map((message) => message.kind)).toEqual([
+      "solid",
+      "solid",
+      "solid",
+      "dotted",
+    ]);
+    expect(diagram.sequenceFrames).toEqual([
+      {
+        kind: "alt",
+        label: "No cache",
+        startOrder: 1,
+        endOrder: 2,
+        depth: 0,
+        participantIds: ["A", "B"],
+        sections: [{ order: 2, label: "Cached" }],
+      },
+    ]);
+  });
+
+  it("extracts mermaid render geometry for sequence diagrams", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        sequenceDiagram
+        A->>B: one
+        alt branch
+          B->>A: two
+        else other
+          B-->>A: three
+        end
+      `,
+    });
+
+    const geometry = diagram.sequenceGeometry;
+    expect(geometry).toBeDefined();
+    expect(geometry!.participants.map((participant) => participant.id)).toEqual(["A", "B"]);
+    expect(geometry!.participants[0].lifelineX).toBeLessThan(geometry!.participants[1].lifelineX);
+    expect(Object.keys(geometry!.eventYs).sort()).toEqual(["0", "1", "2"]);
+    expect(geometry!.eventYs["0"]).toBeLessThan(geometry!.eventYs["1"]);
+    expect(geometry!.frames).toHaveLength(1);
+    expect(geometry!.frames[0].startOrder).toBe(1);
+    expect(geometry!.frames[0].dividerYs).toHaveLength(1);
+  });
+
+  it("rejects invalid sequence syntax explicitly", () => {
+    return expect(
       parseMermaid({
         mermaid: `
           sequenceDiagram
-          alt Branch
-            A->>B: Message
-          end
+          A->>B: fine
+          this is not valid mermaid
         `,
       }),
-    ).toThrow(/unsupported_construct/);
+    ).rejects.toThrow(/parse_error/);
   });
 
-  it("supports semicolon-separated statements and chained edges", () => {
-    const diagram = parseMermaid({
+  it("supports the full sequence message arrow set", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        sequenceDiagram
+        A->>B: filled
+        A-->>B: dotted filled
+        A->B: open
+        A-->B: dotted open
+        A-xB: cross
+        A--xB: dotted cross
+        A-)B: point
+        A--)B: dotted point
+        A<<->>B: both
+        A<<-->>B: both dotted
+      `,
+    });
+
+    expect(diagram.sequenceMessages.map((message) => message.kind)).toEqual([
+      "solid",
+      "dotted",
+      "solid-open",
+      "dotted-open",
+      "solid-cross",
+      "dotted-cross",
+      "solid-point",
+      "dotted-point",
+      "bidirectional-solid",
+      "bidirectional-dotted",
+    ]);
+  });
+
+  it("supports par, critical, and break frames with actors", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        sequenceDiagram
+        actor U as User
+        par Task one
+          U->>A: One
+        and Task two
+          U->>A: Two
+        end
+        critical Commit
+          A->>B: Commit
+        option Rollback
+          A-xB: Reject
+        end
+        break Abort
+          B-->U: Stopped
+        end
+      `,
+    });
+
+    expect(diagram.sequenceParticipants).toEqual([
+      { id: "U", label: "User", type: "actor" },
+      { id: "A", label: "A" },
+      { id: "B", label: "B" },
+    ]);
+    expect(diagram.sequenceFrames.map((frame) => [frame.kind, frame.label])).toEqual([
+      ["par", "Task one"],
+      ["critical", "Commit"],
+      ["break", "Abort"],
+    ]);
+    expect(diagram.sequenceFrames[0].sections).toEqual([{ order: 1, label: "Task two" }]);
+    expect(diagram.sequenceFrames[1].sections).toEqual([{ order: 3, label: "Rollback" }]);
+    expect(diagram.sequenceMessages.map((message) => message.kind)).toEqual([
+      "solid",
+      "solid",
+      "solid",
+      "solid-cross",
+      "dotted-open",
+    ]);
+  });
+
+  it("supports semicolon-separated statements and chained edges", async () => {
+    const diagram = await parseMermaid({
       sourceName: "chain.mermaid",
       mermaid: `
         flowchart TD
@@ -189,8 +520,8 @@ describe("parseMermaid", () => {
     ]);
   });
 
-  it("supports branch targets with ampersands across chained edges", () => {
-    const diagram = parseMermaid({
+  it("supports branch targets with ampersands across chained edges", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         flowchart TD
         A[Start] --> B{Check} & C(Retry) --> D((Done))
@@ -211,8 +542,8 @@ describe("parseMermaid", () => {
     ]);
   });
 
-  it("supports subgraphs and quoted multiline labels", () => {
-    const diagram = parseMermaid({
+  it("supports subgraphs and quoted multiline labels", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         graph TB
           subgraph "Product Write Path"
@@ -239,8 +570,8 @@ write use case"]
     ]);
   });
 
-  it("supports alternate quoted edge-label syntax", () => {
-    const diagram = parseMermaid({
+  it("supports alternate quoted edge-label syntax", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         graph TD
         A["Shadow mode live
@@ -260,8 +591,8 @@ write use case"]
     ]);
   });
 
-  it("supports dotted directed edges", () => {
-    const diagram = parseMermaid({
+  it("supports dotted directed edges", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         graph TD
         A[Start] -.->|eventual| B[Later]
@@ -278,8 +609,8 @@ write use case"]
     ]);
   });
 
-  it("converts literal escaped newline sequences into multiline labels", () => {
-    const diagram = parseMermaid({
+  it("converts literal escaped newline sequences into multiline labels", async () => {
+    const diagram = await parseMermaid({
       mermaid: String.raw`
         graph TD
         A["Line 1\nLine 2"] --> B["Other\nNode"]
@@ -292,8 +623,8 @@ write use case"]
     ]);
   });
 
-  it("parses a narrow stateDiagram-v2 slice with notes", () => {
-    const diagram = parseMermaid({
+  it("parses a narrow stateDiagram-v2 slice with notes", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         stateDiagram-v2
         [*] --> LegacyOnly : start here
@@ -330,12 +661,16 @@ write use case"]
     ]);
 
     const noteNode = diagram.nodes.find((node) => node.id === "state-note-1");
-    expect(noteNode?.width).toBe(295);
-    expect(noteNode?.height).toBe(64);
+    // Real text measurement sizes the two-line note; font metrics vary a bit
+    // across platforms, so assert a plausible band instead of exact pixels.
+    expect(noteNode?.width!).toBeGreaterThan(150);
+    expect(noteNode?.width!).toBeLessThan(400);
+    expect(noteNode?.height!).toBeGreaterThan(40);
+    expect(noteNode?.height!).toBeLessThan(120);
   });
 
-  it("honors explicit state diagram direction declarations", () => {
-    const diagram = parseMermaid({
+  it("honors explicit state diagram direction declarations", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         stateDiagram-v2
         direction LR
@@ -347,61 +682,411 @@ write use case"]
     expect(diagram.direction).toBe("LR");
   });
 
-  it("parses a gantt slice with quarter headers and month-aligned task starts", () => {
-    const diagram = parseMermaid({
+  it("parses composite states into subgraphs with nested transitions", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        [*] --> Running
+        state Running {
+          [*] --> Warm
+          Warm --> Hot : heat
+        }
+        Running --> [*]
+      `,
+    });
+
+    expect(diagram.subgraphs).toEqual([
+      { id: "Running", label: "Running", nodeIds: ["Running_start", "Warm", "Hot"], parentId: undefined },
+    ]);
+    const nodeIds = diagram.nodes.map((node) => node.id);
+    expect(nodeIds).toContain("Running_start");
+    expect(nodeIds).toContain("Warm");
+    expect(nodeIds).toContain("Hot");
+    expect(diagram.edges.map(stripEdgePoints)).toEqual([
+      { sourceId: "__state_start__", targetId: "Running", label: undefined, kind: "directed" },
+      { sourceId: "Running_start", targetId: "Warm", label: undefined, kind: "directed" },
+      { sourceId: "Warm", targetId: "Hot", label: "heat", kind: "directed" },
+      { sourceId: "Running", targetId: "__state_end__", label: undefined, kind: "directed" },
+    ]);
+    const nestedStart = diagram.nodes.find((node) => node.id === "Running_start");
+    expect(nestedStart).toMatchObject({ shape: "ellipse", label: "" });
+  });
+
+  it("parses fork, join, and choice pseudostates", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        state f <<fork>>
+        state j <<join>>
+        state c <<choice>>
+        [*] --> f
+        f --> a
+        f --> b
+        a --> j
+        b --> j
+        j --> c
+        c --> [*]
+      `,
+    });
+
+    expect(diagram.nodes.find((node) => node.id === "f")).toMatchObject({ shape: "rectangle", fillColor: "#333333" });
+    expect(diagram.nodes.find((node) => node.id === "j")).toMatchObject({ shape: "rectangle", fillColor: "#333333" });
+    expect(diagram.nodes.find((node) => node.id === "c")).toMatchObject({ shape: "rhombus", fillColor: "#333333" });
+    expect(diagram.edges).toHaveLength(7);
+  });
+
+  it("uses state descriptions as labels", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        Slow : A named state
+        [*] --> Slow
+      `,
+    });
+
+    expect(diagram.nodes.find((node) => node.id === "Slow")).toMatchObject({ label: "A named state" });
+  });
+
+  it("extracts mermaid render geometry for state diagrams", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        direction LR
+        [*] --> Idle : boot
+        Idle --> Running : start
+        Running --> [*]
+      `,
+    });
+
+    const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+    const start = byId.get("__state_start__")!;
+    const idle = byId.get("Idle")!;
+    const running = byId.get("Running")!;
+    // LR layout: start left of Idle, Idle left of Running
+    expect(start.x! + start.width!).toBeLessThanOrEqual(idle.x! + 1);
+    expect(idle.x! + idle.width!).toBeLessThanOrEqual(running.x! + 1);
+    for (const edge of diagram.edges) {
+      expect(edge.points?.length ?? 0).toBeGreaterThan(1);
+    }
+  });
+
+  it("parses composite states with internal start/end transitions and fork/join (gallery repro)", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        [*] --> Draft
+        Draft --> Review: submit
+        state Review {
+            [*] --> Screening
+            Screening --> Detailed: pass
+            Screening --> [*]: reject
+        }
+        Review --> Approved: sign off
+        state check <<choice>>
+        Approved --> check
+        check --> Live: metrics ok
+        state Live {
+            state forkState <<fork>>
+            [*] --> forkState
+            forkState --> Serving
+            forkState --> Caching
+            state joinState <<join>>
+            Serving --> joinState
+            Caching --> joinState
+            joinState --> [*]
+        }
+        Live --> [*]: sunset
+        note right of Review : SLA is 2 days
+        classDef hot fill:#f8cecc,stroke:#b85450
+        class Live hot
+      `,
+    });
+
+    expect(diagram.diagramType).toBe("state");
+    expect(diagram.subgraphs.map((subgraph) => subgraph.id).sort()).toEqual(["Live", "Review"]);
+    const review = diagram.subgraphs.find((subgraph) => subgraph.id === "Review")!;
+    expect(review.nodeIds.sort()).toEqual(["Detailed", "Review_end", "Review_start", "Screening"]);
+    expect(diagram.nodes.find((node) => node.id === "check")).toMatchObject({ shape: "rhombus" });
+    expect(diagram.nodes.find((node) => node.id === "forkState")).toMatchObject({ shape: "rectangle" });
+    expect(diagram.nodes.find((node) => node.id === "joinState")).toMatchObject({ shape: "rectangle" });
+    expect(diagram.nodes.find((node) => node.id === "state-note-1")).toMatchObject({ label: "SLA is 2 days" });
+    // Every node is positioned (render geometry or dagre fallback)
+    for (const node of diagram.nodes) {
+      expect(node.x).toBeTypeOf("number");
+      expect(node.y).toBeTypeOf("number");
+    }
+  });
+
+  it("computes fallback layouts for graphs with edges incident to subgraph clusters", () => {
+    // dagre cannot rank edges touching compound (cluster) nodes; the fallback
+    // must skip them instead of crashing ("Cannot set properties of undefined")
+    const layouts = computeFlowchartLayout(
+      [
+        { id: "A", label: "A", shape: "rounded-rectangle" },
+        { id: "Inner", label: "Inner", shape: "rounded-rectangle" },
+        { id: "B", label: "B", shape: "rounded-rectangle" },
+      ],
+      [
+        { sourceId: "A", targetId: "Cluster", kind: "directed" },
+        { sourceId: "Cluster", targetId: "B", kind: "directed" },
+        { sourceId: "A", targetId: "Inner", kind: "directed" },
+      ],
+      [{ id: "Cluster", label: "Cluster", nodeIds: ["Inner"] }],
+      "TD",
+    );
+
+    expect(layouts.nodeLayouts.get("Inner")).toBeDefined();
+    expect(layouts.edgeLayouts.get(0)).toBeUndefined();
+    expect(layouts.edgeLayouts.get(2)).toBeDefined();
+  });
+
+  it("keeps state edge geometry aligned when notes sit between transitions", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        [*] --> A
+        note right of A : a note between transitions
+        A --> B : first
+        B --> C : second
+      `,
+    });
+
+    // The note edge must not shift the polyline of the transitions after it:
+    // every transition's route starts at its own source state's level.
+    const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+    const transitions = diagram.edges.filter((edge) => edge.kind === "directed");
+    expect(transitions.map((edge) => [edge.sourceId, edge.targetId])).toEqual([
+      ["__state_start__", "A"],
+      ["A", "B"],
+      ["B", "C"],
+    ]);
+    for (const edge of transitions) {
+      const source = byId.get(edge.sourceId)!;
+      const target = byId.get(edge.targetId)!;
+      const points = edge.points!;
+      expect(points.length).toBeGreaterThan(1);
+      expect(points[0].y).toBeGreaterThanOrEqual(source.y! + source.height! / 2 - 1);
+      expect(points[0].y).toBeLessThanOrEqual(source.y! + source.height! + 1);
+      const last = points[points.length - 1];
+      expect(last.y).toBeGreaterThanOrEqual(target.y! - 1);
+      expect(last.y).toBeLessThanOrEqual(target.y! + target.height! / 2 + 1);
+    }
+  });
+
+  it("positions composite state contents with ancestor transforms applied", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        stateDiagram-v2
+        [*] --> Draft
+        Draft --> Review
+        state Review {
+          [*] --> Screening
+        }
+        Review --> Live
+        state Live {
+          [*] --> Serving
+        }
+      `,
+    });
+
+    const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+    const draft = byId.get("Draft")!;
+    const screening = byId.get("Screening")!;
+    // Screening is nested inside Review, rendered below Draft: without the
+    // ancestor translate offsets its coordinates would sit near the origin.
+    expect(screening.y!).toBeGreaterThan(draft.y! + draft.height!);
+    // Serving sits in the second composite below Review: only correct when
+    // the ancestor cluster translates are accumulated for both.
+    expect(byId.get("Serving")!.y!).toBeGreaterThan(screening.y!);
+    // Labels are measured (markdown state labels render as foreignObjects
+    // unless htmlLabels are forced off, producing degenerate 16x16 boxes)
+    expect(draft.width!).toBeGreaterThan(30);
+  });
+
+  it("excludes subgraph-endpoint edges and auto-created vertices from flowcharts", async (context) => {
+    const { execFileSync } = await import("node:child_process");
+    try {
+      execFileSync(process.execPath, ["-e", 'require("canvas")'], { stdio: "ignore" });
+    } catch {
+      context.skip();
+    }
+
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart TD
+        subgraph sg [Group]
+          A --> B
+        end
+        sg --> C
+      `,
+    });
+
+    // No duplicate/phantom node for the subgraph id
+    expect(diagram.nodes.filter((node) => node.id === "sg")).toEqual([]);
+    expect(diagram.edges.map(stripEdgePoints)).toEqual([
+      { sourceId: "A", targetId: "B", label: undefined, kind: "directed" },
+    ]);
+    expect(diagram.warnings.some((warning) => warning.startsWith("unsupported_subgraph_edge:"))).toBe(true);
+    // Geometry extraction still succeeded for the remaining nodes
+    for (const node of diagram.nodes) {
+      expect(node.x).toBeTypeOf("number");
+      expect(node.y).toBeTypeOf("number");
+    }
+  });
+
+  it("keeps the start arrowhead on thick bidirectional edges", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        flowchart TD
+        A <==> B
+      `,
+    });
+
+    expect(diagram.edges.map(stripEdgePoints)).toEqual([
+      { sourceId: "A", targetId: "B", label: undefined, kind: "bidirectional-thick-directed" },
+    ]);
+  });
+
+  it("skips frontmatter before diagram header detection", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `---
+title: My Diagram
+config:
+  theme: base
+---
+flowchart LR
+  A --> B
+`,
+    });
+
+    expect(diagram.diagramType).toBe("flowchart");
+    expect(diagram.direction).toBe("LR");
+    expect(diagram.nodes.map(stripLayout)).toEqual([
+      { id: "A", label: "A", shape: "rectangle" },
+      { id: "B", label: "B", shape: "rectangle" },
+    ]);
+  });
+
+  it("skips frontmatter for non-flowchart diagram types too", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `---
+title: Plan
+---
+gantt
+  dateFormat YYYY-MM-DD
+  section S
+  A :a, 2026-01-01, 2d
+`,
+    });
+
+    expect(diagram.diagramType).toBe("gantt");
+  });
+
+  it("rejects gantt quarter date formats explicitly", async () => {
+    await expect(
+      parseMermaid({
+        mermaid: `
+          gantt
+          dateFormat YYYY-QQ
+          section S
+          A :a, 2026-01, 3M
+        `,
+      }),
+    ).rejects.toThrow(/unsupported_construct: gantt dateFormat "YYYY-QQ" uses quarter tokens/);
+  });
+
+  it("parses a gantt slice with month headers and month-aligned task starts", async () => {
+    const diagram = await parseMermaid({
       sourceName: "delivery-plan-gantt.mermaid",
       mermaid: `
         gantt
         title EDA Migration - Multi-Team Swim Lanes
-        dateFormat YYYY-QQ
-        axisFormat %Y Q%q
+        dateFormat YYYY-MM
+        axisFormat %Y-%m
         section api-catalogue
-        EP1 Mutation Contract :p1e1, 2026-01, 1q
-        EP2 Transactional Outbox :p1e2, 2026-02, 1q
+        EP1 Mutation Contract :p1e1, 2026-01, 1M
+        EP2 Transactional Outbox :p1e2, 2026-02, 1M
       `,
     });
 
     expect(diagram.diagramType).toBe("gantt");
     expect(diagram.pageName).toBe("EDA Migration - Multi-Team Swim Lanes");
     expect(diagram.edges).toEqual([]);
-    expect(diagram.warnings).toContain('ignored_gantt_directive: "axisFormat %Y Q%q"');
+    expect(diagram.warnings).toContain('ignored_gantt_directive: "axisFormat %Y-%m"');
 
-    const quarterLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-quarter-"));
-    expect(quarterLabels.map(stripLayout)).toEqual([
-      { id: "gantt-quarter-0", label: "2026 Q1", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-1", label: "2026 Q2", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-period-"));
+    expect(periodLabels.map(stripLayout)).toEqual([
+      { id: "gantt-period-0", label: "2026-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-1", label: "2026-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
     ]);
 
     const firstBar = diagram.nodes.find((node) => node.id === "gantt-task-bar-p1e1");
     const secondBar = diagram.nodes.find((node) => node.id === "gantt-task-bar-p1e2");
     expect(firstBar).toMatchObject({ x: 288, width: 104, height: 22, shape: "rounded-rectangle" });
-    expect(secondBar).toMatchObject({ x: 328, width: 104, height: 22, shape: "rounded-rectangle" });
+    expect(secondBar).toMatchObject({ x: 408, width: 104, height: 22, shape: "rounded-rectangle" });
   });
 
-  it("parses named yearly periods when gantt uses YYYY-QQ input", () => {
-    const diagram = parseMermaid({
+  it("parses datetime gantt input with after references and generated task ids", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         gantt
-        title Seasonal rollout
-        dateFormat YYYY-QQ
-        section Delivery
-        Discovery :d1, 2026-S1, 1q
-        Rollout :d2, 2026-S2, 1q
+        dateFormat YYYY-MM-DD HH:mm
+        section Build
+        Compile :c1, 2026-01-01 08:00, 4h
+        Test :after c1, 2h
+        Deploy :d2, 2026-01-02 00:00, 1d
       `,
     });
 
-    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-quarter-"));
-    expect(periodLabels.map(stripLayout)).toEqual([
-      { id: "gantt-quarter-0", label: "2026 S1", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-1", label: "2026 S2", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-    ]);
+    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-period-"));
+    expect(periodLabels.map((node) => node.label)).toEqual(["2026-01-01", "2026-01-02"]);
 
-    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")).toMatchObject({ x: 288, width: 104 });
+    expect(diagram.nodes.find((node) => node.id === "gantt-section-1")).toMatchObject({ label: "Build" });
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-c1")).toMatchObject({ x: 328, width: 24 });
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-task1")).toBeDefined();
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d2")).toMatchObject({ x: 408, width: 104 });
   });
 
-  it("parses month-based gantt input", () => {
-    const diagram = parseMermaid({
+  it("maps gantt task tags to bar colors", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        gantt
+        dateFormat YYYY-MM-DD
+        section Delivery
+        Done task :done, d1, 2026-01-01, 1d
+        Crit task :crit, c1, 2026-01-02, 1d
+        Active task :active, a1, 2026-01-03, 1d
+      `,
+    });
+
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")).toMatchObject({ fillColor: "#e0e0e0" });
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-c1")).toMatchObject({ fillColor: "#f8cecc" });
+    expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-a1")).toMatchObject({ fillColor: "#d5e8d4" });
+  });
+
+  it("parses month-based gantt input", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         gantt
         title Monthly rollout
@@ -412,19 +1097,19 @@ write use case"]
       `,
     });
 
-    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-quarter-"));
+    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-period-"));
     expect(periodLabels.map(stripLayout)).toEqual([
-      { id: "gantt-quarter-0", label: "2026-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-1", label: "2026-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-2", label: "2026-03", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-0", label: "2026-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-1", label: "2026-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-2", label: "2026-03", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
     ]);
 
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")).toMatchObject({ x: 288, width: 224 });
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d2")).toMatchObject({ x: 528, width: 104 });
   });
 
-  it("parses day-based gantt input", () => {
-    const diagram = parseMermaid({
+  it("parses day-based gantt input", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         gantt
         title Daily rollout
@@ -435,20 +1120,20 @@ write use case"]
       `,
     });
 
-    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-quarter-"));
+    const periodLabels = diagram.nodes.filter((node) => node.id.startsWith("gantt-period-"));
     expect(periodLabels.map(stripLayout)).toEqual([
-      { id: "gantt-quarter-0", label: "2026-01-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-1", label: "2026-01-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-2", label: "2026-01-03", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
-      { id: "gantt-quarter-3", label: "2026-01-04", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-0", label: "2026-01-01", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-1", label: "2026-01-02", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-2", label: "2026-01-03", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
+      { id: "gantt-period-3", label: "2026-01-04", shape: "rectangle", fillColor: "#f5f5f5", strokeColor: "#d0d0d0", fontColor: "#333333" },
     ]);
 
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")).toMatchObject({ x: 288, width: 344 });
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d2")).toMatchObject({ x: 648, width: 104 });
   });
 
-  it("accepts zero-day milestones and month durations in day-based gantt input", () => {
-    const diagram = parseMermaid({
+  it("accepts zero-day milestones and month durations in day-based gantt input", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         gantt
         title Daily rollout with milestone
@@ -470,8 +1155,8 @@ write use case"]
     expect(diagram.nodes.find((node) => node.id === "gantt-task-bar-d1")!.width).toBeGreaterThan(10000);
   });
 
-  it("parses a supported xychart-beta bar chart into explicit layout nodes", () => {
-    const diagram = parseMermaid({
+  it("parses a supported xychart-beta bar chart into explicit layout nodes", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         xychart-beta
         title "Monthly Revenue"
@@ -519,8 +1204,8 @@ write use case"]
     ]);
   });
 
-  it("parses a supported mixed xychart-beta into explicit bar and line primitives", () => {
-    const diagram = parseMermaid({
+  it("parses a supported mixed xychart-beta into explicit bar and line primitives", async () => {
+    const diagram = await parseMermaid({
       sourceName: "sales-trend.mermaid",
       mermaid: `
         xychart-beta
@@ -580,8 +1265,8 @@ write use case"]
     });
   });
 
-  it("supports quoted x-axis category labels containing arrows", () => {
-    const diagram = parseMermaid({
+  it("supports quoted x-axis category labels containing arrows", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         xychart-beta
         x-axis ["A --> B", "B --> C"]
@@ -596,8 +1281,8 @@ write use case"]
     ]);
   });
 
-  it("rejects unsupported xychart-beta header modifiers explicitly", () => {
-    expect(() =>
+  it("rejects unsupported xychart-beta header modifiers explicitly", async () => {
+    await expect(
       parseMermaid({
         mermaid: `
           xychart-beta horizontal
@@ -606,11 +1291,11 @@ write use case"]
           bar [1, 2]
         `,
       }),
-    ).toThrow(/unsupported_construct/);
+    ).rejects.toThrow(/unsupported_construct/);
   });
 
-  it("rejects numeric x-axis ranges for xychart-beta explicitly", () => {
-    expect(() =>
+  it("rejects numeric x-axis ranges for xychart-beta explicitly", async () => {
+    await expect(
       parseMermaid({
         mermaid: `
           xychart-beta
@@ -619,11 +1304,11 @@ write use case"]
           bar [10, 20, 30, 40]
         `,
       }),
-    ).toThrow(/unsupported_construct/);
+    ).rejects.toThrow(/unsupported_construct/);
   });
 
-  it("rejects malformed xychart-beta series lengths explicitly", () => {
-    expect(() =>
+  it("rejects malformed xychart-beta series lengths explicitly", async () => {
+    await expect(
       parseMermaid({
         mermaid: `
           xychart-beta
@@ -632,11 +1317,11 @@ write use case"]
           bar [10, 20]
         `,
       }),
-    ).toThrow(/parse_error/);
+    ).rejects.toThrow(/parse_error/);
   });
 
-  it("parses grouped xychart-beta bar series into separate bar primitives", () => {
-    const diagram = parseMermaid({
+  it("parses grouped xychart-beta bar series into separate bar primitives", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         xychart-beta
         title "Judge Phase Impact"
@@ -660,8 +1345,8 @@ write use case"]
     });
   });
 
-  it("parses line-only xychart-beta charts with multiple series", () => {
-    const diagram = parseMermaid({
+  it("parses line-only xychart-beta charts with multiple series", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         xychart-beta
         x-axis ["10K", "100K", "1M"]
@@ -683,8 +1368,8 @@ write use case"]
     });
   });
 
-  it("rejects xychart-beta diagrams without any bar or line series explicitly", () => {
-    expect(() =>
+  it("rejects xychart-beta diagrams without any bar or line series explicitly", async () => {
+    await expect(
       parseMermaid({
         mermaid: `
           xychart-beta
@@ -692,11 +1377,25 @@ write use case"]
           y-axis 0 --> 100
         `,
       }),
-    ).toThrow(/requires at least one bar or line series/);
+    ).rejects.toThrow(/requires at least one bar or line series/);
   });
 
-  it("parses sequence participants, messages, self-messages, and notes", () => {
-    const diagram = parseMermaid({
+  it("derives the y-axis range from the data when no y-axis directive is present", async () => {
+    const diagram = await parseMermaid({
+      mermaid: `
+        xychart-beta
+        x-axis [Jan, Feb]
+        bar [2, 4]
+      `,
+    });
+
+    expect(diagram.diagramType).toBe("xychart");
+    expect(diagram.nodes.filter((node) => node.id.startsWith("xychart-bar-"))).toHaveLength(2);
+    expect(diagram.nodes.filter((node) => node.id.startsWith("xychart-y-tick-")).length).toBeGreaterThan(0);
+  });
+
+  it("parses sequence participants, messages, self-messages, and notes", async () => {
+    const diagram = await parseMermaid({
       sourceName: "catalogue-publication-sequence.mermaid",
       mermaid: `
         sequenceDiagram
@@ -752,28 +1451,36 @@ write use case"]
     expect(diagram.sequenceFrames).toEqual([]);
   });
 
-  it("keeps semicolons inside sequence note text", () => {
-    const diagram = parseMermaid({
+  it("decodes mermaid entity escapes in sequence text", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         sequenceDiagram
-        participant MCI as Merchant Catalogue Intake
-        participant AC as api-catalogue
-        Note over MCI,AC: Ownership mode determines routing: legacy_batch → EP7 bridge still; api_canonical → this path
+        participant A as api #35;v1
+        Note over A: first #59; second
+        A->>A: a #59; b #38; c
       `,
     });
 
-    expect(diagram.sequenceNotes).toEqual([
-      {
-        order: 0,
-        participantIds: ["MCI", "AC"],
-        label: "Ownership mode determines routing: legacy_batch → EP7 bridge still; api_canonical → this path",
-        placement: "over",
-      },
-    ]);
+    expect(diagram.sequenceParticipants[0].label).toBe("api #v1");
+    expect(diagram.sequenceNotes[0].label).toBe("first ; second");
+    expect(diagram.sequenceMessages[0].label).toBe("a ; b & c");
   });
 
-  it("parses explicit activation and deactivation bars", () => {
-    const diagram = parseMermaid({
+  it("rejects semicolons inside sequence note text like stock mermaid", async () => {
+    await expect(
+      parseMermaid({
+        mermaid: `
+          sequenceDiagram
+          participant MCI as Merchant Catalogue Intake
+          participant AC as api-catalogue
+          Note over MCI,AC: Ownership mode determines routing: legacy_batch → EP7 bridge still; api_canonical → this path
+        `,
+      }),
+    ).rejects.toThrow(/parse_error/);
+  });
+
+  it("parses explicit activation and deactivation bars", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         sequenceDiagram
         participant A as API
@@ -814,13 +1521,13 @@ write use case"]
         sourceId: "B",
         targetId: "A",
         label: "Ack",
-        kind: "dashed",
+        kind: "dotted",
       },
     ]);
   });
 
-  it("rejects deactivate without matching activate", () => {
-    expect(() =>
+  it("rejects deactivate without matching activate", async () => {
+    await expect(
       parseMermaid({
         mermaid: `
           sequenceDiagram
@@ -828,11 +1535,11 @@ write use case"]
           deactivate A
         `,
       }),
-    ).toThrow(/deactivate without matching activate/);
+    ).rejects.toThrow(/deactivate without matching activate|inactivate an inactive/);
   });
 
-  it("parses opt and loop sequence control frames", () => {
-    const diagram = parseMermaid({
+  it("parses opt and loop sequence control frames", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         sequenceDiagram
         participant A as API
@@ -867,8 +1574,8 @@ write use case"]
     ]);
   });
 
-  it("ignores sequence rect wrappers and keeps inner messages", () => {
-    const diagram = parseMermaid({
+  it("ignores sequence rect wrappers and keeps inner messages", async () => {
+    const diagram = await parseMermaid({
       mermaid: `
         sequenceDiagram
         participant A as API
@@ -893,12 +1600,10 @@ write use case"]
         sourceId: "B",
         targetId: "A",
         label: "Ack",
-        kind: "dashed",
+        kind: "dotted",
       },
     ]);
     expect(diagram.sequenceFrames).toEqual([]);
-    expect(diagram.warnings).toEqual([
-      'ignored_sequence_wrapper: "rect rgb(230, 240, 255)"',
-    ]);
+    expect(diagram.warnings).toContain('ignored_sequence_wrapper: "rect rgb(230, 240, 255)"');
   });
 });
