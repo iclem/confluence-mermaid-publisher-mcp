@@ -1,4 +1,4 @@
-# Markdown to Confluence Draw.io MCP Architecture
+# Confluence Mermaid Publisher MCP Architecture
 
 This document describes the implemented runtime shape for Mermaid-to-draw.io conversion and Confluence publication.
 
@@ -23,7 +23,7 @@ Markdown / Mermaid input
   -> Nasdanika-backed draw.io generator
   -> .drawio artifact + preview
   -> publisher
-  -> Confluence page / attachment / draw.io widget
+  -> Confluence page / MacroPack extension / draw.io attachment and widget
   -> MCP tool response
 ```
 
@@ -115,10 +115,11 @@ The MCP layer exposes workflow-oriented tools instead of low-level transport pri
 Current tools include:
 
 - page inspection
-- Markdown page publication from text
-- Markdown page publication from file path
-- single-widget creation from Mermaid
-- in-place widget update from Mermaid
+- Markdown page creation and replacement from text
+- Markdown page creation and replacement from a server-visible file path
+- single-diagram creation from Mermaid
+- in-place diagram update from Mermaid
+- a small plain-text paragraph append operation
 
 That tool surface is intentionally closer to user intent than to Confluence's raw REST operations.
 
@@ -151,7 +152,7 @@ and utility commands:
 
 ## Request flows
 
-### 1. Single Mermaid widget creation
+### 1. Single Mermaid diagram creation
 
 1. MCP client calls `create_confluence_diagram_from_mermaid`
 2. `publisher/src/mcp-app.ts` creates a publisher service
@@ -160,13 +161,14 @@ and utility commands:
 5. the publisher either uploads the draw.io artifacts and injects a draw.io extension, or injects a MacroPack extension directly into page ADF
 6. the tool returns the inspected page state
 
-### 2. Existing widget update
+### 2. Existing diagram update
 
 1. MCP client calls `update_confluence_diagram_from_mermaid`
-2. the publisher finds the existing embedded diagram by draw.io-only selector (`widgetDiagramName`/`custContentId`), or by `localId`, or by `index` within the resolved embedding mode
-3. in draw.io mode, the new `.drawio` and preview replace the old attachments and draw.io custom content is updated
-4. in MacroPack mode, the embedded Mermaid source is rewritten directly in page ADF
-5. page ADF metadata is updated when the backing diagram mode requires it
+2. the publisher requires exactly one selector and finds the existing diagram by draw.io-only selector (`widgetDiagramName`/`custContentId`), by cross-mode `localId`, or by zero-based `index` within the resolved embedding mode
+3. `localId` permits automatic mode detection; a mixed-mode page makes an unqualified `index` ambiguous, and a contradictory mode override is rejected
+4. in draw.io mode, the new `.drawio` and preview replace the old attachments and draw.io custom content is updated
+5. in MacroPack mode, the embedded Mermaid source is rewritten directly in page ADF
+6. page ADF metadata is updated when the backing diagram mode requires it
 
 ### 3. Markdown publication
 
@@ -211,15 +213,15 @@ The current reference backend talks to Confluence directly. The product therefor
 - custom content
 - page ADF mutation
 
-and MacroPack-specific page ADF mutation for embedded Mermaid diagrams.
+plus native SVG attachments and MacroPack-specific page ADF mutation for the other embedding modes.
 
 ### Preview boundary
 
-The publisher currently generates a **placeholder PNG preview** for draw.io widgets. This is enough for the widget contract and page publication flow, but it is not yet a full rendered preview of the generated diagram.
+The publisher attempts to render a real PNG preview for draw.io widgets. If rendering is unavailable or fails, it falls back to the placeholder required by the widget contract so publication can continue.
 
 ### Supported Markdown boundary
 
-The Markdown publisher currently supports:
+The Markdown publisher uses Atlassian's transformers and supports:
 
 - headings
 - paragraphs
@@ -230,6 +232,10 @@ The Markdown publisher currently supports:
 - rules
 - fenced code blocks
 - fenced Mermaid blocks
+- inline links, emphasis, strikethrough, and code marks
+- nested lists and inline formatting inside block containers
+
+Raw HTML remains literal text. Local images are not uploaded automatically, and relative document links are not mapped to Confluence pages.
 
 ### Repository boundary
 
