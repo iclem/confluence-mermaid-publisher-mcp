@@ -79,6 +79,8 @@ describe("mcp app", () => {
     const svgTools = result?.tools.filter((tool) => /^(create|update)_confluence_(diagram_from_mermaid|page_from_markdown(_file)?)$/.test(tool.name));
     expect(svgTools).toHaveLength(6);
     for (const tool of svgTools ?? []) {
+      expect(tool.inputSchema?.properties?.svgAccent?.enum).toEqual(["default", "blue", "green", "yellow", "pink", "orange", "purple", "white"]);
+      expect(tool.inputSchema?.properties?.svgAccent?.description).toContain("Explicit Mermaid colors");
       expect(tool.inputSchema?.properties?.svgStyle?.enum).toEqual(["codex", "github"]);
       expect(tool.inputSchema?.properties?.svgStyle?.description).toContain("Omit for codex");
       expect(tool.inputSchema?.properties?.svgLayout?.enum).toEqual(["elk", "agentic"]);
@@ -104,6 +106,33 @@ describe("mcp app", () => {
 
 describe("Markdown MCP width forwarding", () => {
   it.each([
+    ["create_confluence_diagram_from_mermaid", "createDiagramFromMermaid"],
+    ["update_confluence_diagram_from_mermaid", "updateDiagramFromMermaid"],
+  ] as const)("forwards the selected accent through %s", async (name, method) => {
+    vi.stubEnv("CONFLUENCE_BASE_URL", "https://example.atlassian.net/wiki");
+    vi.stubEnv("CONFLUENCE_BEARER_TOKEN", "test");
+    const publish = vi.spyOn(DrawioPublisherService.prototype, method).mockResolvedValue({} as never);
+    const server = createMcpServer();
+    const client = new Client({ name: "test", version: "1" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    try {
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+      const args = { pageId: "page", mermaid: "flowchart TD\nA-->B", embeddingMode: "svg", svgAccent: "purple" };
+      const result = await client.callTool({ name, arguments: args });
+      expect(result.isError).not.toBe(true);
+      expect(publish).toHaveBeenCalledWith(expect.objectContaining(args));
+      const invalid = await client.callTool({ name, arguments: { ...args, svgAccent: "#ff0000" } });
+      expect(invalid.isError).toBe(true);
+      expect(publish).toHaveBeenCalledTimes(1);
+    } finally {
+      await client.close();
+      await server.close();
+      vi.restoreAllMocks();
+      vi.unstubAllEnvs();
+    }
+  });
+  it.each([
     ["create_confluence_page_from_markdown", "createPageFromMarkdown", { title: "New", spaceId: "space", markdown: "Text" }],
     ["create_confluence_page_from_markdown_file", "createPageFromMarkdownFile", { title: "New", spaceId: "space", markdownFile: "/workspace/source.md" }],
     ["update_confluence_page_from_markdown", "updatePageFromMarkdown", { pageId: "page", markdown: "Text" }],
@@ -119,9 +148,9 @@ describe("Markdown MCP width forwarding", () => {
     try {
       await server.connect(serverTransport);
       await client.connect(clientTransport);
-      const result = await client.callTool({ name, arguments: { ...args, pageWidth: "default", embeddingMode: "svg", svgStyle: "github", svgLayout: "agentic" } });
+      const result = await client.callTool({ name, arguments: { ...args, pageWidth: "default", embeddingMode: "svg", svgStyle: "github", svgLayout: "agentic", svgAccent: "green" } });
       expect(result.isError).not.toBe(true);
-      expect(publish).toHaveBeenCalledWith(expect.objectContaining({ ...args, pageWidth: "default", embeddingMode: "svg", svgStyle: "github", svgLayout: "agentic" }));
+      expect(publish).toHaveBeenCalledWith(expect.objectContaining({ ...args, pageWidth: "default", embeddingMode: "svg", svgStyle: "github", svgLayout: "agentic", svgAccent: "green" }));
     } finally {
       await client.close();
       await server.close();

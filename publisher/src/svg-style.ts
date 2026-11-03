@@ -1,4 +1,5 @@
 import type { RenderOptions, StyleSpec } from "agentic-mermaid";
+import { svgAccentColors, type SvgAccent } from "./svg-accent.js";
 
 export const SVG_STYLES = ["codex", "github"] as const;
 export type SvgStyle = typeof SVG_STYLES[number];
@@ -13,13 +14,17 @@ export function parseSvgStyle(value?: string): SvgStyle {
 }
 
 /** Keep geometry identical across palettes while selecting their paints. */
-export function svgRenderOptions(style: SvgStyle, dark: boolean): RenderOptions {
-  if (style === "github") return { security: "strict", style: dark ? "github-dark" : "github-light" };
+export function svgRenderOptions(style: SvgStyle, dark: boolean, accent: SvgAccent = "default"): RenderOptions {
+  const accentColors = svgAccentColors(accent, dark);
+  if (style === "github") {
+    const palette = dark ? "github-dark" : "github-light";
+    return { security: "strict", style: accentColors ? [palette, { colors: accentColors }] : palette };
+  }
   const colors = dark
     ? { bg: "#0d1117", fg: "#78a9f5", muted: "#78a9f5", surface: "#071b38", border: "#273446", line: "#7b8188", accent: "#7b8188" }
     : { bg: "#ffffff", fg: "#0969da", muted: "#0969da", surface: "#eff6ff", border: "#c8d8eb", line: "#66717e", accent: "#66717e" };
   const look: StyleSpec = {
-    colors,
+    colors: { ...colors, ...accentColors },
     font: "'Share Tech Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace",
     roles: {
       node: { cornerRadius: 16, fontSize: 14, fontWeight: 500, paddingX: 24, paddingY: 18 },

@@ -1,3 +1,4 @@
+import { parseSvgAccent, type SvgAccent } from "./svg-accent.js";
 import { DOMParser, XMLSerializer } from "@xmldom/xmldom";
 import { renderMermaidSVG } from "agentic-mermaid/agent";
 
@@ -18,13 +19,14 @@ export interface RenderedSvg {
 }
 
 /** Render unchanged Mermaid with a light fallback and browser-selected dark palette. */
-export async function renderAdaptiveSvg(mermaid: string, svgStyle?: SvgStyle, svgLayout?: SvgLayout): Promise<RenderedSvg> {
+export async function renderAdaptiveSvg(mermaid: string, svgStyle?: SvgStyle, svgLayout?: SvgLayout, svgAccent?: SvgAccent): Promise<RenderedSvg> {
   const style = parseSvgStyle(svgStyle);
   const layout = parseSvgLayout(svgLayout);
+  const accent = parseSvgAccent(svgAccent);
   const parse = (dark: boolean) => {
     const document = new DOMParser({
       onError: (_level, message) => { throw new Error(message); },
-    }).parseFromString(renderMermaidSVG(mermaid, svgRenderOptions(style, dark)), "image/svg+xml");
+    }).parseFromString(renderMermaidSVG(mermaid, svgRenderOptions(style, dark, accent)), "image/svg+xml");
     if (style === "codex" && layout === "elk") prepareCodexFlowchart(document, mermaid);
     if (style === "codex") {
       // Edge-label boxes have no public style role in Agentic Mermaid.
@@ -89,7 +91,7 @@ export async function renderAdaptiveSvg(mermaid: string, svgStyle?: SvgStyle, sv
   }
   const root = light.documentElement;
   if (!root) throw new Error("Renderer returned an empty SVG");
-  if (layout === "elk") await applyElkLayout(light, mermaid, svgRenderOptions(style, false), style === "codex" ? 8 : 0, style === "codex" ? 8 : undefined);
+  if (layout === "elk") await applyElkLayout(light, mermaid, svgRenderOptions(style, false, accent), style === "codex" ? 8 : 0, style === "codex" ? 8 : undefined);
   root.setAttribute("data-layout", layout);
   const viewBox = root.getAttribute("viewBox")?.trim().split(/\s+/).map(Number);
   if (!viewBox || viewBox.length !== 4 || !viewBox.every(Number.isFinite) || viewBox[2]! <= 0 || viewBox[3]! <= 0) {

@@ -1323,6 +1323,18 @@ describe("Markdown conversion and page width", () => {
 });
 
 describe("SVG style publication", () => {
+  it("rejects invalid accents before creating pages, updating or uploading", async () => {
+    const { client, pageId } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never);
+    const svgAccent = "#ff0000" as never;
+    await expect(service.createPageFromMarkdown({ title: "Bad", spaceId: "space", markdown: "Text", svgAccent })).rejects.toThrow("Unsupported SVG accent");
+    await expect(service.updatePageFromMarkdown({ pageId, markdown: "Text", svgAccent })).rejects.toThrow("Unsupported SVG accent");
+    await expect(service.createDiagramFromMermaid({ pageId, mermaid: "flowchart TD\nA-->B", svgAccent })).rejects.toThrow("Unsupported SVG accent");
+    await expect(service.updateDiagramFromMermaid({ pageId, mermaid: "flowchart TD\nA-->B", diagram: { index: 0 }, svgAccent })).rejects.toThrow("Unsupported SVG accent");
+    expect(client.createdPages).toHaveLength(0);
+    expect(client.uploadedFiles).toHaveLength(0);
+    expect(client.pageUpdateMessages).toHaveLength(0);
+  });
   it("rejects invalid layouts before creating pages, updating or uploading", async () => {
     const { client, pageId } = createExistingWidgetFixture();
     const service = new DrawioPublisherService(client as never);
@@ -1338,11 +1350,13 @@ describe("SVG style publication", () => {
   it.each([undefined, "codex", "github"] as const)("renders selected style through diagram create/update (%s)", async (svgStyle) => {
     const { client, pageId } = createExistingWidgetFixture();
     const service = new DrawioPublisherService(client as never);
-    const result = await service.createDiagramFromMermaid({ pageId, mermaid: "flowchart TD\nA-->B", embeddingMode: "svg", svgStyle });
+    const result = await service.createDiagramFromMermaid({ pageId, mermaid: "flowchart TD\nA-->B", embeddingMode: "svg", svgStyle, svgAccent: "purple" });
     const localId = result.embeddedDiagrams.find((item) => item.embeddingMode === "svg")!.localId;
-    await service.updateDiagramFromMermaid({ pageId, mermaid: "flowchart TD\nA-->Changed", diagram: { localId }, svgStyle });
+    await service.updateDiagramFromMermaid({ pageId, mermaid: "flowchart TD\nA-->Changed", diagram: { localId }, svgStyle, svgAccent: "purple" });
     expect(client.uploadedFiles).toHaveLength(2);
     for (const file of client.uploadedFiles) {
+      expect(file.body).toContain("--fg:#7e22ce");
+      expect(file.body).toContain("--fg:#c084fc");
       expect(file.body).toContain(svgStyle === "github" ? "--font:Inter" : "monospace");
     }
     expect(client.uploadedFiles[1]!.body).toContain("Changed");
@@ -1356,19 +1370,19 @@ describe("SVG style publication", () => {
     const markdownFile = join(directory, "source.md");
     writeFileSync(markdownFile, markdown);
     try {
-      const options = { title: "Styled", spaceId: "space", embeddingMode: "svg" as const, svgStyle: "github" as const, svgLayout: "agentic" as const };
+      const options = { title: "Styled", spaceId: "space", embeddingMode: "svg" as const, svgStyle: "github" as const, svgLayout: "agentic" as const, svgAccent: "green" as const };
       const result = fromFile
         ? await service.createPageFromMarkdownFile({ ...options, markdownFile })
         : await service.createPageFromMarkdown({ ...options, markdown });
       expect(result).toMatchObject({ embeddedBlocks: 2, fallbackBlocks: 0 });
-      expect(client.uploadedFiles.every((file) => file.body.includes("--font:Inter") && file.body.includes("data-layout=\"agentic\""))).toBe(true);
-      const update = { pageId: result.page.id, embeddingMode: "svg" as const, svgStyle: "codex" as const };
+      expect(client.uploadedFiles.every((file) => file.body.includes("--fg:#047857") && file.body.includes("--font:Inter") && file.body.includes("data-layout=\"agentic\""))).toBe(true);
+      const update = { pageId: result.page.id, embeddingMode: "svg" as const, svgStyle: "codex" as const, svgAccent: "purple" as const };
       const updated = fromFile
         ? await service.updatePageFromMarkdownFile({ ...update, markdownFile })
         : await service.updatePageFromMarkdown({ ...update, markdown });
       expect(updated).toMatchObject({ embeddedBlocks: 2, fallbackBlocks: 0 });
       expect(client.uploadedFiles).toHaveLength(4);
-      expect(client.uploadedFiles.slice(2).every((file) => file.body.includes("monospace"))).toBe(true);
+      expect(client.uploadedFiles.slice(2).every((file) => file.body.includes("monospace") && file.body.includes("--fg:#7e22ce"))).toBe(true);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
