@@ -1,3 +1,5 @@
+import { SVG_LAYOUTS, SVG_LAYOUT_GUIDANCE } from "./svg-layout.js";
+import { SVG_STYLES, SVG_STYLE_GUIDANCE } from "./svg-style.js";
 import { getConfiguredPageWidth, PAGE_WIDTHS } from "./page-width.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -85,6 +87,8 @@ export function createMcpServer(): McpServer {
   const embeddingModeSchema = z.enum(EMBEDDING_MODES).optional().describe(
     `Optional Mermaid embedding mode override. ${embeddingModeGuidance}`,
   );
+  const svgLayoutSchema = z.enum(SVG_LAYOUTS).optional().describe(SVG_LAYOUT_GUIDANCE);
+  const svgStyleSchema = z.enum(SVG_STYLES).optional().describe(SVG_STYLE_GUIDANCE);
   const pageWidthSchema = z.enum(PAGE_WIDTHS).optional().describe("Page width: full-width or default (centered column). Overrides CONFLUENCE_DEFAULT_PAGE_WIDTH. New pages default to full-width; updates preserve width when neither is set.");
   const defaultEmbeddingModeToolGuidance =
     "Omit embeddingMode to use the server default. Only set it when the user explicitly requests a non-default mode.";
@@ -111,8 +115,10 @@ export function createMcpServer(): McpServer {
       spaceKey: z.string().optional().describe("Optional Confluence space key for the page."),
       anchorText: z.string().optional().describe("Optional text anchor. The widget is inserted immediately after the first matching text inside a paragraph."),
       embeddingMode: embeddingModeSchema,
+      svgStyle: svgStyleSchema,
+      svgLayout: svgLayoutSchema,
     },
-    async ({ pageId, diagramName, mermaid, spaceKey, anchorText, embeddingMode }) => {
+    async ({ pageId, diagramName, mermaid, spaceKey, anchorText, embeddingMode, svgStyle, svgLayout }) => {
       const service = createPublisherService();
       return textResult(
         await service.createDiagramFromMermaid({
@@ -122,6 +128,8 @@ export function createMcpServer(): McpServer {
           spaceKey,
           anchorText,
           embeddingMode,
+          svgStyle,
+          svgLayout,
         }),
       );
     },
@@ -152,9 +160,11 @@ export function createMcpServer(): McpServer {
       siblingPageId: z.string().optional().describe("Optional existing page ID whose parent should be reused for the new sibling page."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
       embeddingMode: embeddingModeSchema,
+      svgStyle: svgStyleSchema,
+      svgLayout: svgLayoutSchema,
       pageWidth: pageWidthSchema,
     },
-    async ({ title, markdown, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode, pageWidth }) => {
+    async ({ title, markdown, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode, svgStyle, svgLayout, pageWidth }) => {
       const service = createPublisherService();
       return textResult(
         await service.createPageFromMarkdown({
@@ -166,6 +176,8 @@ export function createMcpServer(): McpServer {
           siblingPageId,
           spaceKey,
           embeddingMode,
+          svgStyle,
+          svgLayout,
           pageWidth,
         }),
       );
@@ -184,9 +196,11 @@ export function createMcpServer(): McpServer {
       siblingPageId: z.string().optional().describe("Optional existing page ID whose parent should be reused for the new sibling page."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
       embeddingMode: embeddingModeSchema,
+      svgStyle: svgStyleSchema,
+      svgLayout: svgLayoutSchema,
       pageWidth: pageWidthSchema,
     },
-    async ({ title, markdownFile, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode, pageWidth }) => {
+    async ({ title, markdownFile, sourceName, spaceId, parentId, siblingPageId, spaceKey, embeddingMode, svgStyle, svgLayout, pageWidth }) => {
       const service = createPublisherService();
       return textResult(await withMarkdownFileHint(
         markdownFile,
@@ -199,6 +213,8 @@ export function createMcpServer(): McpServer {
           siblingPageId,
           spaceKey,
           embeddingMode,
+          svgStyle,
+          svgLayout,
           pageWidth,
         }),
       ));
@@ -214,9 +230,11 @@ export function createMcpServer(): McpServer {
       sourceName: z.string().optional().describe("Optional source file name used in publication metadata."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
       embeddingMode: embeddingModeSchema,
+      svgStyle: svgStyleSchema,
+      svgLayout: svgLayoutSchema,
       pageWidth: pageWidthSchema,
     },
-    async ({ pageId, markdown, sourceName, spaceKey, embeddingMode, pageWidth }) => {
+    async ({ pageId, markdown, sourceName, spaceKey, embeddingMode, svgStyle, svgLayout, pageWidth }) => {
       const service = createPublisherService();
       return textResult(
         await service.updatePageFromMarkdown({
@@ -225,6 +243,8 @@ export function createMcpServer(): McpServer {
           sourceName,
           spaceKey,
           embeddingMode,
+          svgStyle,
+          svgLayout,
           pageWidth,
         }),
       );
@@ -240,9 +260,11 @@ export function createMcpServer(): McpServer {
       sourceName: z.string().optional().describe("Optional source file name used in publication metadata."),
       spaceKey: z.string().optional().describe("Optional Confluence space key for diagram macro metadata."),
       embeddingMode: embeddingModeSchema,
+      svgStyle: svgStyleSchema,
+      svgLayout: svgLayoutSchema,
       pageWidth: pageWidthSchema,
     },
-    async ({ pageId, markdownFile, sourceName, spaceKey, embeddingMode, pageWidth }) => {
+    async ({ pageId, markdownFile, sourceName, spaceKey, embeddingMode, svgStyle, svgLayout, pageWidth }) => {
       const service = createPublisherService();
       return textResult(await withMarkdownFileHint(
         markdownFile,
@@ -252,6 +274,8 @@ export function createMcpServer(): McpServer {
           sourceName,
           spaceKey,
           embeddingMode,
+          svgStyle,
+          svgLayout,
           pageWidth,
         }),
       ));
@@ -270,8 +294,10 @@ export function createMcpServer(): McpServer {
       localId: z.string().optional().describe("Existing embedded diagram local ID selector (stable attachment ID for SVG). Use only one selector."),
       index: z.number().int().nonnegative().optional().describe("Existing embedded diagram index selector. Use only one selector. On mixed pages, also provide embeddingMode or use localId."),
       embeddingMode: embeddingModeSchema,
+      svgStyle: svgStyleSchema,
+      svgLayout: svgLayoutSchema,
     },
-    async ({ pageId, mermaid, diagramName, widgetDiagramName, custContentId, localId, index, embeddingMode }) => {
+    async ({ pageId, mermaid, diagramName, widgetDiagramName, custContentId, localId, index, embeddingMode, svgStyle, svgLayout }) => {
       const service = createPublisherService();
       return textResult(
         await service.updateDiagramFromMermaid({
@@ -279,6 +305,8 @@ export function createMcpServer(): McpServer {
           mermaid,
           diagramName,
           embeddingMode,
+          svgStyle,
+          svgLayout,
           diagram: {
             diagramName: widgetDiagramName,
             custContentId,

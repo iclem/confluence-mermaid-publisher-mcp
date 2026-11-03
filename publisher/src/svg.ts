@@ -2,6 +2,10 @@ import { DOMParser, XMLSerializer } from "@xmldom/xmldom";
 import { renderMermaidSVG } from "agentic-mermaid/agent";
 
 import type { ConfluenceAttachment, DiagramTarget, JsonObject } from "./types.js";
+import { parseSvgStyle, svgRenderOptions, type SvgStyle } from "./svg-style.js";
+import { parseSvgLayout, type SvgLayout } from "./svg-layout.js";
+import { applyElkLayout } from "./svg-elk.js";
+import { prepareCodexFlowchart } from "./svg-codex.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ALT_PREFIX = "Mermaid diagram: ";
@@ -14,12 +18,32 @@ export interface RenderedSvg {
 }
 
 /** Render unchanged Mermaid with a light fallback and browser-selected dark palette. */
-export function renderAdaptiveSvg(mermaid: string): RenderedSvg {
-  const parse = (style: string) => new DOMParser({
-    onError: (_level, message) => { throw new Error(message); },
-  }).parseFromString(renderMermaidSVG(mermaid, { security: "strict", style }), "image/svg+xml");
-  const light = parse("github-light");
-  const dark = parse("github-dark");
+export async function renderAdaptiveSvg(mermaid: string, svgStyle?: SvgStyle, svgLayout?: SvgLayout): Promise<RenderedSvg> {
+  const style = parseSvgStyle(svgStyle);
+  const layout = parseSvgLayout(svgLayout);
+  const parse = (dark: boolean) => {
+    const document = new DOMParser({
+      onError: (_level, message) => { throw new Error(message); },
+    }).parseFromString(renderMermaidSVG(mermaid, svgRenderOptions(style, dark)), "image/svg+xml");
+    if (style === "codex" && layout === "elk") prepareCodexFlowchart(document, mermaid);
+    if (style === "codex") {
+      // Edge-label boxes have no public style role in Agentic Mermaid 0.4.1.
+      for (const group of Array.from(document.getElementsByTagName("g"))) {
+        if (group.getAttribute("class") !== "edge-label") continue;
+        const text = group.getElementsByTagName("text")[0];
+        for (const rect of Array.from(group.getElementsByTagName("rect"))) {
+          rect.setAttribute("rx", "12");
+          rect.setAttribute("ry", "12");
+          if (rect.getAttribute("class") !== "edge-label-halo") {
+            rect.setAttribute("stroke", text?.getAttribute("fill") || (dark ? "#78a9f5" : "#0969da"));
+          }
+        }
+      }
+    }
+    return document;
+  };
+  const light = parse(false);
+  const dark = parse(true);
   const lightNodes = Array.from(light.getElementsByTagName("*"));
   const darkNodes = Array.from(dark.getElementsByTagName("*"));
   const rules: string[] = [];
@@ -53,6 +77,8 @@ export function renderAdaptiveSvg(mermaid: string): RenderedSvg {
   }
   const root = light.documentElement;
   if (!root) throw new Error("Renderer returned an empty SVG");
+  if (layout === "elk") await applyElkLayout(light, mermaid, svgRenderOptions(style, false), style === "codex" ? 8 : 0, style === "codex" ? 8 : undefined);
+  root.setAttribute("data-layout", layout);
   const viewBox = root.getAttribute("viewBox")?.trim().split(/\s+/).map(Number);
   if (!viewBox || viewBox.length !== 4 || !viewBox.every(Number.isFinite) || viewBox[2]! <= 0 || viewBox[3]! <= 0) {
     throw new Error("Renderer returned invalid SVG dimensions");
