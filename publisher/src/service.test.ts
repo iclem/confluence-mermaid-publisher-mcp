@@ -1323,6 +1323,18 @@ describe("Markdown conversion and page width", () => {
 });
 
 describe("SVG style publication", () => {
+  it("rejects invalid layouts before creating pages, updating or uploading", async () => {
+    const { client, pageId } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never);
+    const svgLayout = "missing" as never;
+    await expect(service.createPageFromMarkdown({ title: "Bad", spaceId: "space", markdown: "Text", embeddingMode: "svg", svgLayout })).rejects.toThrow("Unsupported SVG layout");
+    await expect(service.updatePageFromMarkdown({ pageId, markdown: "Text", embeddingMode: "svg", svgLayout })).rejects.toThrow("Unsupported SVG layout");
+    await expect(service.createDiagramFromMermaid({ pageId, mermaid: "flowchart TD\nA-->B", embeddingMode: "svg", svgLayout })).rejects.toThrow("Unsupported SVG layout");
+    await expect(service.updateDiagramFromMermaid({ pageId, mermaid: "flowchart TD\nA-->B", diagram: { index: 0 }, svgLayout })).rejects.toThrow("Unsupported SVG layout");
+    expect(client.createdPages).toHaveLength(0);
+    expect(client.uploadedFiles).toHaveLength(0);
+    expect(client.pageUpdateMessages).toHaveLength(0);
+  });
   it.each([undefined, "codex", "github"] as const)("renders selected style through diagram create/update (%s)", async (svgStyle) => {
     const { client, pageId } = createExistingWidgetFixture();
     const service = new DrawioPublisherService(client as never);
@@ -1344,12 +1356,12 @@ describe("SVG style publication", () => {
     const markdownFile = join(directory, "source.md");
     writeFileSync(markdownFile, markdown);
     try {
-      const options = { title: "Styled", spaceId: "space", embeddingMode: "svg" as const, svgStyle: "github" as const };
+      const options = { title: "Styled", spaceId: "space", embeddingMode: "svg" as const, svgStyle: "github" as const, svgLayout: "agentic" as const };
       const result = fromFile
         ? await service.createPageFromMarkdownFile({ ...options, markdownFile })
         : await service.createPageFromMarkdown({ ...options, markdown });
       expect(result).toMatchObject({ embeddedBlocks: 2, fallbackBlocks: 0 });
-      expect(client.uploadedFiles.every((file) => file.body.includes("--font:Inter"))).toBe(true);
+      expect(client.uploadedFiles.every((file) => file.body.includes("--font:Inter") && file.body.includes("data-layout=\"agentic\""))).toBe(true);
       const update = { pageId: result.page.id, embeddingMode: "svg" as const, svgStyle: "codex" as const };
       const updated = fromFile
         ? await service.updatePageFromMarkdownFile({ ...update, markdownFile })

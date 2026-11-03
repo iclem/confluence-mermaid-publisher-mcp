@@ -394,6 +394,9 @@ Use `embeddingMode: "svg"` when you want a native image attachment instead of an
 
 The six diagram and Markdown MCP tools expose `svgStyle: "codex" | "github"`. Omit it for the default Codex-inspired look: monospace text, blue accents, rounded nodes, and outlined edge labels. Set `svgStyle: "github"` for the original Inter typography and GitHub palettes. Both adapt to light/dark mode and preserve explicit Mermaid colors. Font availability determines the local monospace face; no external font downloads are required. Style selection affects SVG mode only and applies to every Mermaid block in a Markdown request, including file-based tools. On updates, omission selects `codex` rather than preserving the old style; pass `github` explicitly to keep that appearance.
 
+SVG layout is independently selectable with `svgLayout: "elk" | "agentic"`. Omission selects `elk` on creation and updates: direct ELK layered placement with orthogonal flowchart routing. Set `agentic` to retain the previous placement and routing adjustments. Other diagram families keep their native layouts. For GitHub appearance with ELK placement, use `{"embeddingMode": "svg", "svgStyle": "github", "svgLayout": "elk"}`. Both layouts run without a browser and reuse the ELK package already included by Agentic Mermaid; no Chromium installation or Docker image change is needed. Direct ELK improves layout similarity but does not promise pixel-identical Codex output.
+
+
 Inspection reports SVG attachments with `embeddingMode: "svg"`, dimensions, a filename, and a stable attachment ID as `localId`. Prefer that `localId` for updates. Updating refreshes the attachment version and page media reference; changing the mode or filename during the update is rejected.
 
 Markdown publishing adds an expandable Mermaid source block below an SVG. Unsupported blocks retain their source instead of aborting the whole document. Single-diagram SVG rendering failures return an error.

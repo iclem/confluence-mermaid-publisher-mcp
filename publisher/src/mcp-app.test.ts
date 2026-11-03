@@ -81,6 +81,8 @@ describe("mcp app", () => {
     for (const tool of svgTools ?? []) {
       expect(tool.inputSchema?.properties?.svgStyle?.enum).toEqual(["codex", "github"]);
       expect(tool.inputSchema?.properties?.svgStyle?.description).toContain("Omit for codex");
+      expect(tool.inputSchema?.properties?.svgLayout?.enum).toEqual(["elk", "agentic"]);
+      expect(tool.inputSchema?.properties?.svgLayout?.description).toContain("Omit for elk");
     }
     expect(createDiagramTool?.description).toContain("Omit embeddingMode to use the server default.");
     expect(createDiagramTool?.inputSchema?.properties?.embeddingMode).toBeDefined();
@@ -117,9 +119,9 @@ describe("Markdown MCP width forwarding", () => {
     try {
       await server.connect(serverTransport);
       await client.connect(clientTransport);
-      const result = await client.callTool({ name, arguments: { ...args, pageWidth: "default", embeddingMode: "svg", svgStyle: "github" } });
+      const result = await client.callTool({ name, arguments: { ...args, pageWidth: "default", embeddingMode: "svg", svgStyle: "github", svgLayout: "agentic" } });
       expect(result.isError).not.toBe(true);
-      expect(publish).toHaveBeenCalledWith(expect.objectContaining({ ...args, pageWidth: "default", embeddingMode: "svg", svgStyle: "github" }));
+      expect(publish).toHaveBeenCalledWith(expect.objectContaining({ ...args, pageWidth: "default", embeddingMode: "svg", svgStyle: "github", svgLayout: "agentic" }));
     } finally {
       await client.close();
       await server.close();

@@ -3,6 +3,8 @@ import { renderMermaidSVG } from "agentic-mermaid/agent";
 
 import type { ConfluenceAttachment, DiagramTarget, JsonObject } from "./types.js";
 import { parseSvgStyle, svgRenderOptions, type SvgStyle } from "./svg-style.js";
+import { parseSvgLayout, type SvgLayout } from "./svg-layout.js";
+import { applyElkLayout } from "./svg-elk.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ALT_PREFIX = "Mermaid diagram: ";
@@ -15,8 +17,9 @@ export interface RenderedSvg {
 }
 
 /** Render unchanged Mermaid with a light fallback and browser-selected dark palette. */
-export function renderAdaptiveSvg(mermaid: string, svgStyle?: SvgStyle): RenderedSvg {
+export async function renderAdaptiveSvg(mermaid: string, svgStyle?: SvgStyle, svgLayout?: SvgLayout): Promise<RenderedSvg> {
   const style = parseSvgStyle(svgStyle);
+  const layout = parseSvgLayout(svgLayout);
   const parse = (dark: boolean) => {
     const document = new DOMParser({
       onError: (_level, message) => { throw new Error(message); },
@@ -72,6 +75,8 @@ export function renderAdaptiveSvg(mermaid: string, svgStyle?: SvgStyle): Rendere
   }
   const root = light.documentElement;
   if (!root) throw new Error("Renderer returned an empty SVG");
+    if (layout === "elk") await applyElkLayout(light, mermaid, svgRenderOptions(style, false), style === "codex" ? 8 : 0);
+    root.setAttribute("data-layout", layout);
   const viewBox = root.getAttribute("viewBox")?.trim().split(/\s+/).map(Number);
   if (!viewBox || viewBox.length !== 4 || !viewBox.every(Number.isFinite) || viewBox[2]! <= 0 || viewBox[3]! <= 0) {
     throw new Error("Renderer returned invalid SVG dimensions");
