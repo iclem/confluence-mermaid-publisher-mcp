@@ -1200,11 +1200,11 @@ describe("DrawioPublisherService", () => {
 });
 
 describe("SVG publishing", () => {
-  it("creates and updates native SVG without Java or draw.io custom content", async () => {
+  it("creates native SVG by default and updates it without Java or draw.io custom content", async () => {
     const { client, pageId } = createExistingWidgetFixture();
     const converter = vi.fn();
     const service = new DrawioPublisherService(client as never, converter);
-    const created = await service.createDiagramFromMermaid({ pageId, mermaid: "flowchart LR\nA-->B", diagramName: "flow.svg", embeddingMode: "svg" });
+    const created = await service.createDiagramFromMermaid({ pageId, mermaid: "flowchart LR\nA-->B", diagramName: "flow.svg" });
     const svg = created.embeddedDiagrams.find((diagram) => diagram.embeddingMode === "svg")!;
     expect(svg).toMatchObject({ diagramName: "flow.svg", localId: expect.any(String) });
     const originalFile = created.attachments.find((a) => a.title === "flow.svg")!.fileId;
@@ -1234,7 +1234,7 @@ describe("SVG publishing", () => {
     const converter = vi.fn();
     const service = new DrawioPublisherService(client as never, converter);
     const markdown = "# Gallery\n\n```mermaid\ngantt\n dateFormat YYYY-MM-DD\n section Work\n Test :2026-09-01, 2d\n```\n\n```mermaid\ninvalid diagram\n```";
-    const first = await service.updatePageFromMarkdown({ pageId, markdown, embeddingMode: "svg" });
+    const first = await service.updatePageFromMarkdown({ pageId, markdown });
     expect(first).toMatchObject({ embeddingMode: "svg", mermaidBlocks: 2, embeddedBlocks: 1, fallbackBlocks: 1 });
     expect(JSON.stringify(getStoredPageAdf(client))).toContain("invalid diagram");
     expect(JSON.stringify(getStoredPageAdf(client))).toContain("Original Mermaid source");

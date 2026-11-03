@@ -1,6 +1,6 @@
 # confluence-mermaid-publisher-mcp
 
-`confluence-mermaid-publisher-mcp` is an MCP server for publishing locally authored Markdown to Confluence while embedding Mermaid diagrams as Confluence diagrams. Draw.io is the default embedding mode for editable `.drawio` artifacts. Adaptive SVG is opt-in, and MacroPack remains available.
+`confluence-mermaid-publisher-mcp` is an MCP server for publishing locally authored Markdown to Confluence while embedding Mermaid diagrams as Confluence diagrams. Adaptive SVG is the default embedding mode, with automatic light/dark colors and Codex + ELK rendering. Draw.io remains available for editable `.drawio` artifacts, along with MacroPack.
 
 Migration note: older MCP registrations may still refer to this server as `drawio-confluence-mcp` and to the previous draw.io-specific tool names. Update those registrations to use the `confluence-mermaid-publisher` server name and the generic Confluence diagram tool names.
 
@@ -149,7 +149,7 @@ export COPILOT_MCP_CONFLUENCE_API_TOKEN="..."
 
 The local stdio helper forwards both supported direct Confluence credential variables and the Copilot-style fallback credential variables into the container.
 
-The server accepts `CONFLUENCE_DEFAULT_EMBEDDING_MODE=drawio|svg|macropack`; when unset, it defaults to `drawio`. Individual publication and diagram calls can override the default with `embeddingMode`. The checked-in helper and Compose services currently do not forward this environment variable, so use a per-call override or the raw Docker form below to configure a different default.
+The server accepts `CONFLUENCE_DEFAULT_EMBEDDING_MODE=drawio|svg|macropack`; when unset, it defaults to `svg`. Individual publication and diagram calls can override the default with `embeddingMode`. The checked-in helper and Compose services currently do not forward this environment variable, so use a per-call override or the raw Docker form below to configure a different default.
 
 Run local Docker stdio from the workspace you want mounted:
 
@@ -192,7 +192,7 @@ Or use the development compose service:
 docker compose -f build/docker-compose/docker-compose-local.yml up mcp-http
 ```
 
-The checked-in helper and Compose services use the built-in `drawio` default because they do not forward `CONFLUENCE_DEFAULT_EMBEDDING_MODE`. They do forward `CONFLUENCE_DEFAULT_PAGE_WIDTH`.
+The checked-in helper and Compose services use the built-in `svg` default because they do not forward `CONFLUENCE_DEFAULT_EMBEDDING_MODE`. They do forward `CONFLUENCE_DEFAULT_PAGE_WIDTH`.
 
 The container binds to `0.0.0.0`, while local MCP clients should still connect to `http://127.0.0.1:3000/mcp` on the host.
 

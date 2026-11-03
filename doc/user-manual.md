@@ -4,7 +4,7 @@ This manual covers installation, runtime setup, and the most common operator wor
 
 For the shortest path to a first successful publish, see `doc/quick-start.md`.
 
-The intended workflow is: author locally in Markdown, iterate with normal file-based tools, and publish the final result to Confluence. This is typically faster, more reproducible, and less token-expensive than using Confluence itself as the primary editing surface. The project embeds Mermaid as editable draw.io diagrams by default; adaptive SVG and MacroPack are optional modes.
+The intended workflow is: author locally in Markdown, iterate with normal file-based tools, and publish the final result to Confluence. This is typically faster, more reproducible, and less token-expensive than using Confluence itself as the primary editing surface. The project embeds Mermaid as adaptive SVG by default; editable draw.io diagrams and MacroPack are optional modes.
 
 ## What this server does
 
@@ -72,7 +72,7 @@ Equivalent Make target:
 make mcp-http
 ```
 
-The checked-in Compose service and stdio helper currently do not forward `CONFLUENCE_DEFAULT_EMBEDDING_MODE`; they therefore use the built-in `drawio` default. Use a per-call `embeddingMode` override with those launch paths, or use the raw Docker form when you need a different server-wide default. Both launch paths forward `CONFLUENCE_DEFAULT_PAGE_WIDTH`.
+The checked-in Compose service and stdio helper currently do not forward `CONFLUENCE_DEFAULT_EMBEDDING_MODE`; they therefore use the built-in `svg` default. Use a per-call `embeddingMode` override with those launch paths, or use the raw Docker form when you need a different server-wide default. Both launch paths forward `CONFLUENCE_DEFAULT_PAGE_WIDTH`.
 
 For containerized HTTP, `MCP_HOST` must be `0.0.0.0` so the published Docker port can reach the server. MCP clients on the host should still use `http://127.0.0.1:3000/mcp`.
 
@@ -321,7 +321,7 @@ and send the Markdown body directly instead.
 | `update_confluence_diagram_from_mermaid` | You want to replace an existing embedded diagram without recreating the page |
 | `append_confluence_page_paragraph` | You want a small text-only page edit |
 
-All diagram creation and Markdown publication tools accept an optional `embeddingMode` override. Omit it to use `CONFLUENCE_DEFAULT_EMBEDDING_MODE`, which itself defaults to `drawio`. Accepted values are `drawio`, `svg`, and `macropack`.
+All diagram creation and Markdown publication tools accept an optional `embeddingMode` override. Omit it to use `CONFLUENCE_DEFAULT_EMBEDDING_MODE`, which itself defaults to `svg`. Accepted values are `drawio`, `svg`, and `macropack`.
 
 ## Typical workflows
 
