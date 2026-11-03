@@ -1,0 +1,37 @@
+publisher/src/svg.ts
+  s_86dd4f5dbe79c8::t_cf969e4d88518d 30,47-48,52,56-58
+  s_86dd4f5dbe79c8::t_4ed9a040aad1e1 49-51,53-55
+publisher/package.json
+  s_86dd4f5dbe79c8::t_3eeb13fd8deb49 19
+README.md
+  s_86dd4f5dbe79c8::t_cf969e4d88518d 66-68
+publisher/src/svg-layout.test.ts
+  s_86dd4f5dbe79c8::t_3eeb13fd8deb49 20,42,51-52,62
+publisher/src/svg-theme.test.ts
+  s_86dd4f5dbe79c8::t_20a814db0273e1 1-24,26-39,42-43,45-52,54-55
+  s_86dd4f5dbe79c8::t_ae34f5b3fb373b 40-41
+  s_86dd4f5dbe79c8::t_4ed9a040aad1e1 25,44
+  s_86dd4f5dbe79c8::t_8b6daef4c7d328 53
+docs/superpowers/plans/2026-11-03-svg-layout.md
+  s_86dd4f5dbe79c8::t_cf969e4d88518d 19
+AGENTS.md
+  s_86dd4f5dbe79c8::t_cf969e4d88518d 1-8
+publisher/package-lock.json
+  s_86dd4f5dbe79c8::t_bf18b3bdf84433 15,1550-1552,1557-1559,1569,1813-1855,2368-2373
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8dc2b1d5a4bdb603ce8b057cd0b9648efa5798bc",
+  "prompts": {},
+  "sessions": {
+    "s_86dd4f5dbe79c8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a287-641f-7163-a360-986c942f0e67",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
