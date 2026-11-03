@@ -1,0 +1,57 @@
+README.md
+  s_86dd4f5dbe79c8::t_e8eefb3f8f3be8 77-79
+publisher/src/svg-layout.test.ts
+  s_86dd4f5dbe79c8::t_c1ee49d38f6e53 6,56-100
+  s_86dd4f5dbe79c8::t_293e0862eab65d 107
+  s_86dd4f5dbe79c8::t_9145dd8d4f8d86 7-9,36-55
+  s_86dd4f5dbe79c8::t_bbcaaac62b76e6 1-5,101-106,108-125
+  s_86dd4f5dbe79c8::t_a5e2e78d6e253e 28
+  s_86dd4f5dbe79c8::t_5bad8ad5ed9081 10-27,29-35
+publisher/package.json
+  s_86dd4f5dbe79c8::t_1b7be0e2e9eb3b 20
+publisher/src/svg-layout.ts
+  s_86dd4f5dbe79c8::t_d3da326803dd62 1-10
+doc/user-manual.md
+  s_86dd4f5dbe79c8::t_e8eefb3f8f3be8 397-399
+publisher/src/service.test.ts
+  s_86dd4f5dbe79c8::t_6c1f3ca934e454 1359,1364
+  s_86dd4f5dbe79c8::t_76c7700996f78c 1326-1337
+publisher/src/svg-elk.ts
+  s_86dd4f5dbe79c8::t_4fa9471e09bbbf 1-3,6,9-90,93,95-105,110,113-116,125-142,146-149,151-154,158-171,178-182,184-208
+  s_86dd4f5dbe79c8::t_11a546b07a179b 91-92,94,106-109,111-112,117-124,143,150,172-177
+  s_86dd4f5dbe79c8::t_5ea5aa1d91684a 4-5,7-8,155
+  s_86dd4f5dbe79c8::t_66759fc90efe5f 144-145,156-157,183
+publisher/src/mcp-app.test.ts
+  s_86dd4f5dbe79c8::t_6c1f3ca934e454 122,124
+  s_86dd4f5dbe79c8::t_bbcaaac62b76e6 84-85
+docs/superpowers/plans/2026-11-03-svg-layout.md
+  s_86dd4f5dbe79c8::t_f3518f4d497fab 16-18
+  s_86dd4f5dbe79c8::t_e8eefb3f8f3be8 5,7,9,11,13-15,19
+  s_86dd4f5dbe79c8::t_567e6fa2393056 1-4,6,8,10,12
+publisher/src/mcp-app.ts
+  s_86dd4f5dbe79c8::t_293e0862eab65d 1,90,119,121,132,164,167,180,200,203,217,234,237,247,264,267,278,298,300,309
+publisher/src/svg.ts
+  s_86dd4f5dbe79c8::t_ee2a56420ea377 6-7,20,22,78-79
+publisher/src/service.ts
+  s_86dd4f5dbe79c8::t_293e0862eab65d 1,225,227,469,472,484,524,527,538,576,614,712,716,740,755,770,782,786,796,808,820
+publisher/src/svg.test.ts
+  s_86dd4f5dbe79c8::t_293e0862eab65d 9-10,21-22,35-36,41-42,45,47,54-55
+publisher/package-lock.json
+  s_86dd4f5dbe79c8::t_0142b49fa4cd33 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "23c6e3bdc6bea769ff27b00a8ab16785e41133a3",
+  "prompts": {},
+  "sessions": {
+    "s_86dd4f5dbe79c8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a287-641f-7163-a360-986c942f0e67",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
