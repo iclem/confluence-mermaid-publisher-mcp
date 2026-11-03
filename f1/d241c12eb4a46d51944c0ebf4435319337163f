@@ -1,0 +1,44 @@
+doc/quick-start.md
+  s_86dd4f5dbe79c8::t_6a53490acfb556 7
+  s_86dd4f5dbe79c8::t_c0141a8e77b4d0 107,113
+doc/spec.md
+  s_86dd4f5dbe79c8::t_6a53490acfb556 11-12,71,206
+doc/adr/0001-product-runtime-and-publication-shape.md
+  s_86dd4f5dbe79c8::t_6a53490acfb556 30
+  s_86dd4f5dbe79c8::t_5057bf19779048 10,135
+doc/user-manual.md
+  s_86dd4f5dbe79c8::t_6a53490acfb556 7
+  s_86dd4f5dbe79c8::t_21243779b7430c 75,324
+publisher/src/cli.test.ts
+  s_86dd4f5dbe79c8::t_6a53490acfb556 12,14-15,19
+publisher/src/service.test.ts
+  s_86dd4f5dbe79c8::t_6a53490acfb556 1203,1207,1237
+publisher/src/mcp-app.ts
+  s_86dd4f5dbe79c8::t_6a53490acfb556 87
+README.md
+  s_86dd4f5dbe79c8::t_1f6e51fc813513 3,152,195
+doc/development.md
+  s_86dd4f5dbe79c8::t_1f725da028082d 330,335
+publisher/src/embedding-mode.test.ts
+  s_86dd4f5dbe79c8::t_c974d549bc0f82 1-12
+publisher/src/embedding-mode.ts
+  s_86dd4f5dbe79c8::t_ece42f4fa55b5f 3
+publisher/src/mcp-app.test.ts
+  s_86dd4f5dbe79c8::t_9e7e2c52bd1490 40,47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f1d241c12eb4a46d51944c0ebf4435319337163f",
+  "prompts": {},
+  "sessions": {
+    "s_86dd4f5dbe79c8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a287-641f-7163-a360-986c942f0e67",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
