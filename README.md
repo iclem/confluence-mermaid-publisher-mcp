@@ -63,7 +63,9 @@ Set `"embeddingMode": "svg"` on the Mermaid diagram or Markdown MCP tools. For e
 }
 ```
 
-SVG uses Agentic Mermaid 0.4.1 locally on Node.js 22+, bypassing the Java/draw.io converter. No rendering service or Confluence diagram app is required for this mode. Each SVG contains light colors plus dark overrides selected by `prefers-color-scheme`; explicit colors in the source remain unchanged. Theme switching depends on the browser's scheme for embedded images and is not guaranteed to track Confluence's theme setting.
+SVG uses Agentic Mermaid 0.5.6 locally on Node.js 22+, bypassing the Java/draw.io converter. No rendering service or Confluence diagram app is required for this mode. Each SVG contains light colors plus dark overrides selected by `prefers-color-scheme`; explicit colors in the source remain unchanged. Both renderer CSS scopes are retained so each palette's selectors apply. Theme switching depends on the browser's scheme for embedded images and is not guaranteed to track Confluence's theme setting.
+
+Rendering remains browserless. Compared with 0.4.1, 0.5.6 adds six D3-related packages and approximately 6.5 MiB of installed production files on macOS; container image size varies by platform and compression.
 
 All six Mermaid diagram and Markdown MCP tools advertise the optional `svgStyle` enum:
 

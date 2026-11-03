@@ -27,7 +27,7 @@ export async function renderAdaptiveSvg(mermaid: string, svgStyle?: SvgStyle, sv
     }).parseFromString(renderMermaidSVG(mermaid, svgRenderOptions(style, dark)), "image/svg+xml");
     if (style === "codex" && layout === "elk") prepareCodexFlowchart(document, mermaid);
     if (style === "codex") {
-      // Edge-label boxes have no public style role in Agentic Mermaid 0.4.1.
+      // Edge-label boxes have no public style role in Agentic Mermaid.
       for (const group of Array.from(document.getElementsByTagName("g"))) {
         if (group.getAttribute("class") !== "edge-label") continue;
         const text = group.getElementsByTagName("text")[0];
@@ -44,6 +44,18 @@ export async function renderAdaptiveSvg(mermaid: string, svgStyle?: SvgStyle, sv
   };
   const light = parse(false);
   const dark = parse(true);
+  const lightRoot = light.documentElement, darkRoot = dark.documentElement;
+  if (!lightRoot || !darkRoot) throw new Error("Renderer returned an empty SVG");
+  const rootClasses = [lightRoot, darkRoot].map((root) => (root.getAttribute("class") ?? "").split(/\s+/).filter(Boolean));
+  const isScope = (name: string) => /^am-[a-z0-9]+$/.test(name);
+  const [lightScopes, darkScopes] = rootClasses.map((names) => names.filter(isScope));
+  // Renderer CSS scopes depend on paint; keep both palettes' selectors applicable.
+  if (lightScopes!.length === 1 && darkScopes!.length === 1 &&
+      rootClasses[0]!.filter((name) => !isScope(name)).join(" ") === rootClasses[1]!.filter((name) => !isScope(name)).join(" ")) {
+    const scopes = [...new Set([...rootClasses[0]!, ...rootClasses[1]!])].join(" ");
+    lightRoot.setAttribute("class", scopes);
+    darkRoot.setAttribute("class", scopes);
+  }
   const lightNodes = Array.from(light.getElementsByTagName("*"));
   const darkNodes = Array.from(dark.getElementsByTagName("*"));
   const rules: string[] = [];

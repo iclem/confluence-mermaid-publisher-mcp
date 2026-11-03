@@ -17,7 +17,7 @@ describe("SVG layout selection", () => {
       let x = Number(rect.getAttribute("x")), y = Number(rect.getAttribute("y"));
       let ancestor: typeof group | null = group;
       while (ancestor) {
-        const translation = /translate\(([-\d.]+),([-\d.]+)\)/.exec(ancestor.getAttribute("transform") ?? "");
+        const translation = /translate\(([-+\d.eE]+),([-+\d.eE]+)\)/.exec(ancestor.getAttribute("transform") ?? "");
         if (translation) { x += Number(translation[1]); y += Number(translation[2]); }
         ancestor = ancestor.parentNode?.nodeType === 1 ? ancestor.parentNode as typeof group : null;
       }
@@ -39,7 +39,7 @@ describe("SVG layout selection", () => {
     const group = Array.from(document.getElementsByTagName("g")).find((e) => e.getAttribute("data-id") === "s")!;
     expect(Number(group.getElementsByTagName("rect")[0]!.getAttribute("width"))).toBeGreaterThan(210);
     const nodes = Array.from(document.getElementsByTagName("g")).filter((e) => e.getAttribute("class") === "node");
-    const x = nodes.map((node) => Number(node.getElementsByTagName("rect")[0]!.getAttribute("x")) + Number(/translate\(([-\d.]+)/.exec(node.getAttribute("transform")!)![1]));
+    const x = nodes.map((node) => Number(node.getElementsByTagName("rect")[0]!.getAttribute("x")) + Number(/translate\(([-+\d.eE]+)/.exec(node.getAttribute("transform")!)![1]));
     expect(x[1]! - x[0]!).toBeGreaterThan(60);
   });
   it("does not collide with user node IDs in its internal namespace", async () => {
@@ -48,8 +48,8 @@ describe("SVG layout selection", () => {
     const edge = Array.from(doc.getElementsByTagName("path")).find((e) => e.hasAttribute("data-from"))!;
     const node = Array.from(doc.getElementsByTagName("g")).find((e) => e.getAttribute("data-id") === "__svg_root")!;
     const rect = node.getElementsByTagName("rect")[0]!;
-    const [, dx, dy] = /translate\(([-\d.]+),([-\d.]+)\)/.exec(node.getAttribute("transform")!)!;
-    const [, x, y] = /^M ([-\d.]+) ([-\d.]+)/.exec(edge.getAttribute("d")!)!;
+    const [, dx, dy] = /translate\(([-+\d.eE]+),([-+\d.eE]+)\)/.exec(node.getAttribute("transform")!)!;
+    const [, x, y] = /^M ([-+\d.eE]+) ([-+\d.eE]+)/.exec(edge.getAttribute("d")!)!;
     expect(Number(x)).toBeCloseTo(Number(rect.getAttribute("x")) + Number(dx) + Number(rect.getAttribute("width")) / 2);
     expect(Number(y)).toBeCloseTo(Number(rect.getAttribute("y")) + Number(dy) + Number(rect.getAttribute("height")));
   });
@@ -59,7 +59,7 @@ describe("SVG layout selection", () => {
     const position = (id: string) => {
       const node = nodes.find((e) => e.getAttribute("data-id") === id)!;
       const rect = node.getElementsByTagName("rect")[0]!;
-      const translation = /translate\(([-\d.]+),([-\d.]+)\)/.exec(node.getAttribute("transform")!)!;
+      const translation = /translate\(([-+\d.eE]+),([-+\d.eE]+)\)/.exec(node.getAttribute("transform")!)!;
       return [Number(rect.getAttribute("x")) + Number(translation[1]), Number(rect.getAttribute("y")) + Number(translation[2])];
     };
     const a = position("A"), b = position("B");
