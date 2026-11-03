@@ -1,0 +1,39 @@
+publisher/src/svg-accent.test.ts
+  s_86dd4f5dbe79c8::t_2e790751b501c8 56-61
+  s_86dd4f5dbe79c8::t_ccda1e58a6855e 1-55,62-70
+publisher/src/svg-accent.ts
+  s_86dd4f5dbe79c8::t_12cf37c7789ade 1-28
+publisher/src/service.test.ts
+  s_86dd4f5dbe79c8::t_2e790751b501c8 1326-1337
+  s_86dd4f5dbe79c8::t_1918b0aa89caf2 1353,1355,1358-1359,1373,1378-1379,1385
+publisher/src/svg-style.ts
+  s_86dd4f5dbe79c8::t_12cf37c7789ade 2,17-22,27
+publisher/src/mcp-app.test.ts
+  s_86dd4f5dbe79c8::t_2e790751b501c8 109-134
+  s_86dd4f5dbe79c8::t_1918b0aa89caf2 82-83,151,153
+  s_86dd4f5dbe79c8::t_b71888f46fcee9 108
+README.md
+  s_86dd4f5dbe79c8::t_024f8712c7f1e7 79-98
+publisher/src/mcp-app.ts
+  s_86dd4f5dbe79c8::t_e6d1395bb76c09 1,92,120,124,134,167,172,184,205,210,223,241,246,255,273,278,288,309,313,321
+publisher/src/service.ts
+  s_86dd4f5dbe79c8::t_05d1bacac392a0 1,226,228,471,475,487,528,532,543,582,620,719,724,749,765,781,794,799,810,823,836
+publisher/src/svg.ts
+  s_86dd4f5dbe79c8::t_ef24c21558e033 1,22,25,29,94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "848a2e9a6290bb67d63751d294511d1e0a3373e9",
+  "prompts": {},
+  "sessions": {
+    "s_86dd4f5dbe79c8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a287-641f-7163-a360-986c942f0e67",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
