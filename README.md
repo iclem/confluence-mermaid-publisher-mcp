@@ -76,6 +76,26 @@ All six Mermaid diagram and Markdown MCP tools advertise the optional `svgStyle`
 
 For example, add `"svgStyle": "github"` alongside `"embeddingMode": "svg"` to retain the original appearance. The choice applies to every Mermaid block in a Markdown request, including file-based tools. Omission selects `codex` on both creation and updates; updates do not infer the previous style. Styles affect SVG mode only and do not select an embedding mode. The Codex-inspired font stack uses Share Tech Mono when available, with local monospace fallbacks; font appearance can vary between viewers. Both styles preserve the original source and its explicit colors.
 
+All six tools also accept optional `svgAccent`: `default`, `blue`, `green`, `yellow`, `pink`, `orange`, `purple`, or `white`. For example:
+
+```json
+{"embeddingMode": "svg", "svgStyle": "codex", "svgAccent": "purple", "svgLayout": "elk"}
+```
+
+The option changes accent text, tinted node fills and borders; connectors stay neutral. It works with both styles and layouts. Omission or `default` preserves the selected style's original palette (blue for Codex); explicit `blue` also gives GitHub style the blue palette. `white` means neutral dark ink in light mode and near-white ink in dark mode. The choice applies to every Mermaid block in a Markdown request, including file-based tools. Updates use `default` when omitted and do not infer the previous accent. The option affects SVG mode only.
+
+| Accent | Light text | Dark text |
+| --- | --- | --- |
+| Blue | `#0969DA` | `#78A9F5` |
+| Green | `#047857` | `#34D399` |
+| Yellow | `#A16207` | `#FACC15` |
+| Pink | `#BE185D` | `#F472B6` |
+| Orange | `#C2410C` | `#FB923C` |
+| Purple | `#7E22CE` | `#C084FC` |
+| White | `#374151` | `#E5E7EB` |
+
+Authored element colors and supported Mermaid `themeVariables` override the accent palette. Palette-derived colors may be adjusted for contrast by the renderer. Mermaid color compatibility follows Agentic Mermaid: for example, `linkStyle` connector strokes work, but its edge-label `color` is not currently applied.
+
 SVG layout is independently selectable with `svgLayout: "elk" | "agentic"`. Omission selects `elk` on creation and updates: direct ELK layered placement with orthogonal flowchart routing. Set `agentic` to retain the previous placement and routing adjustments. Other diagram families keep their native layouts. For GitHub appearance with ELK placement, use `{"embeddingMode": "svg", "svgStyle": "github", "svgLayout": "elk"}`. Both layouts run without a browser and reuse the ELK package already included by Agentic Mermaid; no Chromium installation or Docker image change is needed. Direct ELK improves layout similarity but does not promise pixel-identical Codex output. Codex + ELK uses deterministic advances calibrated to the bundled Share Tech Mono font, 200-pixel text wrapping, and reference node/label padding and minimum heights. Rich labels and specialized shapes retain their renderer-supplied geometry. The `agentic` option retains its original typography and placement.
 
 

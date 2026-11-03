@@ -1,3 +1,4 @@
+import { parseSvgAccent, type SvgAccent } from "./svg-accent.js";
 import { parseSvgLayout, type SvgLayout } from "./svg-layout.js";
 import { parseSvgStyle, type SvgStyle } from "./svg-style.js";
 import { createHash } from "node:crypto";
@@ -222,9 +223,9 @@ export class DrawioPublisherService {
     };
   }
 
-  private async createSvgImage(pageId: string, mermaid: string, name: string, svgStyle?: SvgStyle, svgLayout?: SvgLayout): Promise<JsonObject> {
+  private async createSvgImage(pageId: string, mermaid: string, name: string, svgStyle?: SvgStyle, svgLayout?: SvgLayout, svgAccent?: SvgAccent): Promise<JsonObject> {
     const filename = svgFileName(name);
-    const rendered = await renderAdaptiveSvg(mermaid, svgStyle, svgLayout);
+    const rendered = await renderAdaptiveSvg(mermaid, svgStyle, svgLayout, svgAccent);
     const directory = await mkdtemp(join(tmpdir(), "mermaid-svg-"));
     try {
       const localPath = join(directory, filename);
@@ -467,9 +468,11 @@ export class DrawioPublisherService {
     embeddingMode?: EmbeddingMode;
     svgStyle?: SvgStyle;
     svgLayout?: SvgLayout;
+    svgAccent?: SvgAccent;
   }): Promise<InspectResult> {
     parseSvgStyle(args.svgStyle);
     parseSvgLayout(args.svgLayout);
+    parseSvgAccent(args.svgAccent);
     const embeddingMode = this.resolveEmbeddingMode(args.embeddingMode);
 
     if (embeddingMode === "svg") {
@@ -481,7 +484,7 @@ export class DrawioPublisherService {
       }
       // Validate an anchor before uploading anything.
       if (args.anchorText) insertDrawioExtensionAtAnchor(structuredClone(adf), {}, args.anchorText);
-      const image = await this.createSvgImage(args.pageId, args.mermaid, filename, args.svgStyle, args.svgLayout);
+      const image = await this.createSvgImage(args.pageId, args.mermaid, filename, args.svgStyle, args.svgLayout, args.svgAccent);
       const nextAdf = args.anchorText ? insertDrawioExtensionAtAnchor(adf, image, args.anchorText) : appendDrawioExtension(adf, image);
       await this.client.updatePageAdf(page, nextAdf, "Create Mermaid SVG", "current");
       return this.inspectPage(args.pageId);
@@ -522,9 +525,11 @@ export class DrawioPublisherService {
     embeddingMode?: EmbeddingMode;
     svgStyle?: SvgStyle;
     svgLayout?: SvgLayout;
+    svgAccent?: SvgAccent;
   }): Promise<InspectResult> {
     parseSvgStyle(args.svgStyle);
     parseSvgLayout(args.svgLayout);
+    parseSvgAccent(args.svgAccent);
     assertSingleDiagramSelector(args.diagram);
     const page = await this.client.getPage(args.pageId, "atlas_doc_format");
     const adf = parseAtlasDocFormat(page.body?.atlas_doc_format?.value ?? { type: "doc", version: 1, content: [] });
@@ -535,7 +540,7 @@ export class DrawioPublisherService {
       const target = selectSvgDiagram(findSvgDiagrams(adf, attachments), args.diagram);
       const filename = svgFileName(args.diagramName ?? target.diagramName);
       if (filename !== target.diagramName) throw new Error("Renaming an SVG on update is not supported; keep its diagramName or create a new diagram");
-      const image = await this.createSvgImage(args.pageId, args.mermaid, filename, args.svgStyle, args.svgLayout);
+      const image = await this.createSvgImage(args.pageId, args.mermaid, filename, args.svgStyle, args.svgLayout, args.svgAccent);
       Object.assign(target.node, image);
       if (target.sourceBlock) Object.assign(target.sourceBlock, buildCodeBlockNode(args.mermaid, "mermaid"));
       await this.client.updatePageAdf(page, adf, "Update Mermaid SVG", "current");
@@ -574,6 +579,7 @@ export class DrawioPublisherService {
     embeddingMode?: EmbeddingMode;
     svgStyle?: SvgStyle;
     svgLayout?: SvgLayout;
+    svgAccent?: SvgAccent;
     pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     const source = args.sourceName ?? "markdown.md";
@@ -611,7 +617,7 @@ export class DrawioPublisherService {
             if (!existingSvgNames.has(filename) && (await this.client.listPageAttachments(page.id, filename)).length) {
               throw new Error(`Attachment ${filename} already exists and is not a managed Mermaid SVG`);
             }
-            content.push(await this.createSvgImage(page.id, block.text, filename, args.svgStyle, args.svgLayout));
+            content.push(await this.createSvgImage(page.id, block.text, filename, args.svgStyle, args.svgLayout, args.svgAccent));
             // Expand nodes are only valid at document level; nested source stays a code block.
             const sourceBlock = buildCodeBlockNode(block.text, "mermaid");
             content.push(topLevel ? buildExpandNode("Original Mermaid source", [sourceBlock]) : sourceBlock);
@@ -710,10 +716,12 @@ export class DrawioPublisherService {
     embeddingMode?: EmbeddingMode;
     svgStyle?: SvgStyle;
     svgLayout?: SvgLayout;
+    svgAccent?: SvgAccent;
     pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     parseSvgStyle(args.svgStyle);
     parseSvgLayout(args.svgLayout);
+    parseSvgAccent(args.svgAccent);
     const source = args.sourceName ?? "markdown.md";
     const pageWidth = parsePageWidth(args.pageWidth) ?? this.defaultPageWidth ?? DEFAULT_PAGE_WIDTH;
     const siblingPage =
@@ -738,6 +746,7 @@ export class DrawioPublisherService {
       embeddingMode: args.embeddingMode,
       svgStyle: args.svgStyle,
       svgLayout: args.svgLayout,
+      svgAccent: args.svgAccent,
       pageWidth,
     });
   }
@@ -753,6 +762,7 @@ export class DrawioPublisherService {
     embeddingMode?: EmbeddingMode;
     svgStyle?: SvgStyle;
     svgLayout?: SvgLayout;
+    svgAccent?: SvgAccent;
     pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     const markdownFile = resolve(args.markdownFile);
@@ -768,6 +778,7 @@ export class DrawioPublisherService {
       embeddingMode: args.embeddingMode,
       svgStyle: args.svgStyle,
       svgLayout: args.svgLayout,
+      svgAccent: args.svgAccent,
       pageWidth: args.pageWidth,
     });
   }
@@ -780,10 +791,12 @@ export class DrawioPublisherService {
     embeddingMode?: EmbeddingMode;
     svgStyle?: SvgStyle;
     svgLayout?: SvgLayout;
+    svgAccent?: SvgAccent;
     pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     parseSvgStyle(args.svgStyle);
     parseSvgLayout(args.svgLayout);
+    parseSvgAccent(args.svgAccent);
     const pageWidth = parsePageWidth(args.pageWidth) ?? this.defaultPageWidth;
     const page = await this.client.getPage(args.pageId, "atlas_doc_format", false);
     return this.publishMarkdownToPage({
@@ -794,6 +807,7 @@ export class DrawioPublisherService {
       embeddingMode: args.embeddingMode,
       svgStyle: args.svgStyle,
       svgLayout: args.svgLayout,
+      svgAccent: args.svgAccent,
       pageWidth,
     });
   }
@@ -806,6 +820,7 @@ export class DrawioPublisherService {
     embeddingMode?: EmbeddingMode;
     svgStyle?: SvgStyle;
     svgLayout?: SvgLayout;
+    svgAccent?: SvgAccent;
     pageWidth?: PageWidth;
   }): Promise<MarkdownPublishResult> {
     const markdownFile = resolve(args.markdownFile);
@@ -818,6 +833,7 @@ export class DrawioPublisherService {
       embeddingMode: args.embeddingMode,
       svgStyle: args.svgStyle,
       svgLayout: args.svgLayout,
+      svgAccent: args.svgAccent,
       pageWidth: args.pageWidth,
     });
   }
