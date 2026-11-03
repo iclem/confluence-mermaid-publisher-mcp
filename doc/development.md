@@ -327,12 +327,12 @@ The server currently exposes:
 These tools:
 
 - authenticate using the same `CONFLUENCE_*` or `COPILOT_MCP_CONFLUENCE_*` environment variables
-- default to `drawio` unless `CONFLUENCE_DEFAULT_EMBEDDING_MODE` or a per-tool `embeddingMode` selects `macropack` or `svg`
+- default to `svg` unless `CONFLUENCE_DEFAULT_EMBEDDING_MODE` or a per-tool `embeddingMode` selects `macropack` or `drawio`
 - convert Mermaid to `.drawio` inside the container only when the effective embedding mode is `drawio`
 - create or update embedded diagrams on Confluence pages
 - can create or update a page from Markdown content or from a Markdown file path and embed multiple Mermaid blocks with fallback to Mermaid code blocks when embedding fails
 
-The raw Docker examples forward `CONFLUENCE_DEFAULT_EMBEDDING_MODE`. The checked-in stdio helper and Compose services currently do not, so they use the built-in `drawio` default unless a tool call provides `embeddingMode`. They do forward `CONFLUENCE_DEFAULT_PAGE_WIDTH`.
+The raw Docker examples forward `CONFLUENCE_DEFAULT_EMBEDDING_MODE`. The checked-in stdio helper and Compose services currently do not, so they use the built-in `svg` default unless a tool call provides `embeddingMode`. They do forward `CONFLUENCE_DEFAULT_PAGE_WIDTH`.
 
 ### Preview fallback
 

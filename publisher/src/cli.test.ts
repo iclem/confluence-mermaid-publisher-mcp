@@ -9,13 +9,14 @@ describe("publisher cli", () => {
     expect(CLI_USAGE).toContain("--base-url");
   });
 
-  it("uses the configured default embedding mode when creating the publisher service", () => {
+  it.each([undefined, "drawio", "macropack"])("uses SVG by default and respects the configured mode (%s)", (mode) => {
     const original = process.env[DEFAULT_EMBEDDING_MODE_ENV];
-    process.env[DEFAULT_EMBEDDING_MODE_ENV] = "drawio";
+    if (mode === undefined) delete process.env[DEFAULT_EMBEDDING_MODE_ENV];
+    else process.env[DEFAULT_EMBEDDING_MODE_ENV] = mode;
 
     try {
       const service = createService(new Map([["base-url", "https://example.atlassian.net/wiki"]]));
-      expect((service as unknown as { defaultEmbeddingMode: string }).defaultEmbeddingMode).toBe("drawio");
+      expect((service as unknown as { defaultEmbeddingMode: string }).defaultEmbeddingMode).toBe(mode ?? "svg");
     } finally {
       if (original === undefined) {
         delete process.env[DEFAULT_EMBEDDING_MODE_ENV];

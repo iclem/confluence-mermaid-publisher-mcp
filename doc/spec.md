@@ -8,8 +8,8 @@ Publish locally authored Markdown and Mermaid diagrams to Confluence through a s
 
 The publisher supports three Confluence embedding modes:
 
-- `drawio` converts Mermaid into an editable `.drawio` attachment, creates or updates draw.io custom content, and embeds a draw.io extension; this is the default
-- `svg` renders an adaptive light/dark SVG attachment with the Mermaid source preserved in metadata
+- `drawio` converts Mermaid into an editable `.drawio` attachment, creates or updates draw.io custom content, and embeds a draw.io extension
+- `svg` renders an adaptive light/dark SVG attachment with the Mermaid source preserved in metadata; this is the default
 - `macropack` embeds Mermaid source directly in a MacroPack extension
 
 ## Product boundaries
@@ -68,7 +68,7 @@ For creation and full-page publication, resolution is:
 
 1. the call-level `embeddingMode`, when supplied
 2. `CONFLUENCE_DEFAULT_EMBEDDING_MODE`, when configured
-3. `drawio`
+3. `svg`
 
 For diagram updates, the target is resolved before mutation:
 
@@ -203,4 +203,4 @@ Blank fallback values are treated as unset. Unsupported embedding-mode and page-
 - draw.io preview rendering can fall back to a placeholder when a real preview cannot be produced
 - Confluence app availability and macro schemas vary by tenant
 - HTTP transport is stateless; the server does not retain MCP sessions between requests
-- the checked-in stdio helper and Compose services use the built-in draw.io default because they do not forward the server-wide embedding-mode environment variable
+- the checked-in stdio helper and Compose services use the built-in SVG default because they do not forward the server-wide embedding-mode environment variable

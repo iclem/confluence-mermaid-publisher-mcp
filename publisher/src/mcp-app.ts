@@ -84,7 +84,7 @@ export function createMcpServer(): McpServer {
     version: "0.1.0",
   });
   const embeddingModeGuidance =
-    "Omit this field to use the server default embedding mode. Only set it when the user explicitly requests a non-default mode such as svg or macropack. When omitted, the server uses its configured default; if that is unset, it falls back to drawio. SVG is opt-in and always uses adaptive light/dark colors.";
+    "Omit this field to use the server default embedding mode. Only set it when the user explicitly requests a non-default mode such as drawio or macropack. When omitted, the server uses its configured default; if that is unset, it falls back to svg. SVG always uses adaptive light/dark colors.";
   const embeddingModeSchema = z.enum(EMBEDDING_MODES).optional().describe(
     `Optional Mermaid embedding mode override. ${embeddingModeGuidance}`,
   );

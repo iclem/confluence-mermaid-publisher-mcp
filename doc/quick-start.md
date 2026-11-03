@@ -4,7 +4,7 @@ This is the shortest path from a clean checkout to a successful Confluence publi
 
 For the full setup and provider-specific installation details, see `doc/user-manual.md`.
 
-The workflow assumes that Markdown is your local source of truth and Confluence is the final publication target. That keeps iteration fast and file-based, while the MCP server embeds Mermaid as editable draw.io diagrams by default, with adaptive SVG and MacroPack available as optional modes.
+The workflow assumes that Markdown is your local source of truth and Confluence is the final publication target. That keeps iteration fast and file-based, while the MCP server embeds Mermaid as adaptive SVG by default, with editable draw.io diagrams and MacroPack available as optional modes.
 
 ## 1. Set Confluence credentials
 
@@ -104,13 +104,13 @@ The common endpoint is:
 http://127.0.0.1:3000/mcp
 ```
 
-Optional default diagram mode (`macropack` or `drawio`):
+Optional default diagram mode (`svg`, `macropack`, or `drawio`):
 
 ```bash
 export CONFLUENCE_DEFAULT_EMBEDDING_MODE="drawio"
 ```
 
-If omitted, the server defaults to `drawio`.
+If omitted, the server defaults to `svg`. Set `drawio` explicitly for editable draw.io artifacts.
 
 The raw Docker command forwards this setting. The checked-in stdio helper and Compose service currently do not, so use a per-tool `embeddingMode` override with those launch paths.
 

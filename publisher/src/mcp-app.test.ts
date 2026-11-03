@@ -37,14 +37,14 @@ describe("mcp app", () => {
     expect(() => createPublisherService()).not.toThrow();
   });
 
-  it("defaults the publisher service to drawio when embedding mode is unset", async () => {
+  it("defaults the publisher service to svg when embedding mode is unset", async () => {
     process.env.CONFLUENCE_BASE_URL = "https://example.atlassian.net/wiki";
     process.env.CONFLUENCE_EMAIL = "user@example.com";
     process.env.CONFLUENCE_API_TOKEN = "token";
     delete process.env[DEFAULT_EMBEDDING_MODE_ENV];
 
     const service = createPublisherService();
-    expect((service as unknown as { defaultEmbeddingMode: string }).defaultEmbeddingMode).toBe("drawio");
+    expect((service as unknown as { defaultEmbeddingMode: string }).defaultEmbeddingMode).toBe("svg");
   });
 
   it("rejects unsupported embedding mode configuration", () => {
