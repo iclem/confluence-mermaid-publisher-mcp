@@ -1,0 +1,37 @@
+README.md
+  s_86dd4f5dbe79c8::t_e3706b5239ff78 66-75
+doc/user-manual.md
+  s_86dd4f5dbe79c8::t_909d1888916758 395-396
+docs/superpowers/plans/2026-11-03-svg-styles.md
+  s_86dd4f5dbe79c8::t_4dcc2259ac6786 1-63
+publisher/src/mcp-app.test.ts
+  s_86dd4f5dbe79c8::t_b05bf3b2fd3b85 79-84,120,122
+publisher/src/mcp-app.ts
+  s_86dd4f5dbe79c8::t_0783e8429571b0 1,89,116,118,128,159,162,174,193,196,209,225,228,237,253,256,266,285,287,295
+publisher/src/service.test.ts
+  s_86dd4f5dbe79c8::t_568210a387f171 1325-1375
+publisher/src/service.ts
+  s_86dd4f5dbe79c8::t_b50e6c0098705c 1,224,226,467,469,481,520,522,533,570,608,705,708,731,745,759,770,773,782,793,804
+publisher/src/svg-style.ts
+  s_86dd4f5dbe79c8::t_c173382375fde6 1-33
+publisher/src/svg.test.ts
+  s_86dd4f5dbe79c8::t_f466c008b5a398 9-10,21-45,47
+publisher/src/svg.ts
+  s_86dd4f5dbe79c8::t_ac3f66e43df683 5,18-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a66f11b5e9854a0d54e9f15751823f532571d0aa",
+  "prompts": {},
+  "sessions": {
+    "s_86dd4f5dbe79c8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a287-641f-7163-a360-986c942f0e67",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
