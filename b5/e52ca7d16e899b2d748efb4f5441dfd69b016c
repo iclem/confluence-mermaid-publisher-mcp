@@ -1,0 +1,42 @@
+publisher/src/svg-codex.ts
+  s_86dd4f5dbe79c8::t_85ce494c972bab 22-23
+  s_86dd4f5dbe79c8::t_7d9b8179598f6f 64-66,71-79
+  s_86dd4f5dbe79c8::t_8d098a96665b89 1-21,24-63,67-70,80-99
+doc/user-manual.md
+  s_86dd4f5dbe79c8::t_1ab458b5e50d22 397
+publisher/src/svg.ts
+  s_86dd4f5dbe79c8::t_b8fcdfce03aade 80
+  s_86dd4f5dbe79c8::t_8d098a96665b89 8,28,81
+publisher/src/svg-elk.ts
+  s_86dd4f5dbe79c8::t_b8fcdfce03aade 67,101
+  s_86dd4f5dbe79c8::t_8d098a96665b89 99-100
+  s_86dd4f5dbe79c8::t_7d9b8179598f6f 142-143,145
+docs/superpowers/plans/2026-11-03-svg-layout.md
+  s_86dd4f5dbe79c8::t_3d22f9f381f7d0 27
+  s_86dd4f5dbe79c8::t_2f2bc0f029a4b2 20-24,28
+  s_86dd4f5dbe79c8::t_1ab458b5e50d22 25-26,29-30
+publisher/src/svg-codex-layout.test.ts
+  s_86dd4f5dbe79c8::t_36f644de90a315 48-56
+  s_86dd4f5dbe79c8::t_085625cf5eaf5d 14-17,19-22
+  s_86dd4f5dbe79c8::t_72328f11ff06dd 1-13,30-47,57-83
+  s_86dd4f5dbe79c8::t_70b78ba34b589d 23-29
+  s_86dd4f5dbe79c8::t_7d9b8179598f6f 18
+README.md
+  s_86dd4f5dbe79c8::t_1ab458b5e50d22 77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b5e52ca7d16e899b2d748efb4f5441dfd69b016c",
+  "prompts": {},
+  "sessions": {
+    "s_86dd4f5dbe79c8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a287-641f-7163-a360-986c942f0e67",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Clement Idelon <clement.idelon@lengow.com>"
+    }
+  }
+}
