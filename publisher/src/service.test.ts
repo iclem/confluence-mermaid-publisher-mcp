@@ -1322,6 +1322,57 @@ describe("Markdown conversion and page width", () => {
   });
 });
 
+describe("SVG style publication", () => {
+  it.each([undefined, "codex", "github"] as const)("renders selected style through diagram create/update (%s)", async (svgStyle) => {
+    const { client, pageId } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never);
+    const result = await service.createDiagramFromMermaid({ pageId, mermaid: "flowchart TD\nA-->B", embeddingMode: "svg", svgStyle });
+    const localId = result.embeddedDiagrams.find((item) => item.embeddingMode === "svg")!.localId;
+    await service.updateDiagramFromMermaid({ pageId, mermaid: "flowchart TD\nA-->Changed", diagram: { localId }, svgStyle });
+    expect(client.uploadedFiles).toHaveLength(2);
+    for (const file of client.uploadedFiles) {
+      expect(file.body).toContain(svgStyle === "github" ? "--font:Inter" : "monospace");
+    }
+    expect(client.uploadedFiles[1]!.body).toContain("Changed");
+  });
+
+  it.each([false, true])("renders selected styles through Markdown create/update (file=%s)", async (fromFile) => {
+    const { client } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never);
+    const markdown = "```mermaid\nflowchart TD\nA-->B\n```\n\n```mermaid\nflowchart LR\nC-->D\n```";
+    const directory = mkdtempSync(join(tmpdir(), "svg-style-test-"));
+    const markdownFile = join(directory, "source.md");
+    writeFileSync(markdownFile, markdown);
+    try {
+      const options = { title: "Styled", spaceId: "space", embeddingMode: "svg" as const, svgStyle: "github" as const };
+      const result = fromFile
+        ? await service.createPageFromMarkdownFile({ ...options, markdownFile })
+        : await service.createPageFromMarkdown({ ...options, markdown });
+      expect(result).toMatchObject({ embeddedBlocks: 2, fallbackBlocks: 0 });
+      expect(client.uploadedFiles.every((file) => file.body.includes("--font:Inter"))).toBe(true);
+      const update = { pageId: result.page.id, embeddingMode: "svg" as const, svgStyle: "codex" as const };
+      const updated = fromFile
+        ? await service.updatePageFromMarkdownFile({ ...update, markdownFile })
+        : await service.updatePageFromMarkdown({ ...update, markdown });
+      expect(updated).toMatchObject({ embeddedBlocks: 2, fallbackBlocks: 0 });
+      expect(client.uploadedFiles).toHaveLength(4);
+      expect(client.uploadedFiles.slice(2).every((file) => file.body.includes("monospace"))).toBe(true);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("rejects invalid styles before creating a page or uploading attachments", async () => {
+    const { client, pageId } = createExistingWidgetFixture();
+    const service = new DrawioPublisherService(client as never);
+    const svgStyle = "missing" as never;
+    await expect(service.createPageFromMarkdown({ title: "Bad", spaceId: "space", markdown: "Text", embeddingMode: "svg", svgStyle })).rejects.toThrow("Unsupported SVG style");
+    await expect(service.updatePageFromMarkdown({ pageId, markdown: "Text", embeddingMode: "svg", svgStyle })).rejects.toThrow("Unsupported SVG style");
+    await expect(service.createDiagramFromMermaid({ pageId, mermaid: "flowchart TD\nA-->B", embeddingMode: "svg", svgStyle })).rejects.toThrow("Unsupported SVG style");
+    expect(client.createdPages).toHaveLength(0);
+    expect(client.uploadedFiles).toHaveLength(0);
+    expect(client.pageUpdateMessages).toHaveLength(0);
+  });
+});
+
 describe("nested Mermaid ADF compatibility", () => {
   it("keeps SVG source and failed diagrams inside their original containers", async () => {
     const { client, pageId } = createExistingWidgetFixture();

@@ -76,6 +76,12 @@ describe("mcp app", () => {
       expect(tool.inputSchema?.properties?.pageWidth?.enum).toEqual(["default", "full-width"]);
     }
     const createDiagramTool = result?.tools.find((tool: { name: string }) => tool.name === "create_confluence_diagram_from_mermaid");
+    const svgTools = result?.tools.filter((tool) => /^(create|update)_confluence_(diagram_from_mermaid|page_from_markdown(_file)?)$/.test(tool.name));
+    expect(svgTools).toHaveLength(6);
+    for (const tool of svgTools ?? []) {
+      expect(tool.inputSchema?.properties?.svgStyle?.enum).toEqual(["codex", "github"]);
+      expect(tool.inputSchema?.properties?.svgStyle?.description).toContain("Omit for codex");
+    }
     expect(createDiagramTool?.description).toContain("Omit embeddingMode to use the server default.");
     expect(createDiagramTool?.inputSchema?.properties?.embeddingMode).toBeDefined();
     expect(createDiagramTool?.inputSchema?.properties?.embeddingMode?.enum).toEqual(["macropack", "drawio", "svg"]);
@@ -111,9 +117,9 @@ describe("Markdown MCP width forwarding", () => {
     try {
       await server.connect(serverTransport);
       await client.connect(clientTransport);
-      const result = await client.callTool({ name, arguments: { ...args, pageWidth: "default" } });
+      const result = await client.callTool({ name, arguments: { ...args, pageWidth: "default", embeddingMode: "svg", svgStyle: "github" } });
       expect(result.isError).not.toBe(true);
-      expect(publish).toHaveBeenCalledWith(expect.objectContaining({ ...args, pageWidth: "default" }));
+      expect(publish).toHaveBeenCalledWith(expect.objectContaining({ ...args, pageWidth: "default", embeddingMode: "svg", svgStyle: "github" }));
     } finally {
       await client.close();
       await server.close();

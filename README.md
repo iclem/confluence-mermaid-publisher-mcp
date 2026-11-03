@@ -63,7 +63,16 @@ Set `"embeddingMode": "svg"` on the Mermaid diagram or Markdown MCP tools. For e
 }
 ```
 
-SVG uses Agentic Mermaid 0.4.1 locally on Node.js 22+, bypassing the Java/draw.io converter. No rendering service or Confluence diagram app is required for this mode. Each SVG contains `github-light` colors plus `github-dark` overrides selected by `prefers-color-scheme`; explicit colors in the source remain unchanged. Theme switching depends on the browser's scheme for embedded images and is not guaranteed to track Confluence's theme setting.
+SVG uses Agentic Mermaid 0.4.1 locally on Node.js 22+, bypassing the Java/draw.io converter. No rendering service or Confluence diagram app is required for this mode. Each SVG contains light colors plus dark overrides selected by `prefers-color-scheme`; explicit colors in the source remain unchanged. Theme switching depends on the browser's scheme for embedded images and is not guaranteed to track Confluence's theme setting.
+
+All six Mermaid diagram and Markdown MCP tools advertise the optional `svgStyle` enum:
+
+| `svgStyle` | Appearance |
+| --- | --- |
+| `codex` (default) | Rounded nodes, blue text and accents, monospace typography, outlined edge labels, and a navy node fill in dark mode. |
+| `github` | Original Inter typography with GitHub light/dark palettes. |
+
+For example, add `"svgStyle": "github"` alongside `"embeddingMode": "svg"` to retain the original appearance. The choice applies to every Mermaid block in a Markdown request, including file-based tools. Omission selects `codex` on both creation and updates; updates do not infer the previous style. Styles affect SVG mode only and do not select an embedding mode. The Codex-inspired font stack uses Share Tech Mono when available, with local monospace fallbacks; font appearance can vary between viewers. Both styles preserve the original source and its explicit colors.
 
 The SVG is a native image attachment, not an editable draw.io widget. Original Mermaid is preserved in SVG metadata; Markdown publication also adds an expandable source block. Inspection returns `embeddingMode: "svg"`, the filename, dimensions, and a stable attachment ID as `localId`. Use that `localId` to update the image; its attachment version and media reference are refreshed. Renaming or changing embedding modes during a diagram update is not supported. On mixed pages, select by `localId`, or supply both `index` and `embeddingMode`.
 

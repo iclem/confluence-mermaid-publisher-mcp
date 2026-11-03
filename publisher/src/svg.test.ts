@@ -6,8 +6,8 @@ import { buildSvgMedia, findSvgDiagrams, renderAdaptiveSvg, selectSvgDiagram, sv
 const gallery = JSON.parse(readFileSync(new URL("./fixtures/svg-gallery.json", import.meta.url), "utf8")) as Array<{ title: string; source: string }>;
 
 describe("adaptive SVG rendering", () => {
-  it.each(gallery)("renders $title with both palettes and unchanged source", ({ source }) => {
-    const result = renderAdaptiveSvg(source);
+  it.each(gallery.flatMap((item) => ["codex", "github"].map((style) => ({ ...item, style }))))("renders $title ($style) with both palettes and unchanged source", ({ source, style }) => {
+    const result = renderAdaptiveSvg(source, style as "codex" | "github");
     const document = new DOMParser().parseFromString(result.svg, "image/svg+xml");
     expect(result.width).toBeGreaterThan(0);
     expect(result.height).toBeGreaterThan(0);
@@ -18,9 +18,33 @@ describe("adaptive SVG rendering", () => {
     expect(document.getElementsByTagName("script").length).toBe(0);
   });
 
-  it("preserves explicit node colors and escapes source metadata", () => {
+  it("defaults to the Codex look with rounded nodes and outlined edge labels", () => {
+    const result = renderAdaptiveSvg('flowchart TD\nA[Start] -->|Accept| B[End]');
+    const document = new DOMParser().parseFromString(result.svg, "image/svg+xml");
+    expect(document.documentElement?.getAttribute("style")).toContain("monospace");
+    const node = Array.from(document.getElementsByTagName("rect")).find((item) => item.getAttribute("data-id") === "node-shape:A");
+    expect(Number(node?.getAttribute("rx"))).toBeGreaterThanOrEqual(12);
+    const label = Array.from(document.getElementsByTagName("g")).find((item) => item.getAttribute("class") === "edge-label");
+    const border = label?.getElementsByTagName("rect")[1];
+    expect(Number(border?.getAttribute("rx"))).toBeGreaterThanOrEqual(12);
+    expect(border?.getAttribute("stroke")).toBe("#0969da");
+    expect(result.svg).toContain("#071b38");
+    expect(result.svg).not.toMatch(/@import|<script|<foreignObject/);
+  });
+
+  it("keeps the previous GitHub appearance selectable", () => {
+    const result = renderAdaptiveSvg("flowchart LR\nA-->B", "github");
+    expect(result.svg).toContain("--font:Inter");
+    expect(result.svg).not.toContain("monospace");
+  });
+
+  it("rejects unknown styles", () => {
+    expect(() => renderAdaptiveSvg("flowchart LR\nA-->B", "missing" as never)).toThrow("Unsupported SVG style");
+  });
+
+  it.each(["codex", "github"] as const)("preserves explicit node colors and escapes source metadata (%s)", (style) => {
     const source = 'flowchart LR\nA["a & b"]:::ok\nclassDef ok fill:#d5e8d4,color:#1a4314';
-    const result = renderAdaptiveSvg(source);
+    const result = renderAdaptiveSvg(source, style);
     const document = new DOMParser().parseFromString(result.svg, "image/svg+xml");
     expect(document.getElementsByTagName("metadata")[0]?.textContent).toBe(source);
     expect(result.svg).toContain("#d5e8d4");
