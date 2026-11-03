@@ -64,7 +64,7 @@ function clip(point: ElkPoint, node: SvgNode, placed: Box): ElkPoint {
  * Reuse Agentic Mermaid's measured SVG shapes/labels and run plain ELK over them.
  * No browser, source rewriting, global renderer registration, or dependency patching.
  */
-export async function applyElkLayout(document: Document, source: string, options: RenderOptions, bendRadius: number): Promise<void> {
+export async function applyElkLayout(document: Document, source: string, options: RenderOptions, bendRadius: number, canvasPadding = options.padding ?? 40): Promise<void> {
   const parsed = parseRegisteredMermaid(source);
   if (!parsed.ok) throw new Error(parsed.error.map((e) => e.message).join("; "));
   if (parsed.value.body.kind !== "flowchart") return;
@@ -96,8 +96,9 @@ export async function applyElkLayout(document: Document, source: string, options
     layoutOptions: {
       "elk.algorithm": "layered", "elk.direction": directions[graph.direction]!,
       "elk.edgeRouting": "ORTHOGONAL", "elk.hierarchyHandling": "INCLUDE_CHILDREN",
-      "elk.spacing.baseValue": "40",
-      "elk.padding": `[top=${options.padding ?? 40},left=${options.padding ?? 40},bottom=${options.padding ?? 40},right=${options.padding ?? 40}]`,
+      "elk.layered.spacing.baseValue": "40",
+      "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+      "elk.padding": `[top=${canvasPadding},left=${canvasPadding},bottom=${canvasPadding},right=${canvasPadding}]`,
     },
   };
   const groupNodes = new Map<string, ElkNode>();
@@ -138,8 +139,10 @@ export async function applyElkLayout(document: Document, source: string, options
   const edgeElements = elements.filter((e) => classes(e).includes("edge") && e.hasAttribute("data-from"));
   const labelElements = elements.filter((e) => classes(e).includes("edge-label"));
   const usedEdges = new Set<Element>(), usedLabels = new Set<Element>();
+  // XML attribute parsing folds source newlines into spaces in data-label.
+  const labelKey = (value: string) => value.replace(/\s+/g, " ").trim();
   const edges = graph.edges.map((edge, i) => {
-    const matches = (e: Element) => e.getAttribute("data-from") === edge.source && e.getAttribute("data-to") === edge.target && (e.getAttribute("data-label") ?? "") === (edge.label ?? "");
+    const matches = (e: Element) => e.getAttribute("data-from") === edge.source && e.getAttribute("data-to") === edge.target && labelKey(e.getAttribute("data-label") ?? "") === labelKey(edge.label ?? "");
     const element = edge.style === "invisible" ? undefined : edgeElements.find((e) => !usedEdges.has(e) && matches(e));
     if (!element && edge.style !== "invisible") throw new Error(`Missing SVG edge ${edge.source} -> ${edge.target}`);
     if (element) usedEdges.add(element);
