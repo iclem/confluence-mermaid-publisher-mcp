@@ -16,7 +16,7 @@ Checks: real renderer tests across styles/layouts and gallery families; directio
 - [x] Final review, full suite and build: 112 tests pass; TypeScript build and diff checks pass.
 
 Final: fixed nested group transforms, isolated group direction, group title sizing, invisible link matching and synthetic ID collisions — regression probes failed before fixes and pass after; suite 112/112.
-- [ ] Commit, push and update PR 24 with validation and provenance.
+- [ ] Commit, push and update PR 24 with validation.
 
 ## Follow-up: layout parity correction
 
